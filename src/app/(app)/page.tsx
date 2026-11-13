@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Plus } from "lucide-react";
 import { getSession } from "@/lib/auth";
-import { getCompanyScope, inCompany, WO_COMPANY_COL, WO_COMPANY_JOIN } from "@/lib/company";
+import { getCompanyScope, getReceiptsToReview, inCompany, WO_COMPANY_COL, WO_COMPANY_JOIN } from "@/lib/company";
 import { CompanySelect } from "@/components/CompanySelect";
 import { loadRmLines } from "@/lib/labor";
 import { OPEN_STATUSES } from "@/lib/constants";
@@ -140,6 +140,7 @@ export default async function Dashboard() {
   const attention = open.filter((w) => rank(w) < 9).sort((a, b) => rank(a) - rank(b) || (a.due_at ?? "").localeCompare(b.due_at ?? "")).slice(0, 8);
 
   const firstName = (profile.full_name ?? "").split(" ")[0];
+  const receiptsToReview = await getReceiptsToReview();
 
   return (
     <>
@@ -163,15 +164,27 @@ export default async function Dashboard() {
         </div>
       </div>
 
-      {vendorAction.approvals + vendorAction.reviews + vendorAction.invoices + vendorAction.quotes > 0 && (
-        <Link href="/vendor-jobs?show=action" className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg bg-orange-50 px-4 py-3 text-sm text-orange-950 ring-1 ring-inset ring-orange-200 hover:bg-orange-100">
-          <b>Vendors are waiting on you:</b>
-          {vendorAction.quotes > 0 && <span>{vendorAction.quotes} quote{vendorAction.quotes > 1 ? "s" : ""} to approve</span>}
-          {vendorAction.approvals > 0 && <span>{vendorAction.approvals} approval request{vendorAction.approvals > 1 ? "s" : ""}</span>}
-          {vendorAction.reviews > 0 && <span>{vendorAction.reviews} completed job{vendorAction.reviews > 1 ? "s" : ""} to review</span>}
-          {vendorAction.invoices > 0 && <span>{vendorAction.invoices} invoice{vendorAction.invoices > 1 ? "s" : ""} to review</span>}
-          <span className="ml-auto font-medium">Open vendor work →</span>
-        </Link>
+      {vendorAction.approvals + vendorAction.reviews + vendorAction.invoices + vendorAction.quotes + receiptsToReview > 0 && (
+        <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg bg-orange-50 px-4 py-3 text-sm text-orange-950 ring-1 ring-inset ring-orange-200">
+          <b>Waiting on you:</b>
+          {receiptsToReview > 0 && (
+            <Link href="/purchases?status=review" className="underline-offset-2 hover:underline">
+              {receiptsToReview} receipt{receiptsToReview > 1 ? "s" : ""} to review
+            </Link>
+          )}
+          {[
+            [vendorAction.quotes, "quote", "quotes", "to approve"],
+            [vendorAction.approvals, "approval request", "approval requests", ""],
+            [vendorAction.reviews, "completed vendor job", "completed vendor jobs", "to review"],
+            [vendorAction.invoices, "vendor invoice", "vendor invoices", "to review"],
+          ]
+            .filter(([n]) => (n as number) > 0)
+            .map(([n, one, many, tail]) => (
+              <Link key={one as string} href="/vendor-jobs?show=action" className="underline-offset-2 hover:underline">
+                {n} {(n as number) > 1 ? many : one} {tail}
+              </Link>
+            ))}
+        </div>
       )}
 
       <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">

@@ -33,3 +33,13 @@ export function inCompany<Q>(q: Q, companyId: string | null, column = "company_i
 /** For tables tied to a work order (dispatches, invoices, approvals, receipts): select string to add, and the filter column. */
 export const WO_COMPANY_JOIN = "wo_company:work_orders!inner(company_id)";
 export const WO_COMPANY_COL = "wo_company.company_id";
+
+/** Receipts waiting for an admin's review in the selected company (0 for non-admins). Cached per request. */
+export const getReceiptsToReview = cache(async () => {
+  const { supabase, profile } = await getSession();
+  if (profile.role !== "admin") return 0;
+  const { companyId } = await getCompanyScope();
+  const q = supabase.from("wo_purchases").select(companyId ? `id, ${WO_COMPANY_JOIN}` : "id", { count: "exact", head: true }).eq("status", "submitted");
+  const { count } = await inCompany(q, companyId, WO_COMPANY_COL);
+  return count ?? 0;
+});
