@@ -13,9 +13,20 @@ export function ImportClient() {
   const [fileName, setFileName] = useState<string | null>(null);
   const [intent, setIntent] = useState<"preview" | "import">("preview");
   const formRef = useRef<HTMLFormElement>(null);
+  // The browser clears the file box after each submit, so keep the chosen file and resend it on Import.
+  const fileRef = useRef<File | null>(null);
+
+  const submit = (fd: FormData) => {
+    const f = fd.get("file");
+    if (!(f instanceof File) || f.size === 0) {
+      if (fileRef.current) fd.set("file", fileRef.current);
+    }
+    action(fd);
+  };
 
   const reset = () => {
     formRef.current?.reset();
+    fileRef.current = null;
     setFileName(null);
   };
 
@@ -24,7 +35,7 @@ export function ImportClient() {
       <Card>
         <CardHeader
           title="1. Fill in the template"
-          subtitle="One location per row. Company, Store #, Name, Type, address, and the manager’s email."
+          subtitle="One location per row: Company, Store #, Name, Type and address."
           action={
             <a href="/sites/import/template" className={btnClass("secondary", "sm")}>
               <Download className="h-4 w-4" aria-hidden /> Download template
@@ -32,9 +43,9 @@ export function ImportClient() {
           }
         />
         <ul className="list-disc space-y-1 py-4 pl-10 pr-5 text-sm text-slate-600">
-          <li>Already have a list? Upload it as is. Columns like “Store #”, “Store Name”, “ZIP Code” and “GM Email” are recognised.</li>
+          <li>Already have a list? Upload it as is. Columns like “Store #”, “Store Name” and “ZIP Code” are recognised; others are ignored.</li>
           <li>
-            <b>Manager Email</b> gives that person access to that location only. Several managers? Separate emails with commas. One manager over several stores? Use the same email on each row.
+            Managers and techs are invited on the <Link href="/admin/users" className="font-medium text-brand-700">Users</Link> page, where you pick their locations.
           </li>
           <li>
             <b>Company</b> puts each location in the right corporation. Use the names on the template&apos;s Companies sheet (or the Companies page). Leave it blank to use
@@ -44,7 +55,7 @@ export function ImportClient() {
         </ul>
       </Card>
 
-      <form ref={formRef} action={action}>
+      <form ref={formRef} action={submit}>
         <Card>
           <CardHeader title="2. Upload and check" subtitle="Excel (.xlsx) or CSV. Nothing is saved until you click Import." />
           <div className="flex flex-wrap items-center gap-3 p-5">
@@ -56,12 +67,14 @@ export function ImportClient() {
                 name="file"
                 accept=".xlsx,.xlsm,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
                 className="sr-only"
-                required
                 onChange={(e) => {
-                  setFileName(e.target.files?.[0]?.name ?? null);
+                  const f = e.target.files?.[0] ?? null;
+                  if (!f) return; // cancelled the picker: keep the file already chosen
+                  fileRef.current = f;
+                  setFileName(f.name);
                   setIntent("preview");
                   // Auto-preview as soon as a file is picked.
-                  if (e.target.files?.[0]) setTimeout(() => formRef.current?.requestSubmit(), 0);
+                  setTimeout(() => formRef.current?.requestSubmit(), 0);
                 }}
               />
             </label>
@@ -85,7 +98,6 @@ export function ImportClient() {
                 `${state.counts.create} new`,
                 `${state.counts.update} to update`,
                 state.counts.skip ? `${state.counts.skip} with problems (will be skipped)` : null,
-                state.counts.newManagers ? `${state.counts.newManagers} new manager${state.counts.newManagers === 1 ? "" : "s"} to invite` : null,
                 state.counts.moves ? `${state.counts.moves} moving to another company` : null,
               ]
                 .filter(Boolean)
@@ -117,7 +129,6 @@ export function ImportClient() {
                   <Th>Name</Th>
                   <Th>Type</Th>
                   <Th>Address</Th>
-                  <Th>Managers</Th>
                   <Th>Notes</Th>
                 </tr>
               </thead>
@@ -139,9 +150,6 @@ export function ImportClient() {
                     <Td className="font-medium text-slate-900">{r.name ?? "—"}</Td>
                     <Td>{TYPE_LABEL[r.type]}</Td>
                     <Td className="text-xs">{[r.address, r.city, r.state, r.zip].filter(Boolean).join(", ") || "—"}</Td>
-                    <Td className="text-xs">
-                      {r.managerNotes.length ? r.managerNotes.map((n) => <div key={n}>{n}</div>) : <span className="text-slate-400">None</span>}
-                    </Td>
                     <Td className="text-xs">
                       {r.errors.map((e) => (
                         <div key={e} className="text-red-700">
@@ -167,18 +175,8 @@ export function ImportClient() {
           <CardHeader title="Import finished" />
           <div className="space-y-3 p-5 text-sm">
             <p>
-              <b>{state.created}</b> site{state.created === 1 ? "" : "s"} added, <b>{state.updated}</b> updated, <b>{state.assigned}</b> manager assignment
-              {state.assigned === 1 ? "" : "s"} made.
+              <b>{state.created}</b> site{state.created === 1 ? "" : "s"} added, <b>{state.updated}</b> updated.
             </p>
-            {state.invited.length > 0 && (
-              <p className="text-emerald-800">Invite emails sent to: {state.invited.join(", ")}</p>
-            )}
-            {state.createdNoEmail.length > 0 && (
-              <Alert tone="warning">
-                Logins created but the invite email couldn’t be sent (usually the email limit) for: {state.createdNoEmail.join(", ")}. Their sites are assigned. They can
-                sign in with “Email me a link” on the sign-in page once email is set up.
-              </Alert>
-            )}
             {state.problems.length > 0 && (
               <Alert>
                 <p className="mb-1 font-medium">Not imported:</p>
@@ -194,7 +192,7 @@ export function ImportClient() {
                 View sites
               </Link>
               <Link href="/admin/users" className={btnClass("secondary")}>
-                Review managers
+                Invite managers &amp; techs
               </Link>
               <button type="button" onClick={reset} className={btnClass("ghost")}>
                 Import another file
