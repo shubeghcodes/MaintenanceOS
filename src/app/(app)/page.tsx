@@ -166,7 +166,7 @@ export default async function Dashboard() {
         </div>
         <div className="flex flex-wrap items-end gap-3">
           {scope.enabled && profile.role !== "manager" && (
-            <div className="w-64">
+            <div className="w-64" data-tour="company-dash">
               <CompanySelect companies={scope.companies} value={cid} canManage={!!profile.is_super && profile.role === "admin"} label="Select Company" />
             </div>
           )}
@@ -209,7 +209,7 @@ export default async function Dashboard() {
         </div>
       )}
 
-      <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
+      <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4" data-tour="dashboard-stats">
         <Stat label="Locations" value={sites.length} sub={scope.company ? scope.company.name : "Active sites"} href="/sites" />
         <Stat label="Completed" value={completed30.length} sub="Work orders, last 30 days" href="/work-orders?status=completed" />
         <Stat
@@ -338,7 +338,7 @@ export default async function Dashboard() {
           )}
         </Card>
 
-        <Card className="lg:col-span-2">
+        <Card className="lg:col-span-2" data-tour="by-site">
           <CardHeader
             title="By site"
             subtitle={siteBudgets.length ? "Open work and budget used this month (labor included)" : "Open work and R&M spend this month"}

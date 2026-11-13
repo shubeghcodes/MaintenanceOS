@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import clsx from "clsx";
 import {
   Boxes,
@@ -22,9 +22,12 @@ import {
   Users,
   Wrench,
   X,
+  HelpCircle,
+  Compass,
 } from "lucide-react";
 import type { UserRole } from "@/lib/types";
 import { CompanySelect } from "./CompanySelect";
+import { START_TOUR_EVENT } from "./OnboardingTour";
 
 const NAV: { href: string; label: string; icon: typeof Wrench; roles: UserRole[]; superOnly?: boolean }[] = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard, roles: ["admin", "manager", "tech"] },
@@ -65,7 +68,23 @@ export function Sidebar({
   isSuper?: boolean;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const helpRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!helpOpen) return;
+    const close = (e: MouseEvent) => {
+      if (!(e.target as Element).closest?.("[data-help-menu]")) setHelpOpen(false);
+    };
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && setHelpOpen(false);
+    document.addEventListener("mousedown", close);
+    document.addEventListener("keydown", esc);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("keydown", esc);
+    };
+  }, [helpOpen]);
   const items = NAV.filter((n) => n.roles.includes(role) && (!n.superOnly || isSuper));
 
   const nav = (
@@ -77,6 +96,7 @@ export function Sidebar({
           <Link
             key={href}
             href={href}
+            data-tour={`nav-${href}`}
             onClick={() => setOpen(false)}
             className={clsx(
               "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition",
@@ -101,8 +121,33 @@ export function Sidebar({
     </nav>
   );
 
+  const takeTour = () => {
+    setHelpOpen(false);
+    setOpen(false);
+    if (pathname === "/") window.dispatchEvent(new Event(START_TOUR_EVENT));
+    else router.push("/?tour=1");
+  };
+
   const footer = (
     <div className="border-t border-white/10 px-4 py-4">
+      <div className="relative mb-3" data-help-menu ref={helpRef}>
+        <button
+          data-tour="help"
+          onClick={() => setHelpOpen((v) => !v)}
+          aria-expanded={helpOpen}
+          aria-haspopup="menu"
+          className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-medium text-slate-300 hover:bg-white/5 hover:text-white"
+        >
+          <HelpCircle className="h-4 w-4" aria-hidden /> Help
+        </button>
+        {helpOpen && (
+          <div role="menu" className="absolute bottom-full left-0 z-10 mb-1 w-48 rounded-lg bg-white p-1 shadow-lg ring-1 ring-slate-200">
+            <button role="menuitem" onClick={takeTour} className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-100">
+              <Compass className="h-4 w-4 text-slate-500" aria-hidden /> Take a tour
+            </button>
+          </div>
+        )}
+      </div>
       <Link href="/account" onClick={() => setOpen(false)} className="block rounded-md hover:opacity-80">
         <p className="truncate text-sm font-medium text-white">{name}</p>
         <p className="text-xs text-slate-400">{roleLabel} · My account</p>
@@ -125,7 +170,7 @@ export function Sidebar({
   );
 
   const picker = companyPicker && (
-    <div className="px-4 pb-4">
+    <div className="px-4 pb-4" data-tour="company">
       <CompanySelect companies={companyPicker.companies} value={companyPicker.value} canManage={isSuper} variant="dark" label="Company" />
     </div>
   );
