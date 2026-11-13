@@ -11,7 +11,7 @@ import { maskEmail, resolveToken, type PortalDispatch } from "@/lib/vendor-porta
 import { hashToken, linkTokenFor, vendorLink } from "@/lib/tokens";
 import { emailVendor, loadDispatchContext, notifyManagement, type MgmtEventKind } from "@/lib/vendor-notify";
 import { VENDOR_LINK_DAYS } from "@/lib/constants";
-import type { DispatchStatus, WoStatus } from "@/lib/types";
+import type { CostCategory, DispatchStatus, QuoteLine, WoStatus } from "@/lib/types";
 
 const NAME_COOKIE = "mos_vendor_name";
 
@@ -104,8 +104,16 @@ export async function declineJob(token: string, fd: FormData) {
   done(c, "declined");
 }
 
+/** When a quote is required, work can't start until one is approved. */
+async function quoteBlocks(c: Ctx) {
+  if (!c.d.quote_required) return false;
+  const { count } = await c.db.from("vendor_quotes").select("id", { count: "exact", head: true }).eq("dispatch_id", c.d.id).eq("status", "approved");
+  return !count;
+}
+
 export async function startWork(token: string, fd: FormData) {
   const c = await begin(token, fd);
+  if (await quoteBlocks(c)) oops(token, "This job needs an approved quote before work starts. Send your quote below; you'll get an email when it's approved.");
   const now = new Date().toISOString();
   if (!(await transition(c, ["sent", "accepted"], "in_progress", { started_at: now, accepted_at: c.d.accepted_at ?? now }))) go(token, "");
   await setWoStatus(c, "in_progress");
@@ -296,4 +304,134 @@ export async function requestNewLink(token: string) {
     });
   }
   go(token, sentTo); // the old token no longer resolves, so the page shows the "new link sent" message
+}
+
+// ------------------------------------------------------------------ costs
+
+const COST_CATEGORIES: CostCategory[] = ["labor", "materials", "trip", "equipment", "other"];
+const COST_OPEN: DispatchStatus[] = ["sent", "accepted", "in_progress", "pending_approval", "work_completed"];
+
+async function invoiceLocked(c: Ctx) {
+  const { data } = await c.db.from("vendor_invoices").select("status").eq("dispatch_id", c.d.id).order("created_at", { ascending: false }).limit(1);
+  return ["submitted", "under_review", "approved", "paid"].includes(data?.[0]?.status ?? "");
+}
+
+export async function addCost(token: string, fd: FormData) {
+  const c = await begin(token, fd);
+  if (!COST_OPEN.includes(c.d.status)) oops(token, "Costs can't be changed on this work order anymore.");
+  if (await invoiceLocked(c)) oops(token, "Your invoice has been submitted, so costs are locked. Submit a revised invoice if something changed.");
+  const category = (str(fd, "category") ?? "other") as CostCategory;
+  const description = str(fd, "description");
+  const quantity = num(fd, "quantity") ?? 1;
+  const unitCost = num(fd, "unit_cost");
+  if (!COST_CATEGORIES.includes(category)) oops(token, "Pick a cost type.");
+  if (!description) oops(token, "Describe the cost (e.g. “Labor, 2 techs” or “Condenser fan motor”).");
+  if (unitCost == null || unitCost < 0) oops(token, "Enter the rate or price.");
+  if (quantity <= 0) oops(token, "Quantity must be more than zero.");
+  const files = fd.getAll("receipt");
+  const bad = fileProblems(files);
+  if (bad) oops(token, bad);
+  const key = str(fd, "client_key");
+  if (key) {
+    const { data: dup } = await c.db.from("vendor_cost_lines").select("id").eq("dispatch_id", c.d.id).eq("client_key", key).maybeSingle();
+    if (dup) go(token, "ok=cost");
+  }
+  const [receiptId] = await saveAttachments(c.db, "work_order", c.d.work_order_id, null, files, { category: "vendor_receipt", dispatchId: c.d.id, label: c.actor });
+  const { error } = await c.db.from("vendor_cost_lines").insert({
+    work_order_id: c.d.work_order_id,
+    dispatch_id: c.d.id,
+    vendor_id: c.d.vendor_id,
+    category,
+    description,
+    quantity,
+    unit_cost: unitCost,
+    attachment_id: receiptId ?? null,
+    added_by_label: c.actor,
+    client_key: key,
+  });
+  if (error?.code === "23505") go(token, "ok=cost");
+  if (error) oops(token, "Couldn't save that cost. Please try again.");
+  const total = Math.round(quantity * unitCost * 100) / 100;
+  await log(c, "vendor_cost", `Added cost: ${description} — ${quantity} × $${unitCost.toFixed(2)} = $${total.toFixed(2)}${receiptId ? " (receipt attached)" : ""}`, { category, amount: total });
+  revalidatePath(`/work-orders/${c.d.work_order_id}`);
+  go(token, "ok=cost");
+}
+
+export async function removeCost(token: string, fd: FormData) {
+  const c = await begin(token, fd);
+  if (!COST_OPEN.includes(c.d.status) || (await invoiceLocked(c))) oops(token, "Costs are locked on this work order.");
+  const id = str(fd, "cost_id");
+  const { data } = await c.db.from("vendor_cost_lines").delete().eq("id", id).eq("dispatch_id", c.d.id).select("description,amount").maybeSingle();
+  if (data) await log(c, "vendor_cost", `Removed cost: ${data.description} ($${Number(data.amount).toFixed(2)})`);
+  revalidatePath(`/work-orders/${c.d.work_order_id}`);
+  go(token, "ok=cost_removed");
+}
+
+// ------------------------------------------------------------------ quotes
+
+const QUOTE_OPEN: DispatchStatus[] = ["sent", "accepted", "in_progress", "pending_approval"];
+
+function readQuoteLines(fd: FormData): QuoteLine[] {
+  const cats = fd.getAll("line_category").map(String);
+  const descs = fd.getAll("line_description").map(String);
+  const qtys = fd.getAll("line_quantity").map(String);
+  const units = fd.getAll("line_unit_cost").map(String);
+  const lines: QuoteLine[] = [];
+  descs.forEach((raw, i) => {
+    const description = raw.trim().slice(0, 300);
+    const unit = Number(String(units[i] ?? "").replace(/[$,\s]/g, ""));
+    if (!description || !Number.isFinite(unit)) return;
+    const qty = Number(String(qtys[i] ?? "1").replace(/[,\s]/g, "")) || 1;
+    const category = (COST_CATEGORIES.includes(cats[i] as CostCategory) ? cats[i] : "other") as CostCategory;
+    lines.push({ category, description, quantity: qty, unit_cost: unit, amount: Math.round(qty * unit * 100) / 100 });
+  });
+  return lines.slice(0, 30);
+}
+
+export async function submitQuote(token: string, fd: FormData) {
+  const c = await begin(token, fd);
+  if (!QUOTE_OPEN.includes(c.d.status)) oops(token, "Quotes can't be sent once the work is complete.");
+  const scope = str(fd, "scope");
+  if (!scope) oops(token, "Describe the work the quote covers.");
+  const lines = readQuoteLines(fd);
+  const typed = num(fd, "amount");
+  const amount = typed ?? (lines.length ? Math.round(lines.reduce((t, l) => t + l.amount, 0) * 100) / 100 : null);
+  if (amount == null || amount < 0) oops(token, "Enter the quote total, or add line items.");
+  const files = fd.getAll("quote_file");
+  const bad = fileProblems(files);
+  if (bad) oops(token, bad);
+  const key = str(fd, "client_key");
+  if (key) {
+    const { data: dup } = await c.db.from("vendor_quotes").select("id").eq("dispatch_id", c.d.id).eq("client_key", key).maybeSingle();
+    if (dup) go(token, "ok=quote");
+  }
+  const { data: prior } = await c.db.from("vendor_quotes").select("id,status,version").eq("dispatch_id", c.d.id).order("created_at", { ascending: false });
+  const priorRows = (prior ?? []) as { id: string; status: string; version: number }[];
+  if (priorRows.some((q) => q.status === "approved"))
+    oops(token, "Your quote is already approved. For extra work, use “Request approval for additional work”.");
+
+  const [fileId] = await saveAttachments(c.db, "work_order", c.d.work_order_id, null, files, { category: "quote", dispatchId: c.d.id, label: c.actor });
+  const { error } = await c.db.from("vendor_quotes").insert({
+    work_order_id: c.d.work_order_id,
+    dispatch_id: c.d.id,
+    vendor_id: c.d.vendor_id,
+    quote_number: str(fd, "quote_number"),
+    amount,
+    scope,
+    lines,
+    valid_until: str(fd, "valid_until"),
+    attachment_id: fileId ?? null,
+    version: (priorRows[0]?.version ?? 0) + 1,
+    submitted_by_label: c.actor,
+    client_key: key,
+  });
+  if (error?.code === "23505") go(token, "ok=quote");
+  if (error) oops(token, "Couldn't send the quote. Please try again.");
+  // A new quote replaces any that are still waiting.
+  const waiting = priorRows.filter((q) => q.status === "submitted").map((q) => q.id);
+  if (waiting.length) await c.db.from("vendor_quotes").update({ status: "superseded" }).in("id", waiting);
+  const revised = priorRows.length > 0;
+  await log(c, "quote", `Sent ${revised ? "a revised " : "a "}quote for $${amount.toFixed(2)}: ${scope}`);
+  await tell(c, "quote", { amount, note: `${revised ? "Revised quote. " : ""}${scope}${lines.length ? `\n\n${lines.map((l) => `• ${l.description}: ${l.quantity} × $${l.unit_cost.toFixed(2)} = $${l.amount.toFixed(2)}`).join("\n")}` : ""}` });
+  done(c, "quote");
 }

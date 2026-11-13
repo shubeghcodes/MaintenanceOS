@@ -57,8 +57,9 @@ export default async function Dashboard() {
           vendorCount(supabase.from("approval_requests").select(woJoin, { count: "exact", head: true }).eq("status", "pending")),
           vendorCount(supabase.from("vendor_dispatches").select(woJoin, { count: "exact", head: true }).eq("status", "work_completed")),
           vendorCount(supabase.from("vendor_invoices").select(woJoin, { count: "exact", head: true }).in("status", ["submitted", "under_review"])),
-        ]).then(([a, b, c]) => ({ approvals: a.count ?? 0, reviews: b.count ?? 0, invoices: c.count ?? 0 }))
-      : Promise.resolve({ approvals: 0, reviews: 0, invoices: 0 }),
+          vendorCount(supabase.from("vendor_quotes").select(woJoin, { count: "exact", head: true }).eq("status", "submitted")),
+        ]).then(([a, b, c, q]) => ({ approvals: a.count ?? 0, reviews: b.count ?? 0, invoices: c.count ?? 0, quotes: q.count ?? 0 }))
+      : Promise.resolve({ approvals: 0, reviews: 0, invoices: 0, quotes: 0 }),
     inCompany(
       supabase.from("work_orders").select(`id,number,title,status,priority,type,due_at,site_id${co},site:sites(code,name)`).in("status", OPEN_STATUSES),
       cid,
@@ -158,9 +159,10 @@ export default async function Dashboard() {
         </div>
       </div>
 
-      {vendorAction.approvals + vendorAction.reviews + vendorAction.invoices > 0 && (
+      {vendorAction.approvals + vendorAction.reviews + vendorAction.invoices + vendorAction.quotes > 0 && (
         <Link href="/vendor-jobs?show=action" className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg bg-orange-50 px-4 py-3 text-sm text-orange-950 ring-1 ring-inset ring-orange-200 hover:bg-orange-100">
           <b>Vendors are waiting on you:</b>
+          {vendorAction.quotes > 0 && <span>{vendorAction.quotes} quote{vendorAction.quotes > 1 ? "s" : ""} to approve</span>}
           {vendorAction.approvals > 0 && <span>{vendorAction.approvals} approval request{vendorAction.approvals > 1 ? "s" : ""}</span>}
           {vendorAction.reviews > 0 && <span>{vendorAction.reviews} completed job{vendorAction.reviews > 1 ? "s" : ""} to review</span>}
           {vendorAction.invoices > 0 && <span>{vendorAction.invoices} invoice{vendorAction.invoices > 1 ? "s" : ""} to review</span>}

@@ -3,13 +3,13 @@ import { cookies } from "next/headers";
 import { CheckCircle2, Clock, FileText, MapPin, Navigation, Phone, Wrench } from "lucide-react";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { loadPortal, maskEmail, resolveToken } from "@/lib/vendor-portal";
-import { INVOICE_LABEL, INVOICE_TONE, PRIORITY_LABEL, PRIORITY_TONE, APPROVAL_LABEL, APPROVAL_TONE } from "@/lib/constants";
+import { COST_CATEGORY_LABEL, INVOICE_LABEL, INVOICE_TONE, PRIORITY_LABEL, PRIORITY_TONE, APPROVAL_LABEL, APPROVAL_TONE, QUOTE_LABEL, QUOTE_TONE } from "@/lib/constants";
 import { fmtDate, fmtDateTime, fmtMoney, todayISO } from "@/lib/format";
 import type { DispatchStatus } from "@/lib/types";
 import { Alert, Badge, Card, CardHeader, Field, Input, Select, Textarea } from "@/components/ui";
 import { SubmitButton } from "@/components/SubmitButton";
 import { PhotoInput } from "@/components/PhotoInput";
-import { acceptJob, completeWork, declineJob, postUpdate, requestApproval, requestNewLink, startWork, submitInvoice } from "./actions";
+import { acceptJob, addCost, completeWork, declineJob, postUpdate, removeCost, requestApproval, requestNewLink, startWork, submitInvoice, submitQuote } from "./actions";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Work order", robots: { index: false, follow: false }, referrer: "no-referrer" };
@@ -36,6 +36,9 @@ const OK: Record<string, string> = {
   completed: "Work marked complete and sent for review. You can submit your invoice below now or later.",
   completed_invoice: "Work marked complete and your invoice was submitted. You'll get an email when it's reviewed.",
   invoice: "Invoice submitted. You'll get an email when it's reviewed.",
+  quote: "Quote sent. You'll get an email when it's approved or if changes are needed.",
+  cost: "Cost added.",
+  cost_removed: "Cost removed.",
 };
 
 export default async function VendorPortal({
@@ -91,6 +94,14 @@ export default async function VendorPortal({
   const pendingApproval = data.approvals.find((a) => a.status === "pending");
   const latestInvoice = data.invoices[0];
   const invoiceOpen = ["work_completed", "closed"].includes(d.status) && (!latestInvoice || latestInvoice.status === "rejected");
+  const approvedQuote = data.quotes.find((q) => q.status === "approved");
+  const waitingQuote = data.quotes.find((q) => q.status === "submitted");
+  const quoteBlocks = !!d.quote_required && !approvedQuote;
+  const quoteOpen = ["sent", "accepted", "in_progress", "pending_approval"].includes(d.status) && !approvedQuote;
+  const costTotal = Math.round(data.costs.reduce((t, c) => t + Number(c.amount), 0) * 100) / 100;
+  const costsLocked = !!latestInvoice && latestInvoice.status !== "rejected";
+  const costsOpen = ["sent", "accepted", "in_progress", "pending_approval", "work_completed"].includes(d.status) && !costsLocked;
+  const invoiceDefault = costTotal > 0 ? costTotal.toFixed(2) : approvedQuote ? Number(approvedQuote.amount).toFixed(2) : undefined;
 
   const NameField = () => (
     <Field label="Your name">
@@ -126,14 +137,17 @@ export default async function VendorPortal({
             <p className="text-sm font-semibold">Can you take this job?</p>
             <form className="mt-3 space-y-3">
               <NameField />
-              <div className="grid grid-cols-2 gap-2">
+              <div className={quoteBlocks ? "" : "grid grid-cols-2 gap-2"}>
                 <SubmitButton formAction={acceptJob.bind(null, token)} pendingText="Accepting…">
                   Accept work order
                 </SubmitButton>
-                <SubmitButton variant="secondary" formAction={startWork.bind(null, token)} pendingText="Starting…">
-                  I&apos;m on site — Start
-                </SubmitButton>
+                {!quoteBlocks && (
+                  <SubmitButton variant="secondary" formAction={startWork.bind(null, token)} pendingText="Starting…">
+                    I&apos;m on site — Start
+                  </SubmitButton>
+                )}
               </div>
+              {quoteBlocks && <p className="text-xs text-slate-600">A quote is required for this job. Send it in the Quote section below; work can start once it&apos;s approved.</p>}
             </form>
             <DeclineForm token={token} actorName={actorName} />
           </Card>
@@ -142,13 +156,21 @@ export default async function VendorPortal({
         {d.status === "accepted" && (
           <Card className="p-4">
             <p className="text-sm font-semibold">Accepted {fmtDateTime(d.accepted_at)}</p>
-            <p className="text-sm text-slate-600">Tap Start Work when you arrive. We&apos;ll record the time.</p>
-            <form className="mt-3 space-y-3">
-              <NameField />
-              <SubmitButton formAction={startWork.bind(null, token)} pendingText="Starting…">
-                <Clock className="h-4 w-4" aria-hidden /> Start Work
-              </SubmitButton>
-            </form>
+            {quoteBlocks ? (
+              <p className="mt-1 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900 ring-1 ring-amber-200">
+                {waitingQuote ? "Your quote is waiting for approval. You'll get an email as soon as it's decided, then you can start work." : "This job needs an approved quote before work starts. Send your quote below."}
+              </p>
+            ) : (
+              <>
+                <p className="text-sm text-slate-600">Tap Start Work when you arrive. We&apos;ll record the time.</p>
+                <form className="mt-3 space-y-3">
+                  <NameField />
+                  <SubmitButton formAction={startWork.bind(null, token)} pendingText="Starting…">
+                    <Clock className="h-4 w-4" aria-hidden /> Start Work
+                  </SubmitButton>
+                </form>
+              </>
+            )}
             <DeclineForm token={token} actorName={actorName} />
           </Card>
         )}
@@ -257,7 +279,7 @@ export default async function VendorPortal({
                           </Field>
                         </div>
                         <Field label="Invoice total ($)">
-                          <Input name="inv_amount" inputMode="decimal" placeholder="0.00" />
+                          <Input name="inv_amount" inputMode="decimal" placeholder="0.00" defaultValue={invoiceDefault} />
                         </Field>
                         {wo.nte_amount != null && <p className="text-xs text-slate-500">Approved not-to-exceed: {fmtMoney(wo.nte_amount, 2)}</p>}
                         <Field label="Invoice notes (optional)">
@@ -276,6 +298,193 @@ export default async function VendorPortal({
         )}
 
         {d.status === "closed" && <Alert tone="good">This work order is closed. Thank you! {!latestInvoice && "You can still submit your invoice below."}</Alert>}
+
+        {/* -------- Quote / estimate -------- */}
+        {(quoteOpen || data.quotes.length > 0) && (
+          <Card id="quote">
+            <CardHeader
+              title="Quote / estimate"
+              subtitle={d.quote_required ? "Required before work starts" : "Optional: send a quote for approval before you proceed"}
+              action={<Badge tone={QUOTE_TONE[data.quotes[0]?.status ?? "none"]}>{QUOTE_LABEL[data.quotes[0]?.status ?? "none"]}</Badge>}
+            />
+            <div className="space-y-3 p-4">
+              {data.quotes.map((q, i) => (
+                <div key={q.id} className={`rounded-lg p-3 text-sm ring-1 ring-slate-200 ${i ? "opacity-60" : ""}`}>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-medium">
+                      {q.quote_number ? `${q.quote_number} · ` : ""}
+                      {fmtMoney(q.amount, 2)}
+                      {q.version > 1 && <span className="ml-1 text-xs font-normal text-slate-500">(revision {q.version})</span>}
+                    </span>
+                    <Badge tone={QUOTE_TONE[q.status]}>{QUOTE_LABEL[q.status]}</Badge>
+                  </div>
+                  <p className="mt-1 whitespace-pre-wrap text-slate-700">{q.scope}</p>
+                  {q.lines.length > 0 && (
+                    <ul className="mt-2 space-y-0.5 text-xs text-slate-600">
+                      {q.lines.map((l, j) => (
+                        <li key={j} className="flex justify-between gap-2">
+                          <span>{l.description} · {l.quantity} × {fmtMoney(l.unit_cost, 2)}</span>
+                          <span className="tabular-nums">{fmtMoney(l.amount, 2)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  <p className="mt-1 text-xs text-slate-500">
+                    Sent {fmtDateTime(q.created_at)}
+                    {q.valid_until && ` · valid until ${fmtDate(q.valid_until)}`}
+                    {q.file_url && (
+                      <>
+                        {" · "}
+                        <a href={q.file_url} target="_blank" rel="noreferrer" className="text-brand-700">
+                          View file
+                        </a>
+                      </>
+                    )}
+                  </p>
+                  {q.decision_note && <p className={`mt-1 text-sm ${q.status === "rejected" ? "text-red-800" : "text-slate-700"}`}>Note from reviewer: {q.decision_note}</p>}
+                </div>
+              ))}
+              {quoteOpen && (
+                <details open={quoteBlocks && !waitingQuote} className="rounded-lg ring-1 ring-slate-200">
+                  <summary className="cursor-pointer list-none px-3 py-2.5 text-sm font-semibold text-brand-700">
+                    {waitingQuote ? "Send a revised quote (replaces the one waiting)" : data.quotes.length ? "Send a revised quote" : "Send a quote"}
+                  </summary>
+                  <form action={submitQuote.bind(null, token)} className="space-y-3 border-t border-slate-100 p-3">
+                    <input type="hidden" name="client_key" value={key()} />
+                    <NameField />
+                    <Field label="Scope of work">
+                      <Textarea name="scope" required rows={3} placeholder="What you'll do, parts included, assumptions" />
+                    </Field>
+                    <div>
+                      <p className="mb-1 text-xs font-medium text-slate-600">Line items (optional)</p>
+                      <div className="space-y-2">
+                        {[0, 1, 2, 3].map((n) => (
+                          <div key={n} className="grid grid-cols-12 gap-1.5">
+                            <Select name="line_category" defaultValue={n === 0 ? "labor" : "materials"} className="col-span-4" aria-label="Type">
+                              {Object.entries(COST_CATEGORY_LABEL).map(([k, v]) => (
+                                <option key={k} value={k}>{v}</option>
+                              ))}
+                            </Select>
+                            <Input name="line_description" placeholder="Description" className="col-span-4" aria-label="Description" />
+                            <Input name="line_quantity" inputMode="decimal" placeholder="Qty" className="col-span-1 px-1.5" aria-label="Quantity" />
+                            <Input name="line_unit_cost" inputMode="decimal" placeholder="$ each" className="col-span-3" aria-label="Price each" />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <Field label="Quote total ($)" hint="Leave blank to add up the lines">
+                        <Input name="amount" inputMode="decimal" placeholder="0.00" />
+                      </Field>
+                      <Field label="Valid until">
+                        <Input type="date" name="valid_until" />
+                      </Field>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <Field label="Quote # (optional)">
+                        <Input name="quote_number" />
+                      </Field>
+                      <Field label="Quote file (optional)">
+                        <PhotoInput name="quote_file" multiple={false} accept="application/pdf,image/jpeg,image/png" />
+                      </Field>
+                    </div>
+                    {wo.nte_amount != null && <p className="text-xs text-slate-500">Current not-to-exceed: {fmtMoney(wo.nte_amount, 2)}. An approved quote replaces it.</p>}
+                    <SubmitButton pendingText="Sending…" confirm="Send this quote for approval?">
+                      <FileText className="h-4 w-4" aria-hidden /> Send quote for approval
+                    </SubmitButton>
+                  </form>
+                </details>
+              )}
+            </div>
+          </Card>
+        )}
+
+        {/* -------- Costs -------- */}
+        {(costsOpen || data.costs.length > 0) && (
+          <Card id="costs">
+            <CardHeader title="Your costs" subtitle="Itemize labor, parts and other charges as you go" action={<span className="text-sm font-semibold tabular-nums">{fmtMoney(costTotal, 2)}</span>} />
+            <div className="space-y-3 p-4">
+              {data.costs.length > 0 ? (
+                <ul className="divide-y divide-slate-100 rounded-lg ring-1 ring-slate-200">
+                  {data.costs.map((c) => (
+                    <li key={c.id} className="flex items-start gap-2 px-3 py-2 text-sm">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium text-slate-900">{c.description}</p>
+                        <p className="text-xs text-slate-500">
+                          {COST_CATEGORY_LABEL[c.category]} · {Number(c.quantity)} × {fmtMoney(c.unit_cost, 2)}
+                          {c.file_url && (
+                            <>
+                              {" · "}
+                              <a href={c.file_url} target="_blank" rel="noreferrer" className="text-brand-700">
+                                Receipt
+                              </a>
+                            </>
+                          )}
+                        </p>
+                      </div>
+                      <span className="tabular-nums">{fmtMoney(c.amount, 2)}</span>
+                      {costsOpen && (
+                        <form action={removeCost.bind(null, token)}>
+                          <input type="hidden" name="cost_id" value={c.id} />
+                          <SubmitButton size="sm" variant="ghost" pendingText="…" confirm={`Remove “${c.description}”?`}>
+                            Remove
+                          </SubmitButton>
+                        </form>
+                      )}
+                    </li>
+                  ))}
+                  <li className="flex justify-between px-3 py-2 text-sm font-semibold">
+                    <span>Total</span>
+                    <span className="tabular-nums">{fmtMoney(costTotal, 2)}</span>
+                  </li>
+                </ul>
+              ) : (
+                <p className="text-sm text-slate-500">No costs added yet.</p>
+              )}
+              {wo.nte_amount != null && costTotal > Number(wo.nte_amount) && (
+                <p className="rounded-lg bg-orange-50 px-3 py-2 text-xs text-orange-900 ring-1 ring-orange-200">
+                  Your costs are over the approved not-to-exceed of {fmtMoney(wo.nte_amount, 2)}. Request approval for the additional amount before continuing.
+                </p>
+              )}
+              {costsLocked && <p className="text-xs text-slate-500">Costs are locked because your invoice was submitted.</p>}
+              {costsOpen && (
+                <details className="rounded-lg ring-1 ring-slate-200">
+                  <summary className="cursor-pointer list-none px-3 py-2.5 text-sm font-semibold text-brand-700">+ Add a cost</summary>
+                  <form action={addCost.bind(null, token)} className="space-y-3 border-t border-slate-100 p-3">
+                    <input type="hidden" name="client_key" value={key()} />
+                    <NameField />
+                    <div className="grid grid-cols-2 gap-3">
+                      <Field label="Type">
+                        <Select name="category" defaultValue="labor">
+                          {Object.entries(COST_CATEGORY_LABEL).map(([k, v]) => (
+                            <option key={k} value={k}>{v}</option>
+                          ))}
+                        </Select>
+                      </Field>
+                      <Field label="Description">
+                        <Input name="description" required placeholder="e.g. Labor, 2 techs" />
+                      </Field>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <Field label="Quantity / hours">
+                        <Input name="quantity" inputMode="decimal" defaultValue="1" required />
+                      </Field>
+                      <Field label="Rate or price each ($)">
+                        <Input name="unit_cost" inputMode="decimal" required placeholder="0.00" />
+                      </Field>
+                    </div>
+                    <Field label="Receipt photo (optional)">
+                      <PhotoInput name="receipt" multiple={false} accept="application/pdf,image/*" />
+                    </Field>
+                    <SubmitButton variant="secondary" pendingText="Saving…">
+                      Add cost
+                    </SubmitButton>
+                  </form>
+                </details>
+              )}
+            </div>
+          </Card>
+        )}
 
         {/* -------- Invoice -------- */}
         <Card>
@@ -320,8 +529,9 @@ export default async function VendorPortal({
                   </Field>
                 </div>
                 <Field label="Total amount ($)">
-                  <Input name="amount" inputMode="decimal" required placeholder="0.00" />
+                  <Input name="amount" inputMode="decimal" required placeholder="0.00" defaultValue={invoiceDefault} />
                 </Field>
+                {costTotal > 0 && <p className="text-xs text-slate-500">Your itemized costs total {fmtMoney(costTotal, 2)}.</p>}
                 <Field label="Notes (optional)">
                   <Textarea name="notes" rows={2} />
                 </Field>

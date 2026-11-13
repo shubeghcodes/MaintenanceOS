@@ -1,4 +1,4 @@
-import type { PaymentMethod, PurchaseStatus, ApprovalStatus, AssetStatus, DispatchStatus, FreqUnit, InvoiceStatus, SiteType, UserRole, WoPriority, WoStatus, WoType } from "./types";
+import type { CostCategory, QuoteStatus, PaymentMethod, PurchaseStatus, ApprovalStatus, AssetStatus, DispatchStatus, FreqUnit, InvoiceStatus, SiteType, UserRole, WoPriority, WoStatus, WoType } from "./types";
 
 export const CATEGORIES = [
   "HVAC",
@@ -136,6 +136,22 @@ export const INVOICE_TONE: Record<InvoiceStatus | "none", Tone> = {
 };
 export const APPROVAL_LABEL: Record<ApprovalStatus, string> = { pending: "Awaiting decision", approved: "Approved", rejected: "Rejected" };
 export const APPROVAL_TONE: Record<ApprovalStatus, Tone> = { pending: "serious", approved: "good", rejected: "critical" };
+
+export const QUOTE_LABEL: Record<QuoteStatus | "none", string> = {
+  none: "No quote",
+  submitted: "Awaiting decision",
+  approved: "Approved",
+  rejected: "Not approved",
+  superseded: "Replaced by revision",
+};
+export const QUOTE_TONE: Record<QuoteStatus | "none", Tone> = { none: "muted", submitted: "serious", approved: "good", rejected: "critical", superseded: "muted" };
+export const COST_CATEGORY_LABEL: Record<CostCategory, string> = {
+  labor: "Labor",
+  materials: "Parts & materials",
+  trip: "Trip / service call",
+  equipment: "Equipment rental",
+  other: "Other",
+};
 
 /** How long a vendor link works before it must be renewed. */
 export const VENDOR_LINK_DAYS = 90;

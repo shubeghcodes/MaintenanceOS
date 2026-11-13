@@ -6,6 +6,8 @@ export type WoStatus = "new" | "assigned" | "in_progress" | "on_hold" | "pending
 export type DispatchStatus = "sent" | "accepted" | "declined" | "in_progress" | "pending_approval" | "work_completed" | "closed" | "revoked";
 export type InvoiceStatus = "submitted" | "under_review" | "approved" | "rejected" | "paid";
 export type ApprovalStatus = "pending" | "approved" | "rejected";
+export type QuoteStatus = "submitted" | "approved" | "rejected" | "superseded";
+export type CostCategory = "labor" | "materials" | "trip" | "equipment" | "other";
 export type WoType = "reactive" | "preventive" | "compliance" | "project";
 export type FreqUnit = "day" | "week" | "month" | "year";
 export type ComplianceResult = "pass" | "fail" | "conditional";
@@ -218,6 +220,43 @@ export interface VendorDispatch {
   closed_at: string | null;
   revoked_at: string | null;
   created_by: string | null;
+  created_at: string;
+  quote_required?: boolean;
+}
+
+export type QuoteLine = { category: CostCategory; description: string; quantity: number; unit_cost: number; amount: number };
+
+export interface VendorQuote {
+  id: string;
+  work_order_id: string;
+  dispatch_id: string;
+  vendor_id: string;
+  quote_number: string | null;
+  amount: number;
+  scope: string;
+  lines: QuoteLine[];
+  valid_until: string | null;
+  attachment_id: string | null;
+  status: QuoteStatus;
+  version: number;
+  submitted_by_label: string | null;
+  decided_at: string | null;
+  decision_note: string | null;
+  created_at: string;
+}
+
+export interface VendorCostLine {
+  id: string;
+  work_order_id: string;
+  dispatch_id: string;
+  vendor_id: string;
+  category: CostCategory;
+  description: string;
+  quantity: number;
+  unit_cost: number;
+  amount: number;
+  attachment_id: string | null;
+  added_by_label: string | null;
   created_at: string;
 }
 

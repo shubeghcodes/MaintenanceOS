@@ -34,6 +34,8 @@ const VENDOR_NOTICE: Record<string, string> = {
   closed: "Work approved and work order closed.",
   sent_back: "Sent back to the vendor for follow-up.",
   invoice_under_review: "Invoice marked under review.",
+  quote_approved: "Quote approved and the not-to-exceed updated. The vendor has been notified.",
+  quote_rejected: "Quote not approved. The vendor has been notified and can send a revision.",
   invoice_approved: "Invoice approved. The vendor has been notified.",
   invoice_rejected: "Revision requested. The vendor has been notified.",
   invoice_paid: "Invoice marked paid.",
@@ -203,7 +205,7 @@ export default async function WorkOrderPage({
                       )}
                       {e.kind === "assignment" && <>updated assignment: {e.body}</>}
                       {e.kind === "schedule" && <>{e.body?.replace(/^S/, "s").replace(/^R/, "r")}</>}
-                      {["system", "dispatch", "approval", "invoice", "vendor"].includes(e.kind) && <>{e.body}</>}
+                      {["system", "dispatch", "approval", "invoice", "vendor", "quote", "vendor_cost"].includes(e.kind) && <>{e.body}</>}
                       {e.kind === "comment" && (e.meta?.to_vendor ? "messaged the vendor" : "commented")}
                       {e.kind === "vendor_update" && "posted an update"}
                       {e.kind === "email_reply" && (e.meta?.unverified ? "sent an email (unrecognized sender)" : "replied by email")}

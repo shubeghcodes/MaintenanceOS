@@ -1,7 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { hashToken } from "./tokens";
-import type { ApprovalRequest, Attachment, VendorDispatch, VendorInvoice, WoPriority, WoStatus } from "./types";
+import type { ApprovalRequest, Attachment, VendorCostLine, VendorDispatch, VendorInvoice, VendorQuote, WoPriority, WoStatus } from "./types";
 
 export type PortalDispatch = VendorDispatch & { token_version: number; vendor: { id: string; name: string } | null };
 
@@ -48,11 +48,13 @@ export type PortalData = {
   events: { id: string; kind: string; body: string | null; to_status: WoStatus | null; actor_type: string | null; actor_label: string | null; created_at: string; staff: string | null; meta: Record<string, unknown> | null }[];
   approvals: ApprovalRequest[];
   invoices: (VendorInvoice & { file_url: string | null })[];
+  quotes: (VendorQuote & { file_url: string | null })[];
+  costs: (VendorCostLine & { file_url: string | null })[];
 };
 
 /** Everything the vendor may see — and nothing else (no costs, internal notes, other vendors). */
 export async function loadPortal(db: SupabaseClient, d: PortalDispatch): Promise<PortalData> {
-  const [{ data: wo }, { data: files }, { data: events }, { data: approvals }, { data: invoices }] = await Promise.all([
+  const [{ data: wo }, { data: files }, { data: events }, { data: approvals }, { data: invoices }, { data: quotes }, { data: costs }] = await Promise.all([
     db
       .from("work_orders")
       .select(
@@ -72,20 +74,27 @@ export async function loadPortal(db: SupabaseClient, d: PortalDispatch): Promise
       .order("created_at", { ascending: false }),
     db.from("approval_requests").select("*").eq("dispatch_id", d.id).order("created_at", { ascending: false }),
     db.from("vendor_invoices").select("*").eq("dispatch_id", d.id).order("created_at", { ascending: false }),
+    db.from("vendor_quotes").select("*").eq("dispatch_id", d.id).order("created_at", { ascending: false }),
+    db.from("vendor_cost_lines").select("*").eq("dispatch_id", d.id).order("created_at"),
   ]);
 
   const w = wo as unknown as PortalData["wo"] & { site: PortalData["site"]; asset: PortalData["asset"]; requester: PortalData["requester"] };
-  // Only this dispatch's uploads (or the original request photos); invoice files only through the invoice list.
-  const visible = ((files ?? []) as Attachment[]).filter((f) => (!f.dispatch_id || f.dispatch_id === d.id) && f.category !== "invoice");
+  // Only this dispatch's uploads (or the original request photos); invoice, quote and receipt files only through their own lists.
+  const visible = ((files ?? []) as Attachment[]).filter((f) => (!f.dispatch_id || f.dispatch_id === d.id) && !["invoice", "quote", "receipt"].includes(f.category ?? ""));
   const invoiceRows = (invoices ?? []) as VendorInvoice[];
-  const invoiceFiles = invoiceRows.length
-    ? (((await db.from("attachments").select("*").in("id", invoiceRows.map((i) => i.attachment_id).filter(Boolean) as string[])).data ?? []) as Attachment[])
-    : [];
+  const quoteRows = (quotes ?? []) as VendorQuote[];
+  const costRows = (costs ?? []) as VendorCostLine[];
+  const fileIds = [...invoiceRows, ...quoteRows, ...costRows].map((i) => i.attachment_id).filter(Boolean) as string[];
+  const invoiceFiles = fileIds.length ? (((await db.from("attachments").select("*").in("id", fileIds)).data ?? []) as Attachment[]) : [];
   const all = [...visible, ...invoiceFiles];
   const { data: signed } = all.length
     ? await db.storage.from("attachments").createSignedUrls(all.map((f) => f.storage_path), 60 * 60)
     : { data: [] as { path: string | null; signedUrl: string }[] };
   const url = (p: string) => signed?.find((s) => s.path === p)?.signedUrl ?? null;
+  const fileFor = (id: string | null) => {
+    const f = id ? invoiceFiles.find((x) => x.id === id) : null;
+    return f ? url(f.storage_path) : null;
+  };
 
   const { site, asset, requester, ...woRest } = w;
   return {
@@ -98,10 +107,9 @@ export async function loadPortal(db: SupabaseClient, d: PortalDispatch): Promise
       .filter((e) => !e.meta || !e.meta.dispatch_id || e.meta.dispatch_id === d.id)
       .map(({ user, ...e }) => ({ ...e, staff: user?.full_name ?? null })),
     approvals: (approvals ?? []) as ApprovalRequest[],
-    invoices: invoiceRows.map((i) => {
-      const f = invoiceFiles.find((x) => x.id === i.attachment_id);
-      return { ...i, file_url: f ? url(f.storage_path) : null };
-    }),
+    invoices: invoiceRows.map((i) => ({ ...i, file_url: fileFor(i.attachment_id) })),
+    quotes: quoteRows.map((q) => ({ ...q, file_url: fileFor(q.attachment_id) })),
+    costs: costRows.map((c) => ({ ...c, file_url: fileFor(c.attachment_id) })),
   };
 }
 
