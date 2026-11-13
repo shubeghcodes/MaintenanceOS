@@ -2,7 +2,7 @@ export type UserRole = "admin" | "manager" | "tech" | "vendor";
 export type SiteType = "qsr" | "dine_in" | "cre";
 export type AssetStatus = "operational" | "needs_repair" | "down" | "retired";
 export type WoPriority = "emergency" | "high" | "medium" | "low";
-export type WoStatus = "requested" | "new" | "assigned" | "in_progress" | "on_hold" | "pending_approval" | "pending_review" | "completed" | "cancelled";
+export type WoStatus = "requested" | "new" | "assigned" | "in_progress" | "on_hold" | "pending_approval" | "pending_review" | "awaiting_signoff" | "completed" | "cancelled";
 export type DispatchStatus = "sent" | "accepted" | "declined" | "in_progress" | "pending_approval" | "work_completed" | "closed" | "revoked";
 export type InvoiceStatus = "submitted" | "under_review" | "approved" | "rejected" | "paid";
 export type ApprovalStatus = "pending" | "approved" | "rejected";
@@ -107,6 +107,12 @@ export interface WorkOrder {
   estimated_hours: number | null;
   certificate_number: string | null;
   purchases_cost: number;
+  approved_at?: string | null;
+  signoff_requested_at?: string | null;
+  signed_off_at?: string | null;
+  signed_off_by?: string | null;
+  signoff_method?: "gm" | "admin" | "auto" | null;
+  signoff_note?: string | null;
   created_at: string;
   updated_at: string;
 }

@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { sendDaySchedules } from "@/lib/schedule-email";
 import { sendVendorReminders } from "@/lib/vendor-reminders";
 import { autoDispatchCompliance } from "@/lib/compliance-dispatch";
+import { processSignoffs } from "@/lib/signoff";
 import { todayISO } from "@/lib/format";
 
 /**
@@ -11,6 +12,7 @@ import { todayISO } from "@/lib/format";
  *  2. email due compliance work orders to their vendors (secure link)
  *  3. email techs today's schedule
  *  4. nudge vendors with overdue responses / work / invoices
+ *  5. remind GMs about finished jobs to sign off; close ones left unsigned for 3 days
  */
 export const maxDuration = 60;
 
@@ -35,6 +37,11 @@ export async function GET(request: Request) {
     out.vendorReminders = (await sendVendorReminders(db)).length;
   } catch (e) {
     out.vendorReminders = { error: e instanceof Error ? e.message : "failed" };
+  }
+  try {
+    out.signoffs = await processSignoffs(db);
+  } catch (e) {
+    out.signoffs = { error: e instanceof Error ? e.message : "failed" };
   }
   return NextResponse.json(out);
 }

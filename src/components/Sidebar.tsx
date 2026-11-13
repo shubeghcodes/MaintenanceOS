@@ -86,7 +86,7 @@ export function Sidebar({
             <Icon className="h-4 w-4" aria-hidden />
             {label}
             {href === "/work-orders" && approvalsWaiting > 0 && (
-              <span className="ml-auto rounded-full bg-orange-400 px-1.5 py-0.5 text-[11px] font-semibold text-slate-900" title={`${approvalsWaiting} work order(s) need approval`}>
+              <span className="ml-auto rounded-full bg-orange-400 px-1.5 py-0.5 text-[11px] font-semibold text-slate-900" title={role === "manager" ? `${approvalsWaiting} job(s) waiting for your sign-off` : `${approvalsWaiting} work order(s) need approval`}>
                 {approvalsWaiting}
               </span>
             )}

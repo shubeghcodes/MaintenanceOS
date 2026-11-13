@@ -3,8 +3,12 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
-import { emailApprovalNeeded, emailRequesterApproved, emailRequesterCompleted, emailRequesterDeclined, emailTechAssigned } from "@/lib/wo-notify";
+import { emailApprovalNeeded, emailRequesterApproved, emailRequesterDeclined, emailTechAssigned, emailTechSentBack } from "@/lib/wo-notify";
+import { afterClosed, afterWorkDone } from "@/lib/signoff";
+import { sendAndRecord } from "@/lib/dispatch";
+import { ACTIVE_DISPATCH } from "@/lib/constants";
 import { getSession, isSuper } from "@/lib/auth";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { saveAttachments } from "@/lib/attachments";
 import { num, str, zonedTimeISO } from "@/lib/format";
 import type { WoStatus } from "@/lib/types";
@@ -106,6 +110,81 @@ export async function declineWorkOrder(fd: FormData) {
   redirect(`/work-orders/${id}?approved=declined`);
 }
 
+/** GM (or admin) confirms the work is done: closes the work order. */
+export async function signOffWorkOrder(fd: FormData) {
+  const { supabase, profile } = await getSession();
+  const id = str(fd, "id")!;
+  if (!(profile.role === "manager" || profile.role === "admin")) fail(id, "Only the store's GM or an admin can sign off");
+  const { data: wo } = await supabase.from("work_orders").select("status").eq("id", id).maybeSingle();
+  if (!wo || wo.status !== "awaiting_signoff") fail(id, "This work order isn't waiting for sign-off");
+  const note = str(fd, "note");
+  const { error } = await supabase
+    .from("work_orders")
+    .update({ status: "completed", signed_off_at: new Date().toISOString(), signoff_note: note })
+    .eq("id", id);
+  if (error) fail(id, error.message);
+  await supabase
+    .from("work_order_events")
+    .insert({ work_order_id: id, user_id: profile.id, kind: "system", body: `Signed off: confirmed fixed${note ? `. ${note}` : ""}` });
+  after(() => afterClosed(id, profile.id, note));
+  revalidateWo(id);
+  redirect(`/work-orders/${id}?signoff=done`);
+}
+
+/** Admin closes a job the GM hasn't signed off, with a reason. */
+export async function closeForGm(fd: FormData) {
+  const { supabase, profile } = await getSession();
+  const id = str(fd, "id")!;
+  if (profile.role !== "admin") fail(id, "Only an admin can close this for the GM");
+  const reason = str(fd, "reason");
+  if (!reason) fail(id, "Give a reason for closing without the GM's sign-off");
+  const { data: wo } = await supabase.from("work_orders").select("status").eq("id", id).maybeSingle();
+  if (!wo || wo.status !== "awaiting_signoff") fail(id, "This work order isn't waiting for sign-off");
+  const { error } = await supabase
+    .from("work_orders")
+    .update({ status: "completed", signed_off_at: new Date().toISOString(), signoff_note: reason })
+    .eq("id", id);
+  if (error) fail(id, error.message);
+  await supabase.from("work_order_events").insert({ work_order_id: id, user_id: profile.id, kind: "system", body: `Closed without GM sign-off: ${reason}` });
+  after(() => afterClosed(id, profile.id));
+  revalidateWo(id);
+  redirect(`/work-orders/${id}?signoff=closed`);
+}
+
+/** GM (or admin) says it isn't fixed: back to the same tech or vendor as a return visit. */
+export async function sendBackNotFixed(fd: FormData) {
+  const { supabase, profile } = await getSession();
+  const id = str(fd, "id")!;
+  if (!(profile.role === "manager" || profile.role === "admin")) fail(id, "Only the store's GM or an admin can send this back");
+  const note = str(fd, "note");
+  if (!note) fail(id, "Say what's still wrong so the tech or vendor knows");
+  const { data: wo } = await supabase.from("work_orders").select("status").eq("id", id).maybeSingle();
+  if (!wo || wo.status !== "awaiting_signoff") fail(id, "This work order isn't waiting for sign-off");
+  const { error } = await supabase.from("work_orders").update({ status: "in_progress" }).eq("id", id);
+  if (error) fail(id, error.message);
+  // Shared, so a vendor sees it on their link too.
+  await supabase.from("work_order_events").insert({ work_order_id: id, user_id: profile.id, kind: "comment", body: `Not fixed: ${note}`, visibility: "shared" });
+
+  // A vendor job reopens on their link and they get the note; otherwise the tech is emailed.
+  const db = createAdminClient();
+  const { data: d } = await db
+    .from("vendor_dispatches")
+    .select("id,token_version,status")
+    .eq("work_order_id", id)
+    .in("status", [...ACTIVE_DISPATCH, "closed"])
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (d) {
+    await db.from("vendor_dispatches").update({ status: "in_progress", completed_at: null, closed_at: null }).eq("id", d.id);
+    after(() => sendAndRecord(db, d.id, d.token_version, "sent_back", { note }));
+  } else {
+    after(() => emailTechSentBack(id, profile.id, note));
+  }
+  revalidateWo(id);
+  redirect(`/work-orders/${id}?signoff=sent_back`);
+}
+
 function revalidateWo(id: string) {
   revalidatePath(`/work-orders/${id}`);
   revalidatePath("/work-orders");
@@ -149,7 +228,8 @@ export async function setStatus(status: WoStatus, fd: FormData) {
   if (note) {
     await supabase.from("work_order_events").insert({ work_order_id: id, user_id: profile.id, kind: "comment", body: note });
   }
-  if (status === "completed" && wo.status !== "completed") after(() => emailRequesterCompleted(id, profile.id));
+  // Store jobs now wait for the GM's sign-off; others close and send the closing emails.
+  if (status === "completed" && wo.status !== "completed") after(() => afterWorkDone(id, profile.id));
   revalidatePath(`/work-orders/${id}`);
   revalidatePath("/work-orders");
   revalidatePath("/my-day");

@@ -37,10 +37,13 @@ export const STATUS_LABEL: Record<WoStatus, string> = {
   on_hold: "On hold",
   pending_approval: "Extra work approval",
   pending_review: "Pending review",
+  awaiting_signoff: "Awaiting GM sign-off",
   completed: "Completed",
   cancelled: "Cancelled",
 };
-export const OPEN_STATUSES: WoStatus[] = ["requested", "new", "assigned", "in_progress", "on_hold", "pending_approval", "pending_review"];
+export const OPEN_STATUSES: WoStatus[] = ["requested", "new", "assigned", "in_progress", "on_hold", "pending_approval", "pending_review", "awaiting_signoff"];
+/** Work is done; waiting for the store's GM to confirm (auto-closes after this many days). */
+export const SIGNOFF_AUTO_CLOSE_DAYS = 3;
 
 export const PRIORITY_LABEL: Record<WoPriority, string> = {
   emergency: "Emergency",
@@ -85,6 +88,7 @@ export const STATUS_TONE: Record<WoStatus, Tone> = {
   on_hold: "muted",
   pending_approval: "serious",
   pending_review: "serious",
+  awaiting_signoff: "warning",
   completed: "good",
   cancelled: "muted",
 };

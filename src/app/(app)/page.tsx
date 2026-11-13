@@ -96,6 +96,8 @@ export default async function Dashboard() {
   const urgent = open.filter((w) => w.priority === "emergency" || w.priority === "high");
   const unassigned = open.filter((w) => w.status === "new");
   const needsApproval = open.filter((w) => w.status === "requested");
+  const needsSignoff = open.filter((w) => w.status === "awaiting_signoff");
+  const myAsk = profile.role === "admin" ? needsApproval.length : profile.role === "manager" ? needsSignoff.length : 0;
   const pmDone = done.filter((w) => w.type === "preventive");
   const pmOnTime = pmDone.filter((w) => !w.due_at || new Date(w.completed_at) <= new Date(w.due_at));
   const pmRate = pmDone.length ? Math.round((pmOnTime.length / pmDone.length) * 100) : null;
@@ -174,9 +176,14 @@ export default async function Dashboard() {
         </div>
       </div>
 
-      {vendorAction.approvals + vendorAction.reviews + vendorAction.invoices + vendorAction.quotes + receiptsToReview + (profile.role === "admin" ? needsApproval.length : 0) > 0 && (
+      {vendorAction.approvals + vendorAction.reviews + vendorAction.invoices + vendorAction.quotes + receiptsToReview + myAsk > 0 && (
         <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg bg-orange-50 px-4 py-3 text-sm text-orange-950 ring-1 ring-inset ring-orange-200">
           <b>Waiting on you:</b>
+          {profile.role === "manager" && needsSignoff.length > 0 && (
+            <Link href="/work-orders?status=awaiting_signoff" className="font-semibold underline-offset-2 hover:underline">
+              {needsSignoff.length} finished job{needsSignoff.length > 1 ? "s" : ""} to sign off
+            </Link>
+          )}
           {profile.role === "admin" && needsApproval.length > 0 && (
             <Link href="/work-orders?status=requested" className="font-semibold underline-offset-2 hover:underline">
               {needsApproval.length} work order{needsApproval.length > 1 ? "s" : ""} to approve

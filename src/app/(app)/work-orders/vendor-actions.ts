@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
-import { emailRequesterApproved, emailRequesterCompleted, emailRequesterVendorAssigned } from "@/lib/wo-notify";
+import { emailRequesterApproved, emailRequesterVendorAssigned } from "@/lib/wo-notify";
+import { afterWorkDone } from "@/lib/signoff";
 import { redirect } from "next/navigation";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getSession, isSuper } from "@/lib/auth";
@@ -283,9 +284,8 @@ export async function reviewWork(decision: "close" | "send_back", fd: FormData) 
       .eq("id", d.work_order_id);
     if (error) fail(d.work_order_id, error.message);
     if (note) await logEvent(supabase, { work_order_id: d.work_order_id, user_id: profile.id, kind: "comment", body: `Review: ${note}`, visibility: "shared" });
-    // Let the vendor know it was accepted and closed, and the person who asked that it's done.
-    await sendAndRecord(supabase, id, d.token_version, "closed", { note });
-    after(() => emailRequesterCompleted(d.work_order_id, profile.id));
+    // Store jobs go to the GM for sign-off first; others close now and the vendor and requester are told.
+    after(() => afterWorkDone(d.work_order_id, profile.id));
   } else {
     if (!note) fail(d.work_order_id, "Tell the vendor what needs follow-up.");
     await supabase.from("vendor_dispatches").update({ status: "in_progress", completed_at: null }).eq("id", id);
@@ -314,6 +314,10 @@ export async function reviewInvoice(to: InvoiceStatus, fd: FormData) {
   if (!inv) redirect("/vendor-jobs");
   if ((profile as Profile).role !== "admin") fail(inv.work_order_id, "Only admins can review invoices.");
   if ((to === "approved" || to === "paid") && !isSuper(profile as Profile)) fail(inv.work_order_id, "Only a super admin can approve invoices for payment.");
+  if (to === "approved" && fd.get("override_signoff") !== "on") {
+    const { data: w } = await supabase.from("work_orders").select("status").eq("id", inv.work_order_id).maybeSingle();
+    if (w?.status === "awaiting_signoff") fail(inv.work_order_id, "The GM hasn't signed off on this work yet. Tick “Approve anyway” to approve the invoice now.");
+  }
   if (!NEXT[inv.status as InvoiceStatus].includes(to)) fail(inv.work_order_id, "That invoice has already moved on.");
   const note = str(fd, "note");
   if (to === "rejected" && !note) fail(inv.work_order_id, "Tell the vendor what to correct.");

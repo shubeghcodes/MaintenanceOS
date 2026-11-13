@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, Clock, MapPin, Navigation, Pause, Phone, Play, Receipt, Square } from "lucide-react";
 import { getSession } from "@/lib/auth";
-import { OPEN_STATUSES } from "@/lib/constants";
+import { WORKABLE_STATUSES } from "@/lib/constants";
 import { addDaysISO, dayLabel, fmtTime, isISODate, personName, relativeDue, dueWhen, todayISO } from "@/lib/format";
 import type { WoPriority, WoStatus, WoType } from "@/lib/types";
 import { Alert, Card, CardHeader, EmptyState, PageHeader, Select, Button } from "@/components/ui";
@@ -47,7 +47,7 @@ export default async function MyDayPage({ searchParams }: { searchParams: Promis
 
   const [{ data: dayData }, { data: otherData }, { data: techData }] = await Promise.all([
     supabase.from("work_orders").select(SELECT).eq("assigned_tech_id", techId).eq("scheduled_date", date).neq("status", "cancelled").order("scheduled_start", { ascending: true, nullsFirst: false }),
-    supabase.from("work_orders").select(SELECT).eq("assigned_tech_id", techId).is("scheduled_date", null).in("status", OPEN_STATUSES).order("due_at").limit(20),
+    supabase.from("work_orders").select(SELECT).eq("assigned_tech_id", techId).is("scheduled_date", null).in("status", WORKABLE_STATUSES).order("due_at").limit(20),
     profile.role === "admin"
       ? supabase.from("profiles").select("id,full_name,email").in("role", ["tech", "admin"]).eq("active", true).order("full_name")
       : Promise.resolve({ data: [] as { id: string; full_name: string | null; email: string | null }[] }),
@@ -65,7 +65,7 @@ export default async function MyDayPage({ searchParams }: { searchParams: Promis
   const unscheduled = (otherData ?? []) as unknown as Job[];
   const techs = (techData ?? []) as { id: string; full_name: string | null; email: string | null }[];
   const hours = jobs.reduce((s, j) => s + Number(j.estimated_hours || 0), 0);
-  const done = jobs.filter((j) => j.status === "completed").length;
+  const done = jobs.filter((j) => j.status === "completed" || j.status === "awaiting_signoff").length;
   const nav = (d: string) => `/my-day?date=${d}${!isMe ? `&tech=${techId}` : ""}`;
   const back = nav(date);
   const techLabel = isMe ? "My day" : `${personName(techs.find((t) => t.id === techId))}’s day`;
@@ -161,7 +161,7 @@ export default async function MyDayPage({ searchParams }: { searchParams: Promis
         <ol className="space-y-3">
           {jobs.map((j, i) => {
             const addr = [j.site?.address, j.site?.city, j.site?.state].filter(Boolean).join(", ");
-            const closed = j.status === "completed";
+            const closed = j.status === "completed" || j.status === "awaiting_signoff";
             return (
               <li key={j.id}>
                 <Card className={closed ? "opacity-60" : ""}>
