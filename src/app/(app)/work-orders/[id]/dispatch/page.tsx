@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { Send } from "lucide-react";
 import { requireRole } from "@/lib/auth";
 import { PRIORITY_LABEL, ACTIVE_DISPATCH } from "@/lib/constants";
@@ -20,7 +20,7 @@ export default async function DispatchPage({
 }) {
   const { id } = await params;
   const sp = await searchParams;
-  const { supabase } = await requireRole("admin", "tech");
+  const { supabase, profile } = await requireRole("admin", "tech");
 
   const [{ data }, { data: vData }, { count: fileCount }, { data: live }] = await Promise.all([
     supabase.from("work_orders").select("*, site:sites(name,code,address,city)").eq("id", id).maybeSingle(),
@@ -29,6 +29,9 @@ export default async function DispatchPage({
     supabase.from("vendor_dispatches").select("id,vendor:vendors(name)").eq("work_order_id", id).in("status", ACTIVE_DISPATCH).maybeSingle(),
   ]);
   if (!data) notFound();
+  if (profile.role !== "admin") {
+    redirect(`/work-orders/${id}?error=${encodeURIComponent("Only an admin can assign work orders to a vendor")}`);
+  }
   const wo = data as WorkOrder & { site: { name: string; code: string | null; address: string | null; city: string | null } | null };
   const vendors = (vData ?? []) as { id: string; name: string; trades: string[]; contact_name: string | null; email: string | null; phone: string | null; coi_expires_on: string | null }[];
   const liveVendor = (live as unknown as { vendor: { name: string } | null } | null)?.vendor?.name;

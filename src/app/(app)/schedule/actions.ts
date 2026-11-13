@@ -5,6 +5,8 @@ import { redirect } from "next/navigation";
 import { getSession, requireRole } from "@/lib/auth";
 import { sendDaySchedules } from "@/lib/schedule-email";
 import { isISODate, str } from "@/lib/format";
+import { after } from "next/server";
+import { emailTechAssigned } from "@/lib/wo-notify";
 
 /** Drag-and-drop move on the calendar. `date: null` = back to the unscheduled list. */
 export async function moveWorkOrder(input: {
@@ -16,13 +18,20 @@ export async function moveWorkOrder(input: {
   if (!(profile.role === "admin" || profile.role === "tech")) return { ok: false, error: "Only admins and techs can schedule work." };
   if (input.date !== null && !isISODate(input.date)) return { ok: false, error: "Invalid date" };
 
+  const { data: cur } = await supabase.from("work_orders").select("assigned_tech_id,status").eq("id", input.id).maybeSingle();
+  if (!cur) return { ok: false, error: "You don't have access to that work order." };
+  if (cur.status === "requested") return { ok: false, error: "Approve this work order first." };
+  const reassign = input.techId !== undefined && input.techId !== cur.assigned_tech_id;
+  if (reassign && profile.role !== "admin") return { ok: false, error: "Only an admin can reassign work to another technician." };
+
   const patch: Record<string, unknown> = { scheduled_date: input.date };
-  if (input.techId !== undefined) patch.assigned_tech_id = input.techId;
+  if (reassign) patch.assigned_tech_id = input.techId;
   if (input.date === null) patch.scheduled_start = null;
 
   const { data, error } = await supabase.from("work_orders").update(patch).eq("id", input.id).select("id");
   if (error) return { ok: false, error: error.message };
   if (!data?.length) return { ok: false, error: "You don't have access to that work order." };
+  if (reassign && input.techId) after(() => emailTechAssigned(input.id, profile.id));
   revalidatePath("/schedule");
   revalidatePath("/my-day");
   return { ok: true };

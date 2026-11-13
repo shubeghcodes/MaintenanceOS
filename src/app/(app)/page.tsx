@@ -95,6 +95,7 @@ export default async function Dashboard() {
   const overdue = open.filter((w) => isOverdue(w.due_at, w.status));
   const urgent = open.filter((w) => w.priority === "emergency" || w.priority === "high");
   const unassigned = open.filter((w) => w.status === "new");
+  const needsApproval = open.filter((w) => w.status === "requested");
   const pmDone = done.filter((w) => w.type === "preventive");
   const pmOnTime = pmDone.filter((w) => !w.due_at || new Date(w.completed_at) <= new Date(w.due_at));
   const pmRate = pmDone.length ? Math.round((pmOnTime.length / pmDone.length) * 100) : null;
@@ -144,7 +145,8 @@ export default async function Dashboard() {
       : [];
 
   // Attention list: overdue first, then emergencies/high, then unassigned
-  const rank = (w: OpenWo) => (isOverdue(w.due_at, w.status) ? 0 : w.priority === "emergency" ? 1 : w.priority === "high" ? 2 : w.status === "new" ? 3 : 9);
+  const rank = (w: OpenWo) =>
+    isOverdue(w.due_at, w.status) ? 0 : w.priority === "emergency" ? 1 : w.priority === "high" ? 2 : w.status === "new" || w.status === "requested" ? 3 : 9;
   const attention = open.filter((w) => rank(w) < 9).sort((a, b) => rank(a) - rank(b) || (a.due_at ?? "").localeCompare(b.due_at ?? "")).slice(0, 8);
 
   const firstName = (profile.full_name ?? "").split(" ")[0];
@@ -172,9 +174,14 @@ export default async function Dashboard() {
         </div>
       </div>
 
-      {vendorAction.approvals + vendorAction.reviews + vendorAction.invoices + vendorAction.quotes + receiptsToReview > 0 && (
+      {vendorAction.approvals + vendorAction.reviews + vendorAction.invoices + vendorAction.quotes + receiptsToReview + (profile.role === "admin" ? needsApproval.length : 0) > 0 && (
         <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg bg-orange-50 px-4 py-3 text-sm text-orange-950 ring-1 ring-inset ring-orange-200">
           <b>Waiting on you:</b>
+          {profile.role === "admin" && needsApproval.length > 0 && (
+            <Link href="/work-orders?status=requested" className="font-semibold underline-offset-2 hover:underline">
+              {needsApproval.length} work order{needsApproval.length > 1 ? "s" : ""} to approve
+            </Link>
+          )}
           {receiptsToReview > 0 && (
             <Link href="/purchases?status=review" className="underline-offset-2 hover:underline">
               {receiptsToReview} receipt{receiptsToReview > 1 ? "s" : ""} to review
@@ -198,7 +205,13 @@ export default async function Dashboard() {
       <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
         <Stat label="Locations" value={sites.length} sub={scope.company ? scope.company.name : "Active sites"} href="/sites" />
         <Stat label="Completed" value={completed30.length} sub="Work orders, last 30 days" href="/work-orders?status=completed" />
-        <Stat label="Open work orders" value={open.length} sub={`${unassigned.length} unassigned`} href="/work-orders" />
+        <Stat
+          label="Open work orders"
+          value={open.length}
+          sub={needsApproval.length ? `${needsApproval.length} need approval · ${unassigned.length} unassigned` : `${unassigned.length} unassigned`}
+          tone={needsApproval.length ? "serious" : undefined}
+          href={needsApproval.length && profile.role === "admin" ? "/work-orders?status=requested" : "/work-orders"}
+        />
         <Stat
           label="Overdue"
           value={overdue.length}
@@ -269,7 +282,7 @@ export default async function Dashboard() {
 
       <div className="grid gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2">
-          <CardHeader title="Needs attention" subtitle="Overdue, emergency, high priority and unassigned" action={<Link href="/work-orders" className="text-xs font-medium text-brand-700">View all</Link>} />
+          <CardHeader title="Needs attention" subtitle="Overdue, emergency, high priority, unassigned and waiting for approval" action={<Link href="/work-orders" className="text-xs font-medium text-brand-700">View all</Link>} />
           {attention.length === 0 ? (
             <EmptyState title="Nothing urgent. Nice." />
           ) : (

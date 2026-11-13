@@ -14,7 +14,7 @@ Deploys to Vercel (or any Node host) in about 15 minutes.
 |---|---|
 | **Companies** | Run several corporations from one login. **Select Company** at the top of the dashboard (and in the sidebar on every page) switches the whole app to that company's locations, work orders, PM, compliance, assets, vendor work and purchases. **All companies** shows everything combined, with a *By company* summary on the dashboard. Add, rename or deactivate companies on **Companies**; new locations are assigned to a company, and work orders, assets, PM schedules and compliance items take the company of their location automatically. Switching never changes data. |
 | **Dashboard** | Locations, completed (30 days), open / overdue / emergency counts, PM on-time %, compliance overdue, R&M spend MTD, avg close time, "needs attention" queue, compliance due in 30 days, per-site rollup, upcoming PMs, equipment down. |
-| **Work orders** | Request → assign → in progress → on hold → complete. Priority SLAs set due dates automatically (Emergency 4h, High 24h, Medium 3d, Low 7d). Tech and/or vendor assignment, NTE with over-limit warning, labor/parts/invoice costs, photos & PDFs, comments, and a full audit trail of every status and assignment change. Mobile-friendly request form with camera upload. |
+| **Work orders** | Request → **admin approval** → assign → in progress → on hold → complete. Priority SLAs set due dates automatically (Emergency 4h, High 24h, Medium 3d, Low 7d). Tech and/or vendor assignment, NTE with over-limit warning, labor/parts/invoice costs, photos & PDFs, comments, and a full audit trail of every status and assignment change. Mobile-friendly request form with camera upload. |
 | **Time & labor** | Techs **start, pause, resume and stop** a timer on any work order (from the work order or *My day*); the clock shows h:mm:ss. Several techs can time the same job independently, and starting a second timer pauses your first, so a tech never has two running. **Reopening** a completed work order makes the next time a separate *return visit*; earlier visits are never reset. Each entry records date, tech, start, end and hours (decimal in reports). Admins can add, adjust or void time with a required reason, kept in an **adjustment history**. |
 | **Labor cost & R&M** | Each tech/admin has an **hourly rate with history** on *Users* (only super admins can see rates). Every entry is costed at the rate in effect on the day it was worked: *labor cost = hours × rate*, and a back-dated rate recalculates automatically. Work orders show a cost table (Internal technician labor with hours, Parts & materials, Outside vendor costs, Total R&M). Under **Analytics** (one sidebar item for admins, with tabs for R&M spending, Technician labor and Purchases; it opens on Purchases when receipts are waiting for review and shows a count), **R&M spending** breaks spend down by category, location, company, work order and month/quarter/year; **Technician labor** shows each tech's work orders, hours and labor cost with filters for tech, location, company and dates. The dashboard's R&M spend includes labor for admins. Techs and GMs see hours, never labor dollars. |
 | **Schedule (dispatch calendar)** | Week and day views with a row per tech. Drag jobs from the *Unscheduled* list onto a tech and day, drag between techs/days to reassign or reschedule, drag back to unschedule. Shows hours booked per tech per day (flags over 8h), filter by tech, overdue and in-progress markers. Start times and estimated hours are set on the work order. |
@@ -39,7 +39,7 @@ Deploys to Vercel (or any Node host) in about 15 minutes.
 |---|---|---|
 | **Super admin** | Everything, in every company, including hourly rates | Everything an admin does, plus: add/remove companies; add, change and remove admins and super admins (and limit admins to companies); set labor rates and location budgets; delete work orders and assets; **approve vendor invoices for payment** and mark them paid. There is always at least one active super admin. |
 | **Admin** | Everything in their companies (all companies unless a super admin limits them), including labor dollars and R&M spend, but not hourly rates | Day-to-day setup, assignments, scheduler, managers/techs/vendors, quotes, receipts; reviews invoices (under review, request revision) but can't approve them for payment |
-| **Manager** (store / property) | Only their assigned sites | Submit requests, comment, upload photos, cancel their own new requests |
+| **Manager** (store / property) | Only their assigned sites | Submit requests (an admin approves them), comment, upload photos, withdraw their own requests before work starts |
 | **Tech** | Their assigned sites + anything assigned to them | Work tickets, set status, costs, assign, edit assets, log compliance |
 | **Vendor** | Only work orders dispatched to their company | Start / hold / complete, invoice amount & number, notes, photos |
 
@@ -51,7 +51,7 @@ Row-level security policies in Postgres enforce all of this, so even a direct AP
 
 ### 1. Create the Supabase project
 1. Create a project at supabase.com.
-2. **SQL Editor** → run, in order: `supabase/migrations/0001_schema.sql`, `0003_scheduling.sql`, `0004_vendor_portal.sql`, `0005_compliance_calendar.sql`, `0006_inbound_email.sql`, `0007_purchases.sql`, `0008_grants.sql`, `0009_companies.sql`, `0010_vendor_costs_quotes.sql`, `0011_labor_time.sql`, `0012_super_admin.sql`, `0013_site_budgets.sql`. (`0002` is the optional pg_cron file.) Already ran some? Run only the new ones; 0003–0013 are safe to re-run. `0012` makes the earliest admin the first super admin. `0011` turns any labor typed on existing work orders into a time entry, keeping its hours and dollars. `0009` puts all existing sites into a starting company called "My Company" that you can rename. **Don't skip `0008`**: newer Supabase projects don't give the app access to new tables, and without it every sign-in ends in "Your account is inactive".
+2. **SQL Editor** → run, in order: `supabase/migrations/0001_schema.sql`, `0003_scheduling.sql`, `0004_vendor_portal.sql`, `0005_compliance_calendar.sql`, `0006_inbound_email.sql`, `0007_purchases.sql`, `0008_grants.sql`, `0009_companies.sql`, `0010_vendor_costs_quotes.sql`, `0011_labor_time.sql`, `0012_super_admin.sql`, `0013_site_budgets.sql`, `0014_wo_requested_status.sql`, `0015_wo_approval.sql`. (`0002` is the optional pg_cron file.) Already ran some? Run only the new ones; 0003–0015 are safe to re-run. Run `0014` on its own before `0015` (Postgres must commit a new status before it can be used). `0012` makes the earliest admin the first super admin. `0011` turns any labor typed on existing work orders into a time entry, keeping its hours and dollars. `0009` puts all existing sites into a starting company called "My Company" that you can rename. **Don't skip `0008`**: newer Supabase projects don't give the app access to new tables, and without it every sign-in ends in "Your account is inactive".
 3. *(Optional, for a demo)* run `supabase/seed.sql`: 4 sites, 5 vendors, 9 assets, PM schedules, compliance items and sample work orders. Skip it for production, or delete the sample rows later.
 4. **Authentication → URL Configuration:** set *Site URL* to your app URL and add `https://YOUR-APP/auth/callback` to *Redirect URLs* (also `http://localhost:3000/auth/callback` for local dev).
 5. **Authentication → Providers → Email:** turn **off** "Allow new users to sign up". Access is invite-only.
@@ -161,7 +161,7 @@ Work order R&M cost = internal technician labor (from time entries) + receipts +
 | Open | New |
 | Assigned to Vendor / Accepted | Assigned (the vendor panel shows Sent or Accepted) |
 | In Progress | In progress |
-| Pending Approval | Pending approval |
+| Pending Approval | Extra work approval |
 | Work Completed / Pending Management Review | Pending review |
 | Closed | Completed |
 | Declined / On Hold / Reopened | Vendor panel shows Declined (work order returns to New) / On hold / Reopen button |
@@ -175,6 +175,17 @@ Invoice status is tracked separately: Not submitted, Submitted, Under review, Ap
 - **Audit trail:** every vendor action is logged with the name they entered, time, IP address and device. Changes to the work order itself go through a database function only the server can call.
 - **Duplicates and files:** repeat submissions are blocked (each step only works from the right previous step, and forms carry a one-time key). Files are stored in a private bucket and shown through 1-hour signed URLs.
 - **Verification:** for sensitive steps (decline, complete, invoice), v1 relies on having the link plus a confirmation prompt. An emailed one-time code for invoice submission can be added if you want a second factor.
+
+### Approval workflow
+1. A GM or tech submits a work order. It starts as **Needs approval**, and the admins who cover that company get an email (flagged for emergency and high priority). The sidebar's *Work orders* item and the dashboard show how many are waiting.
+2. An admin or super admin opens it and either:
+   - **Approve & assign:** picks the technician (plus priority, category, schedule and an optional note). The tech gets an email right away, and the person who asked gets an "approved" email saying who's on it.
+   - **Approve & send to vendor:** the usual *Assign to External Vendor* form. Sending it approves it; the vendor gets their link and the person who asked is told which vendor has it.
+   - **Decline** with a reason, which is emailed to the person who asked.
+3. Until it's approved, nobody can schedule, start, log time on, or send it to a vendor, and only admins ever assign or reassign a technician or vendor (enforced in the database). Techs can still adjust the schedule, priority and details of jobs they're on. The person who asked can add details or withdraw a request.
+4. Work orders created by admins, and the automatic PM and compliance work orders, are approved when created.
+
+Other emails to people inside the company: the requester (GMs and techs) gets one when a vendor is put on their job and when it's completed (with what was done); a tech gets one whenever they're assigned a job; the vendor gets one when you **Approve & close** their work. Vendor-activity alerts go to the admins who cover that work order's company, plus whoever sent the job to the vendor.
 
 ### Scheduling workflow
 1. New requests land in **Schedule → Unscheduled** (sorted by priority, then due date).

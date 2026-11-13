@@ -45,7 +45,7 @@ export async function VendorPanel({ supabase, wo, profile }: { supabase: Supabas
   const open = !["completed", "cancelled"].includes(wo.status);
 
   if (!current) {
-    return canManage && open ? (
+    return profile.role === "admin" && open ? (
       <Card>
         <CardHeader title="External vendor" />
         <div className="space-y-3 p-5">
@@ -418,7 +418,7 @@ export async function VendorPanel({ supabase, wo, profile }: { supabase: Supabas
                 </div>
               </>
             )}
-            {!isLive && open && (
+            {!isLive && open && profile.role === "admin" && (
               <ButtonLink href={`/work-orders/${wo.id}/dispatch`} size="sm">
                 <Send className="h-3.5 w-3.5" aria-hidden /> Assign to {d.status === "declined" ? "another" : "an"} external vendor
               </ButtonLink>

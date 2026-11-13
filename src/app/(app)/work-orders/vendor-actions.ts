@@ -1,6 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
+import { emailRequesterApproved, emailRequesterCompleted, emailRequesterVendorAssigned } from "@/lib/wo-notify";
 import { redirect } from "next/navigation";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getSession, isSuper } from "@/lib/auth";
@@ -41,6 +43,10 @@ export async function dispatchToVendor(fd: FormData) {
   const { supabase, profile } = await staff();
   const woId = str(fd, "work_order_id")!;
   const formBack: (msg: string) => never = (msg) => redirect(`/work-orders/${woId}/dispatch?error=${encodeURIComponent(msg)}`);
+
+  const { data: woNow } = await supabase.from("work_orders").select("status").eq("id", woId).maybeSingle();
+  const approving = woNow?.status === "requested";
+  if (profile.role !== "admin") formBack("Only an admin can assign work orders to a vendor.");
 
   const contactEmail = str(fd, "contact_email")?.toLowerCase();
   if (!contactEmail || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(contactEmail)) formBack("A valid vendor email is required.");
@@ -93,6 +99,8 @@ export async function dispatchToVendor(fd: FormData) {
     createdBy: profile.id,
   });
   if (!res.ok) formBack(res.error);
+  if (approving) await supabase.from("work_order_events").insert({ work_order_id: woId, user_id: profile.id, kind: "system", body: "Approved and sent to a vendor" });
+  after(() => (approving ? emailRequesterApproved(woId, profile.id, "vendor") : emailRequesterVendorAssigned(woId, profile.id)));
   refresh(woId);
   back(woId, res.emailOk ? "vendor=sent" : `error=${encodeURIComponent(`Saved, but the email didn't go out: ${res.emailError}. Use “Resend link” once fixed.`)}`);
 }
@@ -275,6 +283,9 @@ export async function reviewWork(decision: "close" | "send_back", fd: FormData) 
       .eq("id", d.work_order_id);
     if (error) fail(d.work_order_id, error.message);
     if (note) await logEvent(supabase, { work_order_id: d.work_order_id, user_id: profile.id, kind: "comment", body: `Review: ${note}`, visibility: "shared" });
+    // Let the vendor know it was accepted and closed, and the person who asked that it's done.
+    await sendAndRecord(supabase, id, d.token_version, "closed", { note });
+    after(() => emailRequesterCompleted(d.work_order_id, profile.id));
   } else {
     if (!note) fail(d.work_order_id, "Tell the vendor what needs follow-up.");
     await supabase.from("vendor_dispatches").update({ status: "in_progress", completed_at: null }).eq("id", id);

@@ -27,6 +27,7 @@ export type DispatchContext = {
     priority: WoPriority;
     nte_amount: number | null;
     location_detail: string | null;
+    company_id?: string | null;
   };
   site: { name: string; code: string | null; address: string | null; city: string | null; state: string | null; zip: string | null; phone: string | null } | null;
   asset: { name: string; manufacturer: string | null; model: string | null; serial_number: string | null } | null;
@@ -39,7 +40,7 @@ export async function loadDispatchContext(db: SupabaseClient, dispatchId: string
     .select(
       "id,contact_name,contact_email,contact_phone,instructions,requested_by,created_by,token_expires_at,quote_required," +
         "vendor:vendors(id,name)," +
-        "wo:work_orders(id,number,title,description,priority,nte_amount,location_detail," +
+        "wo:work_orders(id,number,title,description,priority,nte_amount,location_detail,company_id," +
         "site:sites(name,code,address,city,state,zip,phone), asset:assets(name,manufacturer,model,serial_number))",
     )
     .eq("id", dispatchId)
@@ -57,7 +58,7 @@ export async function loadDispatchContext(db: SupabaseClient, dispatchId: string
 const FONT = "-apple-system,Segoe UI,Roboto,Arial,sans-serif";
 const siteAddress = (s: DispatchContext["site"]) => [s?.address, [s?.city, s?.state].filter(Boolean).join(", "), s?.zip].filter(Boolean).join(" ");
 
-function shell(opts: { eyebrow: string; title: string; intro?: string; body?: string; button?: { label: string; url: string }; footer?: string }) {
+export function shell(opts: { eyebrow: string; title: string; intro?: string; body?: string; button?: { label: string; url: string }; footer?: string }) {
   return `<!doctype html><html><body style="margin:0;background:#f1f5f9">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:24px 12px"><tr><td align="center">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:580px;background:#fff;border-radius:12px;padding:24px;font:14px/21px ${FONT};color:#334155">
@@ -70,7 +71,7 @@ ${opts.button ? `<tr><td style="padding-top:20px"><a href="${opts.button.url}" s
 </table></td></tr></table></body></html>`;
 }
 
-function detailTable(rows: [string, string | null | undefined][]) {
+export function detailTable(rows: [string, string | null | undefined][]) {
   return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e2e8f0;border-radius:8px">${rows
     .filter(([, v]) => v)
     .map(
@@ -86,7 +87,7 @@ const vendorFooter = (c: DispatchContext) =>
 
 // ------------------------------------------------------------------ vendor emails
 
-export type VendorEmailKind = "assigned" | "updated" | "approval_decision" | "quote_decision" | "invoice_decision" | "message" | "reminder" | "new_link" | "sent_back";
+export type VendorEmailKind = "assigned" | "updated" | "approval_decision" | "quote_decision" | "invoice_decision" | "message" | "reminder" | "new_link" | "sent_back" | "closed";
 
 export async function emailVendor(
   c: DispatchContext,
@@ -170,6 +171,11 @@ export async function emailVendor(
     title = kind === "sent_back" ? `Work order #${n} needs follow-up` : `New message — work order #${n}`;
     intro = `${hi}<br>${kind === "sent_back" ? "Our team reviewed the completed work and it needs follow-up before we can close it." : "You have a new message about this work order:"}<br><br><div style="padding:12px;background:#f8fafc;border-radius:8px;color:#0f172a">${esc(extra.note ?? "").replace(/\n/g, "<br>")}</div>`;
     body = linkNote;
+  } else if (kind === "closed") {
+    subject = `Work approved — work order #${n} closed`;
+    title = `Work approved — #${n} closed`;
+    intro = `${hi}<br>We reviewed the completed work on <b>${esc(c.wo.title)}</b> and approved it. The work order is now closed.${extra.note ? `<br><br><b>Note:</b> ${esc(extra.note)}` : ""}<br><br>If you haven't sent your invoice yet, you can still submit it from the work order page.`;
+    body = linkNote;
   } else if (kind === "reminder") {
     subject = `Reminder: work order #${n} — ${c.wo.title}`;
     title = `Reminder — work order #${n}`;
@@ -199,7 +205,7 @@ export async function notifyManagement(
   actor: string,
   detail: { note?: string | null; amount?: number | null; invoiceNumber?: string | null } = {},
 ) {
-  const recipients = await managementRecipients(db, c.dispatch.created_by);
+  const recipients = await managementRecipients(db, c.dispatch.created_by, c.wo.company_id ?? null);
   if (!recipients.length) return { ok: false as const, error: "No recipients" };
   const n = c.wo.number;
   const who = kind === "unverified_email" ? actor : `${actor} (${c.vendor.name})`;
@@ -243,18 +249,36 @@ export async function notifyManagement(
   });
 }
 
-/** Admins + whoever dispatched the job, plus VENDOR_NOTIFY_EMAILS (comma-separated). */
-async function managementRecipients(db: SupabaseClient, createdBy: string | null) {
+/** Admins who cover this company + whoever dispatched the job, plus VENDOR_NOTIFY_EMAILS (comma-separated). */
+async function managementRecipients(db: SupabaseClient, createdBy: string | null, companyId: string | null) {
   const { data } = await db.from("profiles").select("id,email,role,active").or(`role.eq.admin${createdBy ? `,id.eq.${createdBy}` : ""}`);
-  const emails = new Set(
-    ((data ?? []) as { email: string | null; active: boolean }[]).filter((p) => p.active && p.email).map((p) => p.email!.toLowerCase()),
-  );
+  const people = ((data ?? []) as { id: string; email: string | null; role: string; active: boolean }[]).filter((p) => p.active && p.email);
+  const covers = await adminCoverage(db, companyId);
+  const emails = new Set(people.filter((p) => p.id === createdBy || (p.role === "admin" && covers(p.id))).map((p) => p.email!.toLowerCase()));
   (process.env.VENDOR_NOTIFY_EMAILS ?? "")
     .split(",")
     .map((e) => e.trim().toLowerCase())
     .filter(Boolean)
     .forEach((e) => emails.add(e));
   return [...emails];
+}
+
+/**
+ * Which admins cover a company: super admins and admins with no company limits cover all;
+ * limited admins only their listed companies. Returns a predicate on the admin's id.
+ */
+export async function adminCoverage(db: SupabaseClient, companyId: string | null) {
+  const [{ data: supers }, { data: limits }] = await Promise.all([
+    db.from("profiles").select("id").eq("role", "admin").eq("is_super", true),
+    db.from("admin_companies").select("user_id,company_id"),
+  ]);
+  const superIds = new Set(((supers ?? []) as { id: string }[]).map((p) => p.id));
+  const byUser = new Map<string, Set<string>>();
+  for (const r of (limits ?? []) as { user_id: string; company_id: string }[]) {
+    if (!byUser.has(r.user_id)) byUser.set(r.user_id, new Set());
+    byUser.get(r.user_id)!.add(r.company_id);
+  }
+  return (adminId: string) => superIds.has(adminId) || !byUser.has(adminId) || (!!companyId && byUser.get(adminId)!.has(companyId));
 }
 
 /** Download a work order's shared photos/files (up to ~8 MB total) to attach to the dispatch email. */
