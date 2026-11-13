@@ -134,7 +134,17 @@ export default async function SitePage({
 
         <div className="space-y-6">
           <Card>
-            <CardHeader title="Team" subtitle="Managed under Users" />
+            <CardHeader
+              title="Team"
+              subtitle="Managed under Users"
+              action={
+                profile.role === "admin" && (
+                  <Link href={`/admin/users?view=sites&site=${id}`} className="text-xs font-medium text-brand-700">
+                    Add / manage
+                  </Link>
+                )
+              }
+            />
             {members.length === 0 ? (
               <EmptyState title="No one assigned." />
             ) : (
