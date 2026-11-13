@@ -128,9 +128,16 @@ export default async function WorkOrderPage({
     listAttachments(supabase, "work_order", id),
     profile.role === "admin" || profile.role === "tech" ? getLookups(supabase, { allCompanies: true }) : Promise.resolve(null),
   ]);
-  const events = ((evData ?? []) as (WorkOrderEvent & { user: { full_name: string | null; email: string | null } | null })[]).filter(
-    (e) => profile.role !== "vendor" || e.visibility === "shared",
-  );
+  // GMs never see vendor money: drop quote/invoice/cost entries and blank amounts in automatic entries.
+  const MONEY_KINDS = ["quote", "invoice", "vendor_cost", "approval"];
+  const events = ((evData ?? []) as (WorkOrderEvent & { user: { full_name: string | null; email: string | null } | null })[])
+    .filter((e) => profile.role !== "vendor" || e.visibility === "shared")
+    .filter((e) => profile.role !== "manager" || !MONEY_KINDS.includes(e.kind))
+    .map((e) =>
+      profile.role === "manager" && e.body && !["comment", "vendor_update", "email_reply"].includes(e.kind)
+        ? { ...e, body: e.body.replace(/\s*\(?\$\s?\d[\d,]*(\.\d+)?\)?/g, "") }
+        : e,
+    );
 
   const { data: laborRow } =
     profile.role === "admin" ? await supabase.from("wo_labor_costs").select("hours,labor_cost,missing_rate").eq("work_order_id", id).maybeSingle() : { data: null };
@@ -241,7 +248,7 @@ export default async function WorkOrderPage({
 
           {role !== "vendor" && <ReceiptsCard supabase={supabase} woId={id} profile={profile} open={!!sp.add_receipt} />}
 
-          <Attachments items={files.filter((f) => f.category !== "receipt")} action={uploadWoFiles} hidden={{ id }} allowInternal={role === "admin" || role === "tech"} categories={role === "admin" || role === "tech"} />
+          <Attachments items={files.filter((f) => f.category !== "receipt" && !(role === "manager" && ["invoice", "quote", "vendor_receipt"].includes(f.category ?? "")))} action={uploadWoFiles} hidden={{ id }} allowInternal={role === "admin" || role === "tech"} categories={role === "admin" || role === "tech"} />
 
           <Card>
             <CardHeader title="Activity" />

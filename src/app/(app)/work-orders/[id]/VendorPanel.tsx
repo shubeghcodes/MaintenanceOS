@@ -20,11 +20,13 @@ export async function VendorPanel({ supabase, wo, profile }: { supabase: Supabas
     supabase.from("vendor_quotes").select("*").eq("work_order_id", wo.id).order("created_at", { ascending: false }),
     supabase.from("vendor_cost_lines").select("*").eq("work_order_id", wo.id).order("created_at"),
   ]);
+  // GMs see who has the job and its progress, never vendor money (also enforced by row security).
+  const gm = profile.role === "manager";
   const dispatches = (dData ?? []) as unknown as Dispatch[];
-  const approvals = (aData ?? []) as ApprovalRequest[];
-  const invoices = (iData ?? []) as VendorInvoice[];
-  const quotes = (qData ?? []) as VendorQuote[];
-  const costs = (cData ?? []) as VendorCostLine[];
+  const approvals = gm ? [] : ((aData ?? []) as ApprovalRequest[]);
+  const invoices = gm ? [] : ((iData ?? []) as VendorInvoice[]);
+  const quotes = gm ? [] : ((qData ?? []) as VendorQuote[]);
+  const costs = gm ? [] : ((cData ?? []) as VendorCostLine[]);
 
   // Signed URLs for invoice, quote and receipt files.
   const fileIds = [...invoices, ...quotes, ...costs].map((i) => i.attachment_id).filter(Boolean) as string[];
@@ -82,12 +84,12 @@ export async function VendorPanel({ supabase, wo, profile }: { supabase: Supabas
     ],
     ["Viewed", d.last_viewed_at ? `${fmtDateTime(d.last_viewed_at)}${d.view_count > 1 ? ` (${d.view_count}×)` : ""}` : "Not yet"],
     d.declined_at ? ["Declined", fmtDateTime(d.declined_at), true] : ["Accepted", d.accepted_at ? fmtDateTime(d.accepted_at) : "Waiting"],
-    ...(d.quote_required || myQuotes.length
+    ...(!gm && (d.quote_required || myQuotes.length)
       ? ([["Quote", myQuotes[0] ? `${QUOTE_LABEL[myQuotes[0].status]} · ${fmtMoney(myQuotes[0].amount, 2)}` : "Required, not sent"]] as [string, string][])
       : []),
     ["Work started", d.started_at ? fmtDateTime(d.started_at) : "—"],
     ["Work completed", d.completed_at ? fmtDateTime(d.completed_at) : "—"],
-    ["Invoice", latestInvoice ? `${INVOICE_LABEL[latestInvoice.status]} · ${fmtMoney(latestInvoice.amount, 2)}` : INVOICE_LABEL.none],
+    ...(gm ? [] : ([["Invoice", latestInvoice ? `${INVOICE_LABEL[latestInvoice.status]} · ${fmtMoney(latestInvoice.amount, 2)}` : INVOICE_LABEL.none]] as [string, string][])),
   ];
 
   return (
@@ -109,7 +111,7 @@ export async function VendorPanel({ supabase, wo, profile }: { supabase: Supabas
               </>
             )}
             Requested by {d.requested_by ? fmtDate(d.requested_by) : "—"} · {PRIORITY_LABEL[wo.priority]}
-            {wo.nte_amount != null && ` · NTE ${fmtMoney(wo.nte_amount)}`}
+            {!gm && wo.nte_amount != null && ` · NTE ${fmtMoney(wo.nte_amount)}`}
           </p>
         </div>
 
@@ -190,7 +192,7 @@ export async function VendorPanel({ supabase, wo, profile }: { supabase: Supabas
             ))}
           </div>
         )}
-        {d.quote_required && myQuotes.length === 0 && isLive && (
+        {!gm && d.quote_required && myQuotes.length === 0 && isLive && (
           <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600 ring-1 ring-inset ring-slate-200">Waiting for the vendor&apos;s quote. They can&apos;t start work until you approve one.</p>
         )}
 
