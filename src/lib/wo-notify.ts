@@ -4,6 +4,7 @@ import { appUrl, esc, sendEmail } from "./email";
 import { PRIORITY_LABEL } from "./constants";
 import { fmtDate, fmtDateTime, fmtTime } from "./format";
 import { adminCoverage, detailTable, shell } from "./vendor-notify";
+import { teamReplyAddress } from "./reply-address";
 import type { WoPriority } from "./types";
 
 /**
@@ -69,13 +70,24 @@ function summary(wo: Wo, extra: [string, string | null | undefined][] = []) {
   ]);
 }
 
-async function send(to: string | string[], subject: string, eyebrow: string, title: string, intro: string, body: string, woId: string, label = "Open work order") {
+async function send(to: string | string[], subject: string, eyebrow: string, title: string, intro: string, body: string, wo: { id: string; number: number }, label = "Open work order") {
+  const woId = wo.id;
+  // Replies come back as a note on the work order (from this location's GMs, techs and admins).
+  const replyTo = teamReplyAddress(wo.id, wo.number);
   try {
     return await sendEmail({
       to,
       subject,
-      html: shell({ eyebrow, title, intro, body, button: { label, url: appUrl(`/work-orders/${woId}`) } }),
+      html: shell({
+        eyebrow,
+        title,
+        intro,
+        body,
+        button: { label, url: appUrl(`/work-orders/${woId}`) },
+        footer: replyTo ? "Reply to this email to add a note to the work order." : undefined,
+      }),
       text: `${title}\n\n${strip(intro)}\n\n${appUrl(`/work-orders/${woId}`)}`,
+      ...(replyTo ? { replyTo } : {}),
     });
   } catch {
     return { ok: false as const, error: "Email failed" };
@@ -98,7 +110,7 @@ export async function emailApprovalNeeded(woId: string) {
     wo.title,
     `${esc(wo.requester?.full_name ?? wo.requester?.email ?? "Someone")} submitted a work order for <b>${esc(loc(wo))}</b>. Approve it and assign a technician or vendor, or decline it.`,
     summary(wo),
-    woId,
+    { id: woId, number: wo.number },
     "Review and assign",
   );
 }
@@ -116,7 +128,7 @@ export async function emailRequesterApproved(woId: string, actorId: string, via:
     `Your request was approved`,
     `${hello(wo.requester)}<br>Your work order <b>${esc(wo.title)}</b> for ${esc(loc(wo))} was approved and assigned to <b>${esc(who)}</b>${via === "vendor" ? " (outside vendor)" : ""}.${when ? `<br>Scheduled: <b>${esc(when)}</b>` : ""}${note ? `<br><br><b>Note:</b> ${esc(note)}` : ""}`,
     "",
-    woId,
+    { id: woId, number: wo.number },
   );
 }
 
@@ -131,7 +143,7 @@ export async function emailRequesterVendorAssigned(woId: string, actorId: string
     `A vendor is on it`,
     `${hello(wo.requester)}<br><b>${esc(wo.vendor?.name ?? "An outside vendor")}</b> has been sent your work order <b>${esc(wo.title)}</b> for ${esc(loc(wo))}. You'll get another email when the work is complete.`,
     "",
-    woId,
+    { id: woId, number: wo.number },
   );
 }
 
@@ -145,7 +157,7 @@ export async function emailRequesterDeclined(woId: string, actorId: string, reas
     `Your request wasn't approved`,
     `${hello(wo.requester)}<br>Your work order <b>${esc(wo.title)}</b> for ${esc(loc(wo))} wasn't approved.<br><br><b>Reason:</b> ${esc(reason)}<br><br>If something has changed, reply on the work order or submit a new request.`,
     "",
-    woId,
+    { id: woId, number: wo.number },
   );
 }
 
@@ -159,7 +171,7 @@ export async function emailRequesterCompleted(woId: string, actorId: string | nu
     `Work completed`,
     `${hello(wo.requester)}<br>Work order <b>${esc(wo.title)}</b> for ${esc(loc(wo))} is complete${wo.tech?.full_name ? ` (${esc(wo.tech.full_name)})` : wo.vendor ? ` (${esc(wo.vendor.name)})` : ""}.${wo.resolution_notes ? `<br><br><b>What was done:</b><br>${esc(wo.resolution_notes).replace(/\n/g, "<br>")}` : ""}<br><br>If anything still isn't right, comment on the work order.`,
     "",
-    woId,
+    { id: woId, number: wo.number },
   );
 }
 
@@ -179,7 +191,7 @@ export async function emailTechAssigned(woId: string, actorId: string, note?: st
       ["Scheduled", esc(when)],
       ["Due", esc(fmtDateTime(wo.due_at))],
     ]),
-    woId,
+    { id: woId, number: wo.number },
   );
 }
 
@@ -206,7 +218,7 @@ export async function emailSignoffRequest(woId: string, opts: { reminder?: boole
       wo.resolution_notes ? `<br><br><b>What was done:</b><br>${esc(wo.resolution_notes).replace(/\n/g, "<br>")}` : ""
     }<br><br><span style="color:#64748b">If no one signs off, it closes automatically on ${esc(fmtDate(opts.closesOn))}.</span>`,
     "",
-    woId,
+    { id: woId, number: wo.number },
     "Review and sign off",
   );
 }
@@ -222,7 +234,7 @@ export async function emailTechSentBack(woId: string, actorId: string, note: str
     `The store says it isn't fixed`,
     `${hello(wo.tech)}<br>The GM at ${esc(loc(wo))} checked <b>${esc(wo.title)}</b> and it still needs work. The work order is open again as a return visit.<br><br><b>Their note:</b> ${esc(note)}`,
     "",
-    woId,
+    { id: woId, number: wo.number },
   );
 }
 
@@ -252,7 +264,7 @@ export async function emailGmsNote(woId: string, note: { body: string; authorId?
     wo.title,
     `<b>${esc(author)}</b> added a note on this work order for ${esc(loc(wo))}:<div style="margin-top:10px;padding:12px;background:#f8fafc;border-radius:8px;color:#0f172a">${esc(text).replace(/\n/g, "<br>")}</div>`,
     "",
-    woId,
+    { id: woId, number: wo.number },
     "Open work order",
   );
 }

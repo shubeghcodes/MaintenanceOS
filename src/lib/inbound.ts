@@ -3,7 +3,7 @@ import { emailGmsNote } from "./wo-notify";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { resendApiBase } from "./email";
-import { parseReplyAddress, type ReplyKind } from "./reply-address";
+import { parseReplyAddress, parseTeamReplyAddress, type ReplyKind } from "./reply-address";
 import { saveAttachments } from "./attachments";
 import { loadDispatchContext, notifyManagement } from "./vendor-notify";
 import { sendAndRecord } from "./dispatch";
@@ -84,7 +84,27 @@ const FREE_MAIL = new Set(["gmail.com", "yahoo.com", "outlook.com", "hotmail.com
 
 // ------------------------------------------------------------------ main handler
 
-export type InboundOutcome = "vendor_reply" | "staff_reply" | "internal_note" | "unverified" | "ignored" | "duplicate";
+export type InboundOutcome = "vendor_reply" | "staff_reply" | "internal_note" | "team_reply" | "unverified" | "ignored" | "duplicate";
+
+/** Text of the reply (quoted original removed) and its photo / PDF attachments. */
+async function readEmail(emailId: string) {
+  const email = await resendGet<Received>(`/emails/receiving/${emailId}`);
+  const body = extractReply(email.text?.trim() ? email.text : htmlToText(email.html ?? "")) || "(no message text)";
+  let files: File[] = [];
+  try {
+    const list = await resendGet<{ data: ReceivedAttachment[] }>(`/emails/receiving/${emailId}/attachments`);
+    for (const a of list.data ?? []) {
+      if (a.content_disposition === "inline" && a.size < 25_000) continue;
+      if (!/^(image\/|application\/pdf$)/.test(a.content_type) || a.size > 10 * 1024 * 1024) continue;
+      const r = await fetch(a.download_url);
+      if (!r.ok) continue;
+      files.push(new File([await r.arrayBuffer()], a.filename || "attachment", { type: a.content_type }));
+    }
+  } catch {
+    files = [];
+  }
+  return { body, files };
+}
 
 export async function processInboundEmail(
   db: SupabaseClient,
@@ -114,6 +134,12 @@ export async function processInboundEmail(
   }
 
   async function handle(): Promise<{ outcome: InboundOutcome; detail?: string }> {
+  // A reply to a team email (GM notes, sign-off, approvals) → note on the work order.
+  for (const a of [...(d.to ?? []), ...(d.received_for ?? []), ...(d.cc ?? [])]) {
+    const team = parseTeamReplyAddress(a);
+    if (team) return handleTeamReply(team.woId);
+  }
+
   // Which work order is this for?
   let route: { dispatchId: string; kind: ReplyKind } | null = null;
   for (const a of [...(d.to ?? []), ...(d.received_for ?? []), ...(d.cc ?? [])]) {
@@ -211,5 +237,49 @@ export async function processInboundEmail(
   });
   await notifyManagement(db, ctx, "unverified_email", from, { note: body });
   return finish("unverified", { work_order_id: woId, dispatch_id: route.dispatchId, attachment_count: saved.length, detail: `Sender ${from} not recognized` });
+  }
+
+  /** GMs at the work order's location, techs and admins post a note; anyone else is kept as a flagged staff-only note. */
+  async function handleTeamReply(woId: string): Promise<{ outcome: InboundOutcome; detail?: string }> {
+    const { data: wo } = await db.from("work_orders").select("id,site_id").eq("id", woId).maybeSingle();
+    if (!wo) return finish("ignored", { detail: "Unknown work order" });
+    const from = bare(d.from);
+    const { data: person } = await db.from("profiles").select("id,full_name,email,role,active").ilike("email", from).maybeSingle();
+    let allowed = !!person && person.active && (person.role === "admin" || person.role === "tech");
+    if (person && person.active && person.role === "manager") {
+      const { count } = await db.from("site_members").select("user_id", { count: "exact", head: true }).eq("site_id", wo.site_id).eq("user_id", person.id);
+      allowed = !!count;
+    }
+    const { body, files } = await readEmail(d.email_id);
+    const meta = { via: "email", from, subject: d.subject ?? null, email_id: d.email_id };
+    const saved = await saveAttachments(db, "work_order", woId, allowed ? person!.id : null, files, {
+      category: "photo",
+      visibility: "internal",
+      label: allowed ? person!.full_name || from : from,
+    });
+    if (allowed) {
+      await db.from("work_order_events").insert({
+        work_order_id: woId,
+        user_id: person!.id,
+        kind: "comment",
+        body,
+        actor_type: "user",
+        visibility: "internal",
+        meta: { ...meta, files: saved.length },
+      });
+      // A tech's or admin's reply is a note the GMs should see; a GM's reply doesn't email the GMs.
+      await emailGmsNote(woId, { body, authorId: person!.id });
+      return finish("team_reply", { work_order_id: woId, attachment_count: saved.length });
+    }
+    await db.from("work_order_events").insert({
+      work_order_id: woId,
+      kind: "email_reply",
+      body: `⚠ Email from ${from} (not a GM at this location or a staff member). Staff only.\n\n${body}`,
+      actor_type: "system",
+      actor_label: from,
+      visibility: "internal",
+      meta: { ...meta, unverified: true, files: saved.length },
+    });
+    return finish("unverified", { work_order_id: woId, attachment_count: saved.length, detail: `Sender ${from} not recognized` });
   }
 }
