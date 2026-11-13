@@ -48,7 +48,7 @@ export function UserImportClient() {
           <li>
             <b>Role</b>: Manager (default), Tech or Admin. Admins see every location. Optional <b>Hourly Rate</b> sets a tech&apos;s labor rate from today.
           </li>
-          <li>New emails get an invite to set a password. People already in MaintainOS are updated instead: blank cells never erase anything, and stores are only added.</li>
+          <li>New emails get an invite to set a password. People already in MaintenanceOS are updated instead: blank cells never erase anything, and stores are only added.</li>
           <li>Already have a list? Upload it as is. Columns like “GM Email”, “Employee Name”, “Position” and “Store Number” are recognised.</li>
         </ul>
       </Card>
@@ -93,7 +93,7 @@ export function UserImportClient() {
               title={`3. Review ${state.fileName}`}
               subtitle={[
                 `${state.counts.invite} to invite`,
-                `${state.counts.update} already in MaintainOS`,
+                `${state.counts.update} already in MaintenanceOS`,
                 `${state.counts.assignments} location assignment${state.counts.assignments === 1 ? "" : "s"}`,
                 state.counts.skip ? `${state.counts.skip} with problems (will be skipped)` : null,
               ]

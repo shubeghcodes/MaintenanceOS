@@ -141,7 +141,7 @@ export async function parseUserFile(file: File): Promise<{ rows: UserImportRow[]
 /** Template: Users sheet (with Role dropdown), Stores sheet listing every location's code, and instructions. */
 export async function buildUserTemplate(stores: { code: string | null; name: string; city: string | null; company: string | null }[]): Promise<ArrayBuffer> {
   const wb = new ExcelJS.Workbook();
-  wb.creator = "MaintainOS";
+  wb.creator = "MaintenanceOS";
   const ws = wb.addWorksheet("Users", { views: [{ state: "frozen", ySplit: 1 }] });
   const example = stores.find((s) => s.code)?.code ?? USER_COLUMNS.find((c) => c.key === "stores")!.example;
   ws.columns = USER_COLUMNS.map((c) => ({ header: c.required ? `${c.label} *` : c.label, key: c.key, width: Math.max(14, c.label.length + 4, String(c.example).length + 2) }));
@@ -183,7 +183,7 @@ export async function buildUserTemplate(stores: { code: string | null; name: str
   for (const c of USER_COLUMNS) help.addRow({ c: c.required ? `${c.label} *` : c.label, h: c.help || "Optional." });
   help.addRow({});
   help.addRow({ c: "Tips", h: "Replace the grey example row with your people, one per row. * = required." });
-  help.addRow({ c: "", h: "New emails get an invite to set a password. People already in MaintainOS are updated: blank cells never erase anything, and stores are added (never removed)." });
+  help.addRow({ c: "", h: "New emails get an invite to set a password. People already in MaintenanceOS are updated: blank cells never erase anything, and stores are added (never removed)." });
   help.addRow({ c: "", h: "Managers and techs only see the locations they're given. Admins see every location." });
   return (await wb.xlsx.writeBuffer()) as ArrayBuffer;
 }

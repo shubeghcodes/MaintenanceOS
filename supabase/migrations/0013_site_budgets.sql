@@ -1,5 +1,5 @@
 -- =====================================================================
--- MaintainOS — Monthly R&M budgets per location
+-- MaintenanceOS — Monthly R&M budgets per location
 -- Run after 0012. Safe to re-run.
 --
 -- site_budgets        one default monthly amount per location

@@ -1,5 +1,5 @@
 -- =====================================================================
--- MaintainOS — Technician time tracking & internal labor cost
+-- MaintenanceOS — Technician time tracking & internal labor cost
 -- Run after 0010. Safe to re-run.
 --
 -- time_entries       one row per timer run (start → stop) or manual entry. Pause/resume

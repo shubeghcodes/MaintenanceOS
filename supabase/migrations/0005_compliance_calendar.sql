@@ -1,5 +1,5 @@
 -- =====================================================================
--- MaintainOS — Compliance calendar, automatic vendor emails, certificate tracking
+-- MaintenanceOS — Compliance calendar, automatic vendor emails, certificate tracking
 -- Run after 0004. Safe to re-run.
 -- =====================================================================
 

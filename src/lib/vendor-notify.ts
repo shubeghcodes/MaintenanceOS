@@ -66,7 +66,7 @@ function shell(opts: { eyebrow: string; title: string; intro?: string; body?: st
 ${opts.intro ? `<tr><td style="padding-top:8px">${opts.intro}</td></tr>` : ""}
 ${opts.body ? `<tr><td style="padding-top:16px">${opts.body}</td></tr>` : ""}
 ${opts.button ? `<tr><td style="padding-top:20px"><a href="${opts.button.url}" style="display:inline-block;padding:12px 22px;border-radius:8px;background:#2c58c4;color:#fff;font-weight:600;font-size:15px;text-decoration:none">${esc(opts.button.label)}</a></td></tr>` : ""}
-<tr><td style="padding-top:20px;border-top:1px solid #e2e8f0;margin-top:20px;font-size:12px;line-height:18px;color:#94a3b8">${opts.footer ?? "Sent by MaintainOS."}</td></tr>
+<tr><td style="padding-top:20px;border-top:1px solid #e2e8f0;margin-top:20px;font-size:12px;line-height:18px;color:#94a3b8">${opts.footer ?? "Sent by MaintenanceOS."}</td></tr>
 </table></td></tr></table></body></html>`;
 }
 

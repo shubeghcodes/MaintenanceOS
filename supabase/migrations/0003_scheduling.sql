@@ -1,5 +1,5 @@
 -- =====================================================================
--- MaintainOS — tech scheduling / dispatch calendar
+-- MaintenanceOS — tech scheduling / dispatch calendar
 -- Run after 0001_schema.sql (0002 is optional pg_cron and can be skipped).
 -- =====================================================================
 

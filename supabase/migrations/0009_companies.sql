@@ -1,5 +1,5 @@
 -- =====================================================================
--- MaintainOS — Companies (multiple corporations in one CMMS)
+-- MaintenanceOS — Companies (multiple corporations in one CMMS)
 -- Run after 0008. Safe to re-run. Keeps all existing data: every existing
 -- site is placed in one starting company ("My Company") that you can rename.
 --

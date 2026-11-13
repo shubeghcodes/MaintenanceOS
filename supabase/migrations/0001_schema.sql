@@ -1,5 +1,5 @@
 -- =====================================================================
--- MaintainOS CMMS — core schema
+-- MaintenanceOS CMMS — core schema
 -- Run in Supabase SQL editor (or `supabase db push`).
 -- =====================================================================
 
