@@ -138,7 +138,8 @@ function parseCsv(text: string): string[][] {
   return rows;
 }
 
-async function readGrid(file: File): Promise<string[][]> {
+/** Reads the first data sheet (preferring one named `preferSheet`) of an .xlsx, or a .csv, into a grid of strings. */
+export async function readGrid(file: File, preferSheet = "sites"): Promise<string[][]> {
   const name = file.name.toLowerCase();
   const buf = await file.arrayBuffer();
   if (name.endsWith(".csv") || file.type === "text/csv") {
@@ -150,7 +151,7 @@ async function readGrid(file: File): Promise<string[][]> {
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.load(buf);
   const sheet =
-    wb.worksheets.find((w) => w.name.trim().toLowerCase() === "sites") ??
+    wb.worksheets.find((w) => w.name.trim().toLowerCase() === preferSheet) ??
     wb.worksheets.find((w) => !/instruction|readme|help/i.test(w.name) && w.actualRowCount > 0) ??
     wb.worksheets[0];
   if (!sheet) throw new Error("The workbook has no sheets.");
