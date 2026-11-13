@@ -13,6 +13,8 @@ export type FreqUnit = "day" | "week" | "month" | "year";
 export type ComplianceResult = "pass" | "fail" | "conditional";
 
 export interface Profile {
+  tour_completed_at?: string | null;
+  tour_outcome?: "completed" | "skipped" | null;
   id: string;
   email: string | null;
   full_name: string | null;
