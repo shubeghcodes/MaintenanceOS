@@ -26,7 +26,7 @@ Deploys to Vercel (or any Node host) in about 15 minutes.
 | **External vendor work orders** | **Assign to External Vendor** on any work order emails the job (location, store #, address, issue, priority, photos attached, special instructions) with a secure **View Work Order** link. **No vendor account needed.** From their phone, vendors accept/decline, start work (timestamped), post updates with before/after photos, materials and parts/visit needs, request approval for extra work, mark complete, and submit invoices (with revisions) from the same link, now or later. You get an email for every vendor action, review approvals, completed work and invoices on the work order, and track everything on **Vendor work**. |
 | **Email replies → work order** | Every vendor email has its own reply address for that work order. When a vendor hits Reply, their message (minus the quoted original) and any photos/PDFs are posted on the work order's activity, visible to them on their link, and you're alerted. Staff can reply over email too: replying to a vendor's message emails the vendor, and replying to a vendor-activity alert adds an internal note. |
 | **Vendors** | Trades, contacts, after-hours numbers, license, COI expiration tracking, rates, rating, YTD spend, on-time rate, job history. |
-| **Sites** | Location cards with open/overdue/compliance/down counts; site page with everything for that location plus its team. |
+| **Sites** | Location cards with open/overdue/compliance/down counts; site page with everything for that location plus its team. **Import from Excel** adds or updates many sites at once from an .xlsx or .csv (template included), and a *Manager Email* column gives each manager access to just their store(s). |
 | **Users** | Invite by email, set role, link vendor logins to a vendor company, assign sites. |
 
 ### Roles (enforced in the database, not just the UI)
@@ -46,7 +46,7 @@ Row-level security policies in Postgres enforce all of this, so even a direct AP
 
 ### 1. Create the Supabase project
 1. Create a project at supabase.com.
-2. **SQL Editor** → run, in order: `supabase/migrations/0001_schema.sql`, `0003_scheduling.sql`, `0004_vendor_portal.sql`, `0005_compliance_calendar.sql`, `0006_inbound_email.sql`, `0007_purchases.sql`. (`0002` is the optional pg_cron file.) Already ran some? Run only the new ones; 0003–0007 are safe to re-run.
+2. **SQL Editor** → run, in order: `supabase/migrations/0001_schema.sql`, `0003_scheduling.sql`, `0004_vendor_portal.sql`, `0005_compliance_calendar.sql`, `0006_inbound_email.sql`, `0007_purchases.sql`, `0008_grants.sql`. (`0002` is the optional pg_cron file.) Already ran some? Run only the new ones; 0003–0008 are safe to re-run. **Don't skip `0008`**: newer Supabase projects don't give the app access to new tables, and without it every sign-in ends in "Your account is inactive".
 3. *(Optional, for a demo)* run `supabase/seed.sql`: 4 sites, 5 vendors, 9 assets, PM schedules, compliance items and sample work orders. Skip it for production, or delete the sample rows later.
 4. **Authentication → URL Configuration:** set *Site URL* to your app URL and add `https://YOUR-APP/auth/callback` to *Redirect URLs* (also `http://localhost:3000/auth/callback` for local dev).
 5. **Authentication → Providers → Email:** turn **off** "Allow new users to sign up". Access is invite-only.
@@ -167,7 +167,7 @@ Invoice status is tracked separately: Not submitted, Submitted, Under review, Ap
 Calendar drag-and-drop is for desktop. On a phone, schedule from the work order's *Assignment & schedule* card instead.
 
 ## Day-one checklist
-1. **Sites:** add each location (code, type, address). Site type drives the compliance template.
+1. **Sites:** add each location (code, type, address), or use **Sites → Import from Excel** to load them all at once with each store's manager email. Site type drives the compliance template.
 2. **Compliance:** on the Compliance page, use **Add standard checklist** for each site, then open each item and set the real next-due date from your last certificate. Template frequencies are common defaults; confirm them with your fire marshal, health department, landlord and insurer.
 3. **Vendors:** add your hood, refrigeration/HVAC, plumbing, pest and electrical vendors with COI dates.
 4. **Assets:** start with the equipment that breaks or costs the most (walk-ins, fryers, ice machines, RTUs, hoods). Bulk import via CSV in Supabase **Table Editor → assets → Insert → Import CSV** works well.

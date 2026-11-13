@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { MapPin, Plus } from "lucide-react";
+import { FileSpreadsheet, MapPin, Plus } from "lucide-react";
 import { getSession } from "@/lib/auth";
 import { OPEN_STATUSES, SITE_TYPE_LABEL } from "@/lib/constants";
 import { daysUntil, isOverdue } from "@/lib/format";
@@ -28,15 +28,20 @@ export default async function SitesPage() {
         subtitle={`${sites.length} location${sites.length === 1 ? "" : "s"}`}
         actions={
           profile.role === "admin" && (
-            <ButtonLink href="/sites/new">
-              <Plus className="h-4 w-4" aria-hidden /> Add site
-            </ButtonLink>
+            <>
+              <ButtonLink href="/sites/import" variant="secondary">
+                <FileSpreadsheet className="h-4 w-4" aria-hidden /> Import from Excel
+              </ButtonLink>
+              <ButtonLink href="/sites/new">
+                <Plus className="h-4 w-4" aria-hidden /> Add site
+              </ButtonLink>
+            </>
           )
         }
       />
       {sites.length === 0 ? (
         <Card>
-          <EmptyState title="No sites visible.">{profile.role === "admin" ? "Add your first location." : "Ask an admin to add you to your location."}</EmptyState>
+          <EmptyState title="No sites visible.">{profile.role === "admin" ? "Add your first location, or import them all from Excel." : "Ask an admin to add you to your location."}</EmptyState>
         </Card>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
