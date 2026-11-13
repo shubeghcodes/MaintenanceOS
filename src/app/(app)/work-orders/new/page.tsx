@@ -20,14 +20,15 @@ export default async function NewWorkOrderPage({
   const { supabase, profile } = await getSession();
   if (profile.role === "vendor") redirect("/work-orders");
   const { sites, vendors, techs, assets } = await getLookups(supabase, { assets: true });
-  const isStaff = profile.role === "admin" || profile.role === "tech";
-  const isManager = profile.role === "manager";
+  // Only admins assign on creation; requests from GMs and techs wait for an admin's approval.
+  const isStaff = profile.role === "admin";
+  const isManager = profile.role !== "admin";
 
   return (
     <>
       <PageHeader
         title={isManager ? "Submit a maintenance request" : "New work order"}
-        subtitle={isManager ? "Describe the problem — maintenance will triage and assign it." : undefined}
+        subtitle={isManager ? "Describe the problem. An admin will approve it and assign a technician or vendor." : undefined}
         back={{ href: "/work-orders", label: "Work orders" }}
       />
       {sp.error && <Alert>{sp.error}</Alert>}

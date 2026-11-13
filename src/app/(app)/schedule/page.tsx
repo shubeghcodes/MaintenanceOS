@@ -2,7 +2,7 @@ import { getCompanyScope, inCompany } from "@/lib/company";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { requireRole } from "@/lib/auth";
-import { OPEN_STATUSES } from "@/lib/constants";
+import { WORKABLE_STATUSES } from "@/lib/constants";
 import { addDaysISO, dayLabel, isISODate, personName, todayISO, weekStartISO } from "@/lib/format";
 import type { WoPriority, WoStatus, WoType } from "@/lib/types";
 import { Alert, Button, PageHeader, Select, btnClass } from "@/components/ui";
@@ -46,7 +46,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
   const [{ data: techData }, { data: schedData }, { data: backlogData }, { data: siteData }, { data: sentData }] = await Promise.all([
     supabase.from("profiles").select("id,full_name,email,role").eq("active", true).in("role", ["tech", "admin"]).order("full_name"),
     inCompany(supabase.from("work_orders").select(SELECT).gte("scheduled_date", start).lte("scheduled_date", end).neq("status", "cancelled"), cid),
-    inCompany(supabase.from("work_orders").select(SELECT).is("scheduled_date", null).in("status", OPEN_STATUSES), cid).limit(300),
+    inCompany(supabase.from("work_orders").select(SELECT).is("scheduled_date", null).in("status", WORKABLE_STATUSES), cid).limit(300),
     inCompany(supabase.from("sites").select("id,code,name").eq("active", true), cid).order("name"),
     profile.role === "admin"
       ? supabase.from("schedule_emails").select("tech_id,schedule_date,sent_at").eq("status", "sent").gte("schedule_date", start).lte("schedule_date", end)

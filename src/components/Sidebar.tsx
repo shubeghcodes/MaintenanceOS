@@ -53,6 +53,7 @@ export function Sidebar({
   roleLabel,
   companyPicker,
   receiptsToReview = 0,
+  approvalsWaiting = 0,
   isSuper = false,
 }: {
   role: UserRole;
@@ -60,6 +61,7 @@ export function Sidebar({
   roleLabel: string;
   companyPicker?: CompanyPicker;
   receiptsToReview?: number;
+  approvalsWaiting?: number;
   isSuper?: boolean;
 }) {
   const pathname = usePathname();
@@ -83,6 +85,11 @@ export function Sidebar({
           >
             <Icon className="h-4 w-4" aria-hidden />
             {label}
+            {href === "/work-orders" && approvalsWaiting > 0 && (
+              <span className="ml-auto rounded-full bg-orange-400 px-1.5 py-0.5 text-[11px] font-semibold text-slate-900" title={`${approvalsWaiting} work order(s) need approval`}>
+                {approvalsWaiting}
+              </span>
+            )}
             {href === "/analytics" && receiptsToReview > 0 && (
               <span className="ml-auto rounded-full bg-amber-400 px-1.5 py-0.5 text-[11px] font-semibold text-slate-900" title={`${receiptsToReview} receipt(s) to review`}>
                 {receiptsToReview}
