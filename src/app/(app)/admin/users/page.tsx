@@ -5,7 +5,8 @@ import { personName } from "@/lib/format";
 import type { Profile, UserRole } from "@/lib/types";
 import Link from "next/link";
 import clsx from "clsx";
-import { Alert, Badge, Card, CardHeader, Field, Input, PageHeader, Select } from "@/components/ui";
+import { Alert, Badge, ButtonLink, Card, CardHeader, Field, Input, PageHeader, Select } from "@/components/ui";
+import { FileSpreadsheet } from "lucide-react";
 import { SubmitButton } from "@/components/SubmitButton";
 import { LocationPicker } from "@/components/LocationPicker";
 import { getCompanyScope } from "@/lib/company";
@@ -49,7 +50,15 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
 
   return (
     <>
-      <PageHeader title="Users" subtitle="Invite people, set their role, and choose which sites they can see." />
+      <PageHeader
+        title="Users"
+        subtitle="Invite people, set their role, and choose which locations they can see."
+        actions={
+          <ButtonLink href="/admin/users/import" variant="secondary">
+            <FileSpreadsheet className="h-4 w-4" aria-hidden /> Import from Excel
+          </ButtonLink>
+        }
+      />
       {sp.error && <Alert>{sp.error}</Alert>}
       {sp.invited && <Alert tone="good">Invite sent to {sp.invited}.</Alert>}
       {sp.added && <Alert tone="good">{sp.added} now has access.</Alert>}
