@@ -44,18 +44,21 @@ export default async function VendorJobsPage({ searchParams }: { searchParams: P
     .limit(500);
   q = inCompany(q, cid, "wo.company_id");
   if (sp.vendor) q = q.eq("vendor_id", sp.vendor);
-  const [{ data }, { data: inv }, { data: appr }, { data: vendors }] = await Promise.all([
+  const [{ data }, { data: inv }, { data: appr }, { data: vendors }, { data: quo }] = await Promise.all([
     q,
     supabase.from("vendor_invoices").select("dispatch_id,status,amount,created_at").order("created_at", { ascending: false }),
     supabase.from("approval_requests").select("dispatch_id").eq("status", "pending"),
     supabase.from("vendors").select("id,name").order("name"),
+    supabase.from("vendor_quotes").select("dispatch_id").eq("status", "submitted"),
   ]);
   const all = (data ?? []) as unknown as Row[];
   const latestInv = new Map<string, { status: InvoiceStatus; amount: number }>();
   for (const i of (inv ?? []) as { dispatch_id: string; status: InvoiceStatus; amount: number }[]) if (!latestInv.has(i.dispatch_id)) latestInv.set(i.dispatch_id, i);
   const pendingAppr = new Set(((appr ?? []) as { dispatch_id: string }[]).map((a) => a.dispatch_id));
 
+  const pendingQuote = new Set(((quo ?? []) as { dispatch_id: string }[]).map((q) => q.dispatch_id));
   const needsAction = (r: Row) =>
+    pendingQuote.has(r.id) ||
     pendingAppr.has(r.id) ||
     r.status === "work_completed" ||
     r.status === "declined" && !all.some((o) => o.wo?.id === r.wo?.id && o.created_at > r.created_at) ||
@@ -74,7 +77,7 @@ export default async function VendorJobsPage({ searchParams }: { searchParams: P
       <PageHeader title="Vendor work" subtitle="Work orders sent to outside vendors, with their response, progress and invoice status." />
       <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
         <Stat label="Active with vendors" value={all.filter((r) => ACTIVE_DISPATCH.includes(r.status)).length} href="/vendor-jobs" />
-        <Stat label="Needs your action" value={all.filter(needsAction).length} tone={all.some(needsAction) ? "serious" : "good"} sub="Approvals, reviews, invoices, declines" href="/vendor-jobs?show=action" />
+        <Stat label="Needs your action" value={all.filter(needsAction).length} tone={all.some(needsAction) ? "serious" : "good"} sub="Quotes, approvals, reviews, invoices, declines" href="/vendor-jobs?show=action" />
         <Stat label="Awaiting response" value={all.filter((r) => r.status === "sent").length} sub="Sent, not yet accepted" />
         <Stat label="Unpaid invoices" value={fmtMoney(unpaid.reduce((s, i) => s + Number(i.amount), 0))} sub={`${unpaid.length} invoice${unpaid.length === 1 ? "" : "s"}`} href="/vendor-jobs?show=invoices" />
       </div>
@@ -144,7 +147,7 @@ export default async function VendorJobsPage({ searchParams }: { searchParams: P
                       {r.declined_at ? <span className="font-medium text-red-700">Declined {fmtDateTime(r.declined_at)}</span> : r.accepted_at ? `Accepted ${fmtDateTime(r.accepted_at)}` : <span className="text-slate-400">Waiting</span>}
                     </Td>
                     <Td>
-                      <Badge tone={DISPATCH_TONE[r.status]}>{pendingAppr.has(r.id) ? "Approval requested" : DISPATCH_LABEL[r.status]}</Badge>
+                      <Badge tone={DISPATCH_TONE[r.status]}>{pendingQuote.has(r.id) ? "Quote to approve" : pendingAppr.has(r.id) ? "Approval requested" : DISPATCH_LABEL[r.status]}</Badge>
                     </Td>
                     <Td className="min-w-[120px] text-xs">
                       <div>Started {r.started_at ? fmtDateTime(r.started_at) : "—"}</div>

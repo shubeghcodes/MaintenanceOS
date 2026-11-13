@@ -43,6 +43,7 @@ export type CreateDispatchInput = {
   requestedBy?: string | null; // YYYY-MM-DD
   priority?: WoPriority;
   nteAmount?: number | null;
+  quoteRequired?: boolean;
   includeFiles?: boolean;
   createdBy: string | null; // null = automatic (daily job)
   reason?: string; // shown in the activity log
@@ -86,6 +87,7 @@ export async function createDispatch(db: SupabaseClient, input: CreateDispatchIn
     contact_phone: input.contactPhone ?? null,
     instructions: input.instructions ?? null,
     requested_by: input.requestedBy ?? null,
+    quote_required: input.quoteRequired ?? false,
     token_hash: hashToken(linkTokenFor(id, 1)),
     token_version: 1,
     token_expires_at: new Date(Date.now() + VENDOR_LINK_DAYS * 86_400_000).toISOString(),

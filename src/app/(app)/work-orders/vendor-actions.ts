@@ -88,6 +88,7 @@ export async function dispatchToVendor(fd: FormData) {
     requestedBy: str(fd, "requested_by"),
     priority: (str(fd, "priority") ?? "medium") as WoPriority,
     nteAmount: num(fd, "nte_amount"),
+    quoteRequired: fd.get("quote_required") === "on",
     includeFiles: fd.get("include_files") === "on",
     createdBy: profile.id,
   });
@@ -146,7 +147,10 @@ export async function updateDispatch(fd: FormData) {
   const { data: d } = await supabase.from("vendor_dispatches").select("id,work_order_id,token_version,status").eq("id", id).single();
   if (!d) redirect("/vendor-jobs");
   const requestedBy = str(fd, "requested_by");
-  await supabase.from("vendor_dispatches").update({ instructions: str(fd, "instructions"), requested_by: requestedBy }).eq("id", id);
+  await supabase
+    .from("vendor_dispatches")
+    .update({ instructions: str(fd, "instructions"), requested_by: requestedBy, quote_required: fd.get("quote_required") === "on" })
+    .eq("id", id);
   await supabase
     .from("work_orders")
     .update({ priority: str(fd, "priority") ?? "medium", nte_amount: num(fd, "nte_amount"), ...(requestedBy && { due_at: zonedTimeISO(requestedBy) }) })
@@ -218,6 +222,40 @@ export async function decideApproval(decision: "approved" | "rejected", fd: Form
   if (d) await sendAndRecord(supabase, a.dispatch_id, d.token_version, "approval_decision", { decision, note, amount: a.amount });
   refresh(a.work_order_id);
   back(a.work_order_id, `vendor=${decision}`);
+}
+
+// ---------------------------------------------------------------- quotes
+
+/** Approve or reject a vendor's quote. Approving makes the quoted amount the not-to-exceed. */
+export async function decideQuote(decision: "approved" | "rejected", fd: FormData) {
+  const { supabase, profile } = await staff();
+  const quoteId = str(fd, "quote_id")!;
+  const note = str(fd, "note");
+  const { data: q0 } = await supabase.from("vendor_quotes").select("work_order_id").eq("id", quoteId).maybeSingle();
+  if (!q0) redirect("/vendor-jobs");
+  if (decision === "rejected" && !note) fail(q0.work_order_id, "Tell the vendor why the quote wasn't approved (or what to change).");
+  const { data: q } = await supabase
+    .from("vendor_quotes")
+    .update({ status: decision, decided_by: profile.id, decided_at: new Date().toISOString(), decision_note: note })
+    .eq("id", quoteId)
+    .eq("status", "submitted")
+    .select("id,work_order_id,dispatch_id,amount,quote_number")
+    .maybeSingle();
+  if (!q) fail(q0.work_order_id, "That quote was already decided or replaced by a revision.");
+
+  if (decision === "approved") await supabase.from("work_orders").update({ nte_amount: q.amount }).eq("id", q.work_order_id);
+  const amt = `$${Number(q.amount).toFixed(2)}`;
+  await logEvent(supabase, {
+    work_order_id: q.work_order_id,
+    user_id: profile.id,
+    kind: "quote",
+    body: `${decision === "approved" ? `Approved quote${q.quote_number ? ` ${q.quote_number}` : ""} (${amt}); not-to-exceed set to ${amt}` : `Did not approve quote${q.quote_number ? ` ${q.quote_number}` : ""} (${amt})`}${note ? `: ${note}` : ""}`,
+    visibility: "shared",
+  });
+  const { data: d } = await supabase.from("vendor_dispatches").select("token_version,status").eq("id", q.dispatch_id).single();
+  if (d && ACTIVE_DISPATCH.includes(d.status)) await sendAndRecord(supabase, q.dispatch_id, d.token_version, "quote_decision", { decision, note, amount: q.amount });
+  refresh(q.work_order_id);
+  back(q.work_order_id, `vendor=quote_${decision}`);
 }
 
 // ---------------------------------------------------------------- completed work review

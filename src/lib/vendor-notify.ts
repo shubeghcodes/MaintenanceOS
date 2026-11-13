@@ -17,6 +17,7 @@ export type DispatchContext = {
     requested_by: string | null;
     created_by: string | null;
     token_expires_at: string;
+    quote_required?: boolean;
   };
   wo: {
     id: string;
@@ -36,7 +37,7 @@ export async function loadDispatchContext(db: SupabaseClient, dispatchId: string
   const { data } = await db
     .from("vendor_dispatches")
     .select(
-      "id,contact_name,contact_email,contact_phone,instructions,requested_by,created_by,token_expires_at," +
+      "id,contact_name,contact_email,contact_phone,instructions,requested_by,created_by,token_expires_at,quote_required," +
         "vendor:vendors(id,name)," +
         "wo:work_orders(id,number,title,description,priority,nte_amount,location_detail," +
         "site:sites(name,code,address,city,state,zip,phone), asset:assets(name,manufacturer,model,serial_number))",
@@ -85,7 +86,7 @@ const vendorFooter = (c: DispatchContext) =>
 
 // ------------------------------------------------------------------ vendor emails
 
-export type VendorEmailKind = "assigned" | "updated" | "approval_decision" | "invoice_decision" | "message" | "reminder" | "new_link" | "sent_back";
+export type VendorEmailKind = "assigned" | "updated" | "approval_decision" | "quote_decision" | "invoice_decision" | "message" | "reminder" | "new_link" | "sent_back";
 
 export async function emailVendor(
   c: DispatchContext,
@@ -130,6 +131,7 @@ export async function emailVendor(
         ["Where", c.wo.location_detail ? esc(c.wo.location_detail) : null],
         ["Requested by", c.dispatch.requested_by ? fmtDate(c.dispatch.requested_by) : null],
         ["Not to exceed", c.wo.nte_amount != null ? fmtMoney(c.wo.nte_amount, 2) : null],
+        ["Quote", c.dispatch.quote_required ? "<b>Required before starting work.</b> Send it from the work order link." : null],
         ["Issue", c.wo.description ? esc(c.wo.description).replace(/\n/g, "<br>") : esc(c.wo.title)],
         ["Special instructions", c.dispatch.instructions ? esc(c.dispatch.instructions).replace(/\n/g, "<br>") : null],
       ]) +
@@ -142,6 +144,14 @@ export async function emailVendor(
     subject = `${ok ? "Approved" : "Not approved"}: additional work on #${n}`;
     title = ok ? `Additional work approved — #${n}` : `Additional work not approved — #${n}`;
     intro = `${hi}<br>Your request${extra.amount != null ? ` (${fmtMoney(extra.amount, 2)})` : ""} for work order #${n} was <b>${ok ? "approved" : "not approved"}</b>.${extra.note ? `<br><br><b>Note:</b> ${esc(extra.note)}` : ""}${ok ? "<br><br>You can proceed." : ""}`;
+    body = linkNote;
+  } else if (kind === "quote_decision") {
+    const ok = extra.decision === "approved";
+    subject = `${ok ? "Quote approved" : "Quote not approved"}: work order #${n}`;
+    title = ok ? `Your quote was approved — #${n}` : `Your quote was not approved — #${n}`;
+    intro = `${hi}<br>Your quote${extra.amount != null ? ` for <b>${fmtMoney(extra.amount, 2)}</b>` : ""} on work order #${n} was <b>${ok ? "approved" : "not approved"}</b>.${extra.note ? `<br><br><b>Note:</b> ${esc(extra.note)}` : ""}${
+      ok ? "<br><br>You're cleared to proceed up to the approved amount." : "<br><br>You can send a revised quote from the work order page."
+    }`;
     body = linkNote;
   } else if (kind === "invoice_decision") {
     const map: Record<string, [string, string]> = {
@@ -180,7 +190,7 @@ export async function emailVendor(
 
 // ------------------------------------------------------------------ management emails
 
-export type MgmtEventKind = "accepted" | "declined" | "started" | "update" | "approval_requested" | "completed" | "invoice" | "link_requested" | "email_reply" | "unverified_email";
+export type MgmtEventKind = "accepted" | "declined" | "started" | "update" | "approval_requested" | "quote" | "completed" | "invoice" | "link_requested" | "email_reply" | "unverified_email";
 
 export async function notifyManagement(
   db: SupabaseClient,
@@ -199,6 +209,7 @@ export async function notifyManagement(
     started: "started work on",
     update: "posted an update on",
     approval_requested: "is requesting approval on",
+    quote: "sent a quote for",
     completed: "marked work complete on",
     invoice: "submitted an invoice for",
     link_requested: "requested a new link for",
@@ -214,7 +225,7 @@ export async function notifyManagement(
     .filter(Boolean)
     .join("<br>");
   const action =
-    kind === "approval_requested" ? "Review the request" : kind === "completed" ? "Review completed work" : kind === "invoice" ? "Review invoice" : kind === "declined" ? "Reassign" : "Open work order";
+    kind === "approval_requested" ? "Review the request" : kind === "quote" ? "Review the quote" : kind === "completed" ? "Review completed work" : kind === "invoice" ? "Review invoice" : kind === "declined" ? "Reassign" : "Open work order";
   return sendEmail({
     to: recipients,
     replyTo: replyAddress(c.dispatch.id, c.wo.number, "internal") ?? undefined,

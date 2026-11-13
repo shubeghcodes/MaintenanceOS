@@ -70,6 +70,13 @@ export default async function DispatchPage({
             <Field label="Not-to-exceed ($)" hint="Vendor must request approval above this.">
               <Input name="nte_amount" inputMode="decimal" defaultValue={wo.nte_amount ?? ""} />
             </Field>
+            <label className="flex items-start gap-2 text-sm text-slate-700">
+              <input type="checkbox" name="quote_required" className="mt-0.5 rounded border-slate-300" />
+              <span>
+                Require a quote before work starts
+                <span className="block text-xs text-slate-500">The vendor can accept, but can&apos;t start until you approve their quote.</span>
+              </span>
+            </label>
             <label className="flex items-center gap-2 text-sm text-slate-700">
               <input type="checkbox" name="include_files" defaultChecked={(fileCount ?? 0) > 0} disabled={!fileCount} className="rounded border-slate-300" />
               Attach photos &amp; files ({fileCount ?? 0})
