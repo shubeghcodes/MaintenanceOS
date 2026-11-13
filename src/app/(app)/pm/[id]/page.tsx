@@ -42,7 +42,7 @@ export default async function PmDetailPage({
       .eq("pm_schedule_id", id)
       .order("created_at", { ascending: false })
       .limit(50),
-    isAdmin ? getLookups(supabase, { assets: true }) : Promise.resolve(null),
+    isAdmin ? getLookups(supabase, { assets: true, allCompanies: true }) : Promise.resolve(null),
   ]);
   const wos = (woData ?? []) as { id: string; number: number; status: WoStatus; due_at: string | null; completed_at: string | null }[];
   const done = wos.filter((w) => w.status === "completed");

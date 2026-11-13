@@ -1,3 +1,4 @@
+import { getCompanyScope, inCompany } from "@/lib/company";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, Send } from "lucide-react";
 import { getSession } from "@/lib/auth";
@@ -37,10 +38,12 @@ export default async function ComplianceCalendarPage({ searchParams }: { searchP
   }
 
   const { sites } = await getLookups(supabase);
+  const { companyId: cid } = await getCompanyScope();
   let rq = supabase
     .from("compliance_requirements")
     .select("id,name,category,next_due_on,scheduled_for,vendor_id,site_id,site:sites(code,name),vendor:vendors(name,email)")
     .eq("active", true);
+  rq = inCompany(rq, cid);
   if (sp.site) rq = rq.eq("site_id", sp.site);
   if (sp.category) rq = rq.eq("category", sp.category);
   let dq = supabase
@@ -48,6 +51,7 @@ export default async function ComplianceCalendarPage({ searchParams }: { searchP
     .select("id,requirement_id,completed_on,result,certificate_number,req:compliance_requirements!inner(name,site_id,category,site:sites(code,name))")
     .gte("completed_on", gridStart)
     .lte("completed_on", gridEnd);
+  dq = inCompany(dq, cid, "req.company_id");
   if (sp.site) dq = dq.eq("req.site_id", sp.site);
   if (sp.category) dq = dq.eq("req.category", sp.category);
 

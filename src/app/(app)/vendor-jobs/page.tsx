@@ -1,3 +1,4 @@
+import { getCompanyScope, inCompany } from "@/lib/company";
 import Link from "next/link";
 import { requireRole } from "@/lib/auth";
 import { ACTIVE_DISPATCH, DISPATCH_LABEL, DISPATCH_TONE, INVOICE_LABEL, INVOICE_TONE } from "@/lib/constants";
@@ -30,16 +31,18 @@ type Row = {
 export default async function VendorJobsPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const sp = await searchParams;
   const { supabase } = await requireRole("admin", "tech");
+  const { companyId: cid } = await getCompanyScope();
   const show = sp.show ?? "active";
 
   let q = supabase
     .from("vendor_dispatches")
     .select(
       "id,status,contact_email,email_status,sent_at,last_viewed_at,accepted_at,declined_at,started_at,completed_at,requested_by,created_at," +
-        "vendor:vendors(id,name), wo:work_orders(id,number,title,priority,site:sites(code,name))",
+        "vendor:vendors(id,name), wo:work_orders!inner(id,number,title,priority,site:sites(code,name))",
     )
     .order("created_at", { ascending: false })
     .limit(500);
+  q = inCompany(q, cid, "wo.company_id");
   if (sp.vendor) q = q.eq("vendor_id", sp.vendor);
   const [{ data }, { data: inv }, { data: appr }, { data: vendors }] = await Promise.all([
     q,

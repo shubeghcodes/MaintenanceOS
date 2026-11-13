@@ -1,3 +1,4 @@
+import { getCompanyScope, inCompany } from "@/lib/company";
 import Link from "next/link";
 import { Plus } from "lucide-react";
 import { requireRole } from "@/lib/auth";
@@ -11,10 +12,11 @@ export const metadata = { title: "Vendors" };
 
 export default async function VendorsPage() {
   const { supabase, profile } = await requireRole("admin", "tech");
+  const { companyId: cid } = await getCompanyScope();
   const yearStart = `${new Date().getFullYear()}-01-01`;
   const [{ data: vData }, { data: woData }] = await Promise.all([
     supabase.from("vendors").select("*").order("active", { ascending: false }).order("name"),
-    supabase.from("work_orders").select("vendor_id,status,total_cost,completed_at").not("vendor_id", "is", null).limit(10000),
+    inCompany(supabase.from("work_orders").select("vendor_id,status,total_cost,completed_at").not("vendor_id", "is", null), cid).limit(10000),
   ]);
   const vendors = (vData ?? []) as Vendor[];
   const wos = (woData ?? []) as { vendor_id: string; status: string; total_cost: number; completed_at: string | null }[];

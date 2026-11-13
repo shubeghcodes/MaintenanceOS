@@ -2,6 +2,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Plus } from "lucide-react";
 import { getSession } from "@/lib/auth";
+import { getCompanyScope, inCompany, WO_COMPANY_COL, WO_COMPANY_JOIN } from "@/lib/company";
+import { CompanySelect } from "@/components/CompanySelect";
 import { OPEN_STATUSES } from "@/lib/constants";
 import { addDaysISO, daysUntil, fmtDate, fmtFreq, fmtMoney, isOverdue, relativeDue, dueWhen, todayISO } from "@/lib/format";
 import type { AssetStatus, FreqUnit, WoPriority, WoStatus, WoType } from "@/lib/types";
@@ -20,12 +22,14 @@ type OpenWo = {
   type: WoType;
   due_at: string | null;
   site_id: string;
+  company_id?: string;
   site: { code: string | null; name: string } | null;
 };
 type DoneWo = {
   id: string;
   type: WoType;
   site_id: string;
+  company_id?: string;
   category: string;
   created_at: string;
   completed_at: string;
@@ -42,53 +46,46 @@ export default async function Dashboard() {
   const monthStart = today.slice(0, 8) + "01";
 
   const isStaff = profile.role === "admin" || profile.role === "tech";
+  const scope = await getCompanyScope();
+  const cid = scope.companyId;
+  const co = scope.enabled ? ",company_id" : "";
+  const woJoin = cid ? `id, ${WO_COMPANY_JOIN}` : "id";
+  const vendorCount = <Q,>(q: Q) => inCompany(q, cid, WO_COMPANY_COL);
   const [vendorAction, openRes, doneRes, compRes, pmRes, assetRes, siteRes] = await Promise.all([
     isStaff
       ? Promise.all([
-          supabase.from("approval_requests").select("id", { count: "exact", head: true }).eq("status", "pending"),
-          supabase.from("vendor_dispatches").select("id", { count: "exact", head: true }).eq("status", "work_completed"),
-          supabase.from("vendor_invoices").select("id", { count: "exact", head: true }).in("status", ["submitted", "under_review"]),
+          vendorCount(supabase.from("approval_requests").select(woJoin, { count: "exact", head: true }).eq("status", "pending")),
+          vendorCount(supabase.from("vendor_dispatches").select(woJoin, { count: "exact", head: true }).eq("status", "work_completed")),
+          vendorCount(supabase.from("vendor_invoices").select(woJoin, { count: "exact", head: true }).in("status", ["submitted", "under_review"])),
         ]).then(([a, b, c]) => ({ approvals: a.count ?? 0, reviews: b.count ?? 0, invoices: c.count ?? 0 }))
       : Promise.resolve({ approvals: 0, reviews: 0, invoices: 0 }),
-    supabase
-      .from("work_orders")
-      .select("id,number,title,status,priority,type,due_at,site_id,site:sites(code,name)")
-      .in("status", OPEN_STATUSES)
-      .limit(2000),
-    supabase
-      .from("work_orders")
-      .select("id,type,site_id,category,created_at,completed_at,due_at,total_cost")
-      .eq("status", "completed")
-      .gte("completed_at", since90)
-      .limit(5000),
-    supabase
-      .from("compliance_requirements")
-      .select("id,name,next_due_on,site:sites(code,name)")
-      .eq("active", true)
+    inCompany(
+      supabase.from("work_orders").select(`id,number,title,status,priority,type,due_at,site_id${co},site:sites(code,name)`).in("status", OPEN_STATUSES),
+      cid,
+    ).limit(2000),
+    inCompany(
+      supabase.from("work_orders").select(`id,type,site_id${co},category,created_at,completed_at,due_at,total_cost`).eq("status", "completed").gte("completed_at", since90),
+      cid,
+    ).limit(5000),
+    inCompany(supabase.from("compliance_requirements").select("id,name,next_due_on,site:sites(code,name)").eq("active", true), cid)
       .lte("next_due_on", addDaysISO(today, 30))
       .order("next_due_on"),
-    supabase
-      .from("pm_schedules")
-      .select("id,title,next_due_on,frequency_interval,frequency_unit,site:sites(code,name)")
-      .eq("active", true)
+    inCompany(supabase.from("pm_schedules").select("id,title,next_due_on,frequency_interval,frequency_unit,site:sites(code,name)").eq("active", true), cid)
       .lte("next_due_on", addDaysISO(today, 14))
       .order("next_due_on")
       .limit(8),
-    supabase
-      .from("assets")
-      .select("id,name,status,site:sites(code,name)")
-      .in("status", ["down", "needs_repair"])
+    inCompany(supabase.from("assets").select("id,name,status,site:sites(code,name)").in("status", ["down", "needs_repair"]), cid)
       .order("status")
       .limit(8),
-    supabase.from("sites").select("id,code,name").eq("active", true).order("name"),
+    inCompany(supabase.from("sites").select(`id,code,name${co}`).eq("active", true), cid).order("name"),
   ]);
 
   const open = (openRes.data ?? []) as unknown as OpenWo[];
-  const done = (doneRes.data ?? []) as DoneWo[];
+  const done = (doneRes.data ?? []) as unknown as DoneWo[];
   const compliance = (compRes.data ?? []) as unknown as { id: string; name: string; next_due_on: string; site: { code: string | null; name: string } | null }[];
   const pms = (pmRes.data ?? []) as unknown as { id: string; title: string; next_due_on: string; frequency_interval: number; frequency_unit: FreqUnit; site: { code: string | null; name: string } | null }[];
   const assetsDown = (assetRes.data ?? []) as unknown as { id: string; name: string; status: AssetStatus; site: { code: string | null; name: string } | null }[];
-  const sites = (siteRes.data ?? []) as { id: string; code: string | null; name: string }[];
+  const sites = (siteRes.data ?? []) as unknown as { id: string; code: string | null; name: string; company_id?: string }[];
 
   // KPIs
   const overdue = open.filter((w) => isOverdue(w.due_at, w.status));
@@ -115,6 +112,23 @@ export default async function Dashboard() {
     }))
     .sort((a, b) => b.spend - a.spend || b.open - a.open);
   const maxSpend = Math.max(1, ...perSite.map((s) => s.spend));
+  const since30 = new Date(Date.now() - 30 * 86_400_000).toISOString();
+  const completed30 = done.filter((w) => w.completed_at >= since30);
+
+  // Consolidated view across companies ("All companies")
+  const perCompany =
+    scope.enabled && !cid && scope.companies.length > 1
+      ? scope.companies
+          .map((c) => ({
+            ...c,
+            sites: sites.filter((s) => s.company_id === c.id).length,
+            open: open.filter((w) => w.company_id === c.id).length,
+            overdue: overdue.filter((w) => w.company_id === c.id).length,
+            completed: completed30.filter((w) => w.company_id === c.id).length,
+            spend: monthDone.filter((w) => w.company_id === c.id).reduce((t, w) => t + Number(w.total_cost || 0), 0),
+          }))
+          .filter((c) => c.active || c.sites || c.open)
+      : [];
 
   // Attention list: overdue first, then emergencies/high, then unassigned
   const rank = (w: OpenWo) => (isOverdue(w.due_at, w.status) ? 0 : w.priority === "emergency" ? 1 : w.priority === "high" ? 2 : w.status === "new" ? 3 : 9);
@@ -128,12 +142,25 @@ export default async function Dashboard() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">{firstName ? `Hi, ${firstName}` : "Dashboard"}</h1>
           <p className="mt-1 text-sm text-slate-500">
-            {fmtDate(today)} · {sites.length} site{sites.length === 1 ? "" : "s"}
+            {fmtDate(today)} · {scope.company ? `${scope.company.name} · ` : scope.enabled && scope.companies.length > 1 ? "All companies · " : ""}
+            {sites.length} site{sites.length === 1 ? "" : "s"}
           </p>
         </div>
-        <ButtonLink href="/work-orders/new">
-          <Plus className="h-4 w-4" aria-hidden /> {profile.role === "manager" ? "Submit request" : "New work order"}
-        </ButtonLink>
+        <div className="flex flex-wrap items-end gap-3">
+          {scope.enabled && profile.role !== "manager" && (
+            <div className="w-64">
+              <CompanySelect companies={scope.companies} value={cid} canManage={profile.role === "admin"} label="Select Company" />
+            </div>
+          )}
+          {scope.enabled && profile.role === "admin" && (
+            <ButtonLink href="/companies?new=1" variant="secondary">
+              <Plus className="h-4 w-4" aria-hidden /> Add New Company
+            </ButtonLink>
+          )}
+          <ButtonLink href="/work-orders/new">
+            <Plus className="h-4 w-4" aria-hidden /> {profile.role === "manager" ? "Submit request" : "New work order"}
+          </ButtonLink>
+        </div>
       </div>
 
       {vendorAction.approvals + vendorAction.reviews + vendorAction.invoices > 0 && (
@@ -146,7 +173,9 @@ export default async function Dashboard() {
         </Link>
       )}
 
-      <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+      <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
+        <Stat label="Locations" value={sites.length} sub={scope.company ? scope.company.name : "Active sites"} href="/sites" />
+        <Stat label="Completed" value={completed30.length} sub="Work orders, last 30 days" href="/work-orders?status=completed" />
         <Stat label="Open work orders" value={open.length} sub={`${unassigned.length} unassigned`} href="/work-orders" />
         <Stat
           label="Overdue"
@@ -176,6 +205,38 @@ export default async function Dashboard() {
           sub={avgHours == null ? "Completed work this month" : `Avg reactive close: ${avgHours < 48 ? `${avgHours.toFixed(1)} h` : `${(avgHours / 24).toFixed(1)} d`}`}
         />
       </div>
+
+      {perCompany.length > 0 && (
+        <Card className="mb-6">
+          <CardHeader title="By company" subtitle="All companies combined. Pick one from Select Company to focus on it." />
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs uppercase tracking-wide text-slate-500">
+                  <th className="px-5 py-2 font-medium">Company</th>
+                  <th className="px-3 py-2 text-right font-medium">Locations</th>
+                  <th className="px-3 py-2 text-right font-medium">Open</th>
+                  <th className="px-3 py-2 text-right font-medium">Overdue</th>
+                  <th className="px-3 py-2 text-right font-medium">Completed 30d</th>
+                  <th className="px-5 py-2 text-right font-medium">Spend MTD</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {perCompany.map((c) => (
+                  <tr key={c.id} className="hover:bg-slate-50">
+                    <td className="px-5 py-2.5 font-medium">{c.name}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums">{c.sites}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums">{c.open}</td>
+                    <td className={`px-3 py-2.5 text-right tabular-nums ${c.overdue ? "font-semibold text-red-700" : "text-slate-400"}`}>{c.overdue}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums">{c.completed}</td>
+                    <td className="px-5 py-2.5 text-right tabular-nums">{fmtMoney(c.spend)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2">

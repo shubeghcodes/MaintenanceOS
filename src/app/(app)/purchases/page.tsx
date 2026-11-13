@@ -1,3 +1,4 @@
+import { getCompanyScope } from "@/lib/company";
 import Link from "next/link";
 import { Download, Receipt } from "lucide-react";
 import { requireRole } from "@/lib/auth";
@@ -17,7 +18,7 @@ export default async function PurchasesPage({ searchParams }: { searchParams: Pr
   // Default: this month, unless a status queue is selected (then all dates).
   const f = { ...sp, from: sp.from ?? (sp.status || sp.all ? undefined : today.slice(0, 8) + "01"), to: sp.to };
   const [rows, { sites }, { data: people }] = await Promise.all([
-    loadPurchases(supabase, f),
+    loadPurchases(supabase, { ...f, company: (await getCompanyScope()).companyId }),
     getLookups(supabase),
     supabase.from("profiles").select("id,full_name,email").in("role", ["admin", "tech", "manager"]).order("full_name"),
   ]);

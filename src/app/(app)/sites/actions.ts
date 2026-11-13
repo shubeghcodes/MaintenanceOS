@@ -22,6 +22,7 @@ export async function saveSite(fd: FormData) {
     sq_ft: num(fd, "sq_ft"),
     notes: str(fd, "notes"),
     active: fd.get("active") === "on",
+    ...(str(fd, "company_id") ? { company_id: str(fd, "company_id") } : {}),
   };
   if (!row.name) redirect(`${back}?error=Name+is+required`);
   const res = id

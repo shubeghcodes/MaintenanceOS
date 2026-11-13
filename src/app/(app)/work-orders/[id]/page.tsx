@@ -100,7 +100,7 @@ export default async function WorkOrderPage({
       .eq("work_order_id", id)
       .order("created_at", { ascending: true }),
     listAttachments(supabase, "work_order", id),
-    profile.role === "admin" || profile.role === "tech" ? getLookups(supabase) : Promise.resolve(null),
+    profile.role === "admin" || profile.role === "tech" ? getLookups(supabase, { allCompanies: true }) : Promise.resolve(null),
   ]);
   const events = ((evData ?? []) as (WorkOrderEvent & { user: { full_name: string | null; email: string | null } | null })[]).filter(
     (e) => profile.role !== "vendor" || e.visibility === "shared",

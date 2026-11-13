@@ -6,6 +6,7 @@ import { useState } from "react";
 import clsx from "clsx";
 import {
   Boxes,
+  Briefcase,
   Building2,
   CalendarClock,
   CalendarDays,
@@ -23,6 +24,7 @@ import {
   X,
 } from "lucide-react";
 import type { UserRole } from "@/lib/types";
+import { CompanySelect } from "./CompanySelect";
 
 const NAV: { href: string; label: string; icon: typeof Wrench; roles: UserRole[] }[] = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard, roles: ["admin", "manager", "tech"] },
@@ -36,10 +38,13 @@ const NAV: { href: string; label: string; icon: typeof Wrench; roles: UserRole[]
   { href: "/assets", label: "Assets", icon: Boxes, roles: ["admin", "manager", "tech"] },
   { href: "/sites", label: "Sites", icon: Building2, roles: ["admin", "manager", "tech"] },
   { href: "/vendors", label: "Vendors", icon: Truck, roles: ["admin", "tech"] },
+  { href: "/companies", label: "Companies", icon: Briefcase, roles: ["admin"] },
   { href: "/admin/users", label: "Users", icon: Users, roles: ["admin"] },
 ];
 
-export function Sidebar({ role, name, roleLabel }: { role: UserRole; name: string; roleLabel: string }) {
+type CompanyPicker = { companies: { id: string; name: string; active: boolean }[]; value: string | null } | null;
+
+export function Sidebar({ role, name, roleLabel, companyPicker }: { role: UserRole; name: string; roleLabel: string; companyPicker?: CompanyPicker }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const items = NAV.filter((n) => n.roles.includes(role));
@@ -89,6 +94,12 @@ export function Sidebar({ role, name, roleLabel }: { role: UserRole; name: strin
     </div>
   );
 
+  const picker = companyPicker && (
+    <div className="px-4 pb-4">
+      <CompanySelect companies={companyPicker.companies} value={companyPicker.value} canManage={role === "admin"} variant="dark" label="Company" />
+    </div>
+  );
+
   return (
     <>
       {/* Mobile top bar */}
@@ -110,6 +121,7 @@ export function Sidebar({ role, name, roleLabel }: { role: UserRole; name: strin
               <X className="h-5 w-5" />
             </button>
             {brand}
+            {picker}
             {nav}
             {footer}
           </aside>
@@ -118,7 +130,8 @@ export function Sidebar({ role, name, roleLabel }: { role: UserRole; name: strin
 
       <aside className="fixed inset-y-0 left-0 hidden w-60 flex-col bg-slate-900 lg:flex">
         {brand}
-        {nav}
+        {picker}
+        <div className="flex flex-1 flex-col overflow-y-auto">{nav}</div>
         {footer}
       </aside>
     </>

@@ -1,3 +1,4 @@
+import { getCompanyScope, inCompany } from "@/lib/company";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { requireRole } from "@/lib/auth";
@@ -33,6 +34,7 @@ const SELECT =
 export default async function SchedulePage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const sp = await searchParams;
   const { supabase, profile } = await requireRole("admin", "tech");
+  const { companyId: cid } = await getCompanyScope();
   const today = todayISO();
   const view: "week" | "day" = sp.view === "day" ? "day" : "week";
   const anchor = isISODate(sp.date) ? sp.date : today;
@@ -43,9 +45,9 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
 
   const [{ data: techData }, { data: schedData }, { data: backlogData }, { data: siteData }, { data: sentData }] = await Promise.all([
     supabase.from("profiles").select("id,full_name,email,role").eq("active", true).in("role", ["tech", "admin"]).order("full_name"),
-    supabase.from("work_orders").select(SELECT).gte("scheduled_date", start).lte("scheduled_date", end).neq("status", "cancelled"),
-    supabase.from("work_orders").select(SELECT).is("scheduled_date", null).in("status", OPEN_STATUSES).limit(300),
-    supabase.from("sites").select("id,code,name").eq("active", true).order("name"),
+    inCompany(supabase.from("work_orders").select(SELECT).gte("scheduled_date", start).lte("scheduled_date", end).neq("status", "cancelled"), cid),
+    inCompany(supabase.from("work_orders").select(SELECT).is("scheduled_date", null).in("status", OPEN_STATUSES), cid).limit(300),
+    inCompany(supabase.from("sites").select("id,code,name").eq("active", true), cid).order("name"),
     profile.role === "admin"
       ? supabase.from("schedule_emails").select("tech_id,schedule_date,sent_at").eq("status", "sent").gte("schedule_date", start).lte("schedule_date", end)
       : Promise.resolve({ data: [] as { tech_id: string; schedule_date: string; sent_at: string }[] }),

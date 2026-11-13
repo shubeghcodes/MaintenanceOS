@@ -1,3 +1,4 @@
+import { getCompanyScope } from "@/lib/company";
 import Link from "next/link";
 import { Download, FileText } from "lucide-react";
 import { getSession } from "@/lib/auth";
@@ -21,7 +22,7 @@ const STATUS: Record<CertRow["status"], [string, "good" | "warning" | "critical"
 export default async function CertificatesPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const sp = await searchParams;
   const { supabase } = await getSession();
-  const [{ sites }, rows] = await Promise.all([getLookups(supabase), loadCertificates(supabase, sp)]);
+  const [{ sites }, rows] = await Promise.all([getLookups(supabase), loadCertificates(supabase, { ...sp, company: (await getCompanyScope()).companyId })]);
   const counts = { current: 0, expiring: 0, expired: 0, failed: 0, superseded: 0 };
   rows.forEach((r) => counts[r.status]++);
   const missingFile = rows.filter((r) => r.status !== "superseded" && r.result !== "fail" && r.files.length === 0).length;

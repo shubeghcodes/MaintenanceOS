@@ -21,7 +21,7 @@ export type CertRow = {
 /** Completed compliance work with its certificate files and whether it's still valid. */
 export async function loadCertificates(
   db: SupabaseClient,
-  f: { site?: string; category?: string; q?: string; view?: string; from?: string; to?: string },
+  f: { site?: string; category?: string; q?: string; view?: string; from?: string; to?: string; company?: string | null },
 ): Promise<CertRow[]> {
   let q = db
     .from("compliance_records")
@@ -32,6 +32,7 @@ export async function loadCertificates(
     .order("completed_on", { ascending: false })
     .order("created_at", { ascending: false })
     .limit(2000);
+  if (f.company) q = q.eq("req.company_id", f.company);
   if (f.site) q = q.eq("req.site_id", f.site);
   if (f.category) q = q.eq("req.category", f.category);
   if (f.from) q = q.gte("completed_on", f.from);

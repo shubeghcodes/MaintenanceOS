@@ -43,7 +43,7 @@ export default async function RequirementPage({
       .eq("compliance_requirement_id", id)
       .in("status", ["new", "assigned", "in_progress", "on_hold"]),
     listAttachments(supabase, "compliance", id),
-    getLookups(supabase),
+    getLookups(supabase, { allCompanies: true }),
   ]);
   const records = (recData ?? []) as (ComplianceRecord & { vendor: { name: string } | null; recorder: { full_name: string | null; email: string | null } | null })[];
   const openWos = (woData ?? []) as { id: string; number: number; status: WoStatus; due_at: string | null }[];
