@@ -74,7 +74,7 @@ export function relativeDue(iso: string | null | undefined) {
 }
 
 export function isOverdue(dueAt: string | null, status: string) {
-  return !!dueAt && !["completed", "cancelled"].includes(status) && new Date(dueAt).getTime() < Date.now();
+  return !!dueAt && !["completed", "cancelled", "awaiting_signoff"].includes(status) && new Date(dueAt).getTime() < Date.now();
 }
 
 export function personName(p: { full_name: string | null; email: string | null } | null | undefined) {

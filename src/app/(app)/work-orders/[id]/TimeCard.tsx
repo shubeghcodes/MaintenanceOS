@@ -52,7 +52,7 @@ export async function TimeCard({
   }[];
   const live = entries.filter((e) => e.status !== "void");
   const mine = entries.find((e) => e.user_id === profile.id && (e.status === "running" || e.status === "paused"));
-  const closed = woStatus === "completed" || woStatus === "cancelled";
+  const closed = woStatus === "completed" || woStatus === "cancelled" || woStatus === "awaiting_signoff";
   const now = Date.now();
   const totalHours = live.reduce((t, e) => t + secondsNow(e, now) / 3600, 0);
   const totalCost = live.reduce((t, e) => t + Number(costs.get(e.id)?.labor_cost ?? 0), 0);
@@ -96,7 +96,11 @@ export async function TimeCard({
             </div>
           ) : closed ? (
             <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600 ring-1 ring-inset ring-slate-200">
-              {woStatus === "completed" ? "Work order is completed. Reopen it to log a return visit; earlier time is kept." : "Work order is cancelled."}
+              {woStatus === "awaiting_signoff"
+                ? "Work is done and waiting for the GM's sign-off. If it isn't fixed, the GM sends it back and you can log a return visit."
+                : woStatus === "completed"
+                  ? "Work order is completed. Reopen it to log a return visit; earlier time is kept."
+                  : "Work order is cancelled."}
             </p>
           ) : (
             <form action={startTimer} className="flex flex-wrap items-center gap-3">

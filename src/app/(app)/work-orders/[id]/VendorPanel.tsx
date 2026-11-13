@@ -265,7 +265,10 @@ export async function VendorPanel({ supabase, wo, profile }: { supabase: Supabas
         ))}
 
         {/* Completed work review */}
-        {d.status === "work_completed" && canManage && (
+        {d.status === "work_completed" && wo.status === "awaiting_signoff" && (
+          <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900 ring-1 ring-inset ring-amber-200">Work approved. Waiting for the store&apos;s GM to sign off before it closes.</p>
+        )}
+        {d.status === "work_completed" && canManage && wo.status !== "awaiting_signoff" && (
           <div className="rounded-lg bg-orange-50 p-3 ring-1 ring-inset ring-orange-200">
             <p className="text-sm font-medium">Vendor marked work complete — review</p>
             {d.completion_notes && <p className="mt-1 whitespace-pre-wrap text-sm text-slate-700">{d.completion_notes}</p>}
@@ -338,6 +341,11 @@ export async function VendorPanel({ supabase, wo, profile }: { supabase: Supabas
                       {inv.status !== "approved" && (
                         <>
                           {superAdmin && <SubmitButton size="sm" formAction={reviewInvoice.bind(null, "approved")}>Approve for payment</SubmitButton>}
+                          {superAdmin && wo.status === "awaiting_signoff" && (
+                            <label className="flex w-full items-center gap-2 text-xs text-amber-800">
+                              <input type="checkbox" name="override_signoff" className="rounded border-slate-300" /> GM hasn&apos;t signed off yet. Approve anyway
+                            </label>
+                          )}
                           <SubmitButton size="sm" variant="danger" formAction={reviewInvoice.bind(null, "rejected")}>
                             Request revision
                           </SubmitButton>

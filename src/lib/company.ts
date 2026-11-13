@@ -34,12 +34,16 @@ export function inCompany<Q>(q: Q, companyId: string | null, column = "company_i
 export const WO_COMPANY_JOIN = "wo_company:work_orders!inner(company_id)";
 export const WO_COMPANY_COL = "wo_company.company_id";
 
-/** Work orders waiting for an admin's approval in the selected company (0 for non-admins). Cached per request. */
+/**
+ * Work orders waiting on the viewer: admins → requests to approve; GMs → finished jobs to sign off.
+ * Row security limits GMs to their own locations. Cached per request.
+ */
 export const getApprovalsWaiting = cache(async () => {
   const { supabase, profile } = await getSession();
-  if (profile.role !== "admin") return 0;
+  if (profile.role !== "admin" && profile.role !== "manager") return 0;
   const { companyId } = await getCompanyScope();
-  const { count } = await inCompany(supabase.from("work_orders").select("id", { count: "exact", head: true }).eq("status", "requested"), companyId);
+  const status = profile.role === "admin" ? "requested" : "awaiting_signoff";
+  const { count } = await inCompany(supabase.from("work_orders").select("id", { count: "exact", head: true }).eq("status", status), companyId);
   return count ?? 0;
 });
 

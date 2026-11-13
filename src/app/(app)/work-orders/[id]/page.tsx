@@ -10,7 +10,9 @@ import { Alert, ButtonLink, Card, CardHeader, DefList, Field, Input, PageHeader,
 import { OverdueBadge, PriorityBadge, StatusBadge, TypeBadge } from "@/components/badges";
 import { SubmitButton } from "@/components/SubmitButton";
 import { Attachments } from "@/components/Attachments";
-import { addComment, approveWorkOrder, declineWorkOrder, deleteWorkOrder, setStatus, updateAssignment, updateCosts, uploadWoFiles } from "../actions";
+import { addComment, approveWorkOrder, closeForGm, declineWorkOrder, deleteWorkOrder, sendBackNotFixed, setStatus, signOffWorkOrder, updateAssignment, updateCosts, uploadWoFiles } from "../actions";
+import { addDaysISO } from "@/lib/format";
+import { SIGNOFF_AUTO_CLOSE_DAYS } from "@/lib/constants";
 import { Send } from "lucide-react";
 import { VendorPanel } from "./VendorPanel";
 import { ReceiptsCard } from "./ReceiptsCard";
@@ -70,6 +72,8 @@ type Detail = WorkOrder & {
 /** Which status buttons each role sees from each status. */
 function nextStatuses(role: Profile["role"], current: WoStatus, isRequester: boolean): WoStatus[] {
   if (current === "completed" || current === "cancelled") return role === "admin" ? ["in_progress"] : [];
+  // Waiting for the GM: the sign-off card handles it.
+  if (current === "awaiting_signoff") return [];
   // Waiting for approval: admins use the approval card; the person who asked can withdraw it.
   if (current === "requested") return role !== "admin" && isRequester ? ["cancelled"] : [];
   switch (role) {
@@ -137,6 +141,9 @@ export default async function WorkOrderPage({
 
   const role = profile.role;
   const awaiting = wo.status === "requested";
+  const signoff = wo.status === "awaiting_signoff";
+  const closesOn = wo.signoff_requested_at ? addDaysISO(toDateInput(wo.signoff_requested_at), SIGNOFF_AUTO_CLOSE_DAYS) : null;
+  const signer = wo.signed_off_by ? (await supabase.from("profiles").select("full_name,email").eq("id", wo.signed_off_by).maybeSingle()).data : null;
   const canAssign = (role === "admin" || role === "tech") && !awaiting;
   const canCost = role !== "manager";
   const statuses = nextStatuses(role, wo.status, wo.requested_by === profile.id);
@@ -171,6 +178,9 @@ export default async function WorkOrderPage({
       {sp.created && sp.created !== "approval" && <Alert tone="good">Submitted. You’ll see updates on this page.</Alert>}
       {sp.approved === "tech" && <Alert tone="good">Approved and assigned. The technician and the person who asked have been emailed.</Alert>}
       {sp.approved === "declined" && <Alert tone="good">Request declined. The person who asked has been emailed the reason.</Alert>}
+      {sp.signoff === "done" && <Alert tone="good">Signed off. The work order is closed.</Alert>}
+      {sp.signoff === "closed" && <Alert tone="good">Closed without the GM&apos;s sign-off. The reason is in the activity.</Alert>}
+      {sp.signoff === "sent_back" && <Alert tone="good">Sent back. It&apos;s open again as a return visit, and the tech or vendor has been emailed your note.</Alert>}
       {sp.vendor && VENDOR_NOTICE[sp.vendor] && <Alert tone="good">{VENDOR_NOTICE[sp.vendor]}</Alert>}
       {sp.receipt && RECEIPT_NOTICE[sp.receipt] && <Alert tone="good">{RECEIPT_NOTICE[sp.receipt]}</Alert>}
       {sp.timer && timerNotice(sp.timer) && <Alert tone="good">{timerNotice(sp.timer)}</Alert>}
@@ -202,7 +212,17 @@ export default async function WorkOrderPage({
                 ["Vendor", wo.vendor ? `${wo.vendor.name}${wo.vendor.phone ? ` · ${wo.vendor.phone}` : ""}` : "—"],
                 ["Scheduled", wo.scheduled_date ? `${fmtDate(wo.scheduled_date)}${wo.scheduled_start ? ` · ${fmtTime(wo.scheduled_start)}` : ""}${wo.estimated_hours ? ` · ~${wo.estimated_hours}h` : ""}` : "Not scheduled"],
                 ["Due", fmtDateTime(wo.due_at)],
-                ["Completed", fmtDateTime(wo.completed_at)],
+                [signoff ? "Work done" : "Completed", fmtDateTime(wo.completed_at)],
+                ...(wo.signed_off_at
+                  ? [
+                      [
+                        "Signed off",
+                        `${fmtDateTime(wo.signed_off_at)} · ${
+                          wo.signoff_method === "auto" ? "closed automatically (no sign-off)" : wo.signoff_method === "admin" ? `closed by ${personName(signer)} (admin)` : personName(signer)
+                        }`,
+                      ] as [string, React.ReactNode],
+                    ]
+                  : []),
                 ...(wo.pm_schedule_id ? [["PM schedule", <Link key="pm" className="text-brand-700 hover:underline" href={`/pm/${wo.pm_schedule_id}`}>View schedule</Link>] as [string, React.ReactNode]] : []),
                 ...(wo.compliance_requirement_id ? [["Compliance item", <Link key="c" className="text-brand-700 hover:underline" href={`/compliance/${wo.compliance_requirement_id}`}>View requirement</Link>] as [string, React.ReactNode]] : []),
               ]}
@@ -282,6 +302,45 @@ export default async function WorkOrderPage({
         </div>
 
         <div className="space-y-6">
+          {signoff && (role === "manager" || role === "admin") && (
+            <Card className="ring-2 ring-amber-300">
+              <CardHeader title="Is it fixed?" subtitle={`Work done ${fmtDateTime(wo.completed_at)}${closesOn ? ` · closes automatically ${fmtDate(closesOn)}` : ""}`} />
+              <form action={signOffWorkOrder} className="space-y-3 p-5">
+                <input type="hidden" name="id" value={id} />
+                <p className="text-sm text-slate-600">Check the work at the store. Signing off closes the work order.</p>
+                <Input name="note" placeholder="Comment (optional)" />
+                <SubmitButton>Yes, it&apos;s fixed</SubmitButton>
+              </form>
+              <form action={sendBackNotFixed} className="space-y-2 border-t border-slate-100 p-5">
+                <input type="hidden" name="id" value={id} />
+                <Field label="Not fixed?" hint="It goes back to the same tech or vendor as a return visit, with your note.">
+                  <Input name="note" placeholder="e.g. Still not cooling below 41°F" required />
+                </Field>
+                <SubmitButton variant="secondary" size="sm">
+                  Send back
+                </SubmitButton>
+              </form>
+              {role === "admin" && (
+                <form action={closeForGm} className="space-y-2 border-t border-slate-100 p-5">
+                  <input type="hidden" name="id" value={id} />
+                  <Field label="Close without the GM" hint="For when the GM can't sign off. The reason is kept in the history.">
+                    <Input name="reason" placeholder="e.g. GM on vacation; confirmed by phone" required />
+                  </Field>
+                  <SubmitButton variant="ghost" size="sm">
+                    Close for the GM
+                  </SubmitButton>
+                </form>
+              )}
+            </Card>
+          )}
+          {signoff && role !== "manager" && role !== "admin" && (
+            <Card>
+              <CardHeader title="Waiting for GM sign-off" />
+              <p className="px-5 py-4 text-sm text-slate-600">
+                The store&apos;s GM checks the work and signs off{closesOn ? `. If no one does, it closes automatically on ${fmtDate(closesOn)}` : ""}. If it isn&apos;t fixed, it comes back to you with a note.
+              </p>
+            </Card>
+          )}
           {awaiting && role === "admin" && lookups && (
             <Card className="ring-2 ring-orange-300">
               <CardHeader title="Approve this work order" subtitle={`Requested by ${personName(wo.requester)}`} />

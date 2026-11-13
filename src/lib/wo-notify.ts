@@ -182,3 +182,46 @@ export async function emailTechAssigned(woId: string, actorId: string, note?: st
     woId,
   );
 }
+
+/** GMs (store / property managers) at the work order's location. */
+async function siteGms(db: ReturnType<typeof createAdminClient>, siteId: string) {
+  const { data } = await db.from("site_members").select("user:profiles(id,full_name,email,active,role)").eq("site_id", siteId);
+  return ((data ?? []) as unknown as { user: Person | null }[]).map((m) => m.user).filter((p): p is Person => !!p && p.role === "manager" && p.active && !!p.email);
+}
+
+/** Work is done: ask the location's GMs to confirm (or a reminder before it auto-closes). */
+export async function emailSignoffRequest(woId: string, opts: { reminder?: boolean; closesOn: string }) {
+  const { db, wo } = await load(woId);
+  if (!wo) return;
+  const { data: siteRow } = await db.from("work_orders").select("site_id").eq("id", woId).single();
+  const gms = await siteGms(db, (siteRow as { site_id: string }).site_id);
+  if (!gms.length) return;
+  const who = wo.tech?.full_name ?? wo.vendor?.name ?? null;
+  await send(
+    gms.map((g) => g.email!),
+    `${opts.reminder ? "Reminder: " : ""}Please confirm WO #${wo.number} is fixed — ${wo.title}`,
+    `${opts.reminder ? "Reminder · " : ""}Sign-off needed · WO #${wo.number}`,
+    `Is it fixed?`,
+    `${who ? `${esc(who)} finished` : "Work was finished on"} <b>${esc(wo.title)}</b> at ${esc(loc(wo))}. Please check it and confirm it's fixed, or send it back if it isn't.${
+      wo.resolution_notes ? `<br><br><b>What was done:</b><br>${esc(wo.resolution_notes).replace(/\n/g, "<br>")}` : ""
+    }<br><br><span style="color:#64748b">If no one signs off, it closes automatically on ${esc(fmtDate(opts.closesOn))}.</span>`,
+    "",
+    woId,
+    "Review and sign off",
+  );
+}
+
+/** The GM (or an admin) says it isn't fixed: tell the technician. Vendors get their own email. */
+export async function emailTechSentBack(woId: string, actorId: string, note: string) {
+  const { wo } = await load(woId);
+  if (!wo || !reachable(wo.tech, actorId)) return;
+  await send(
+    wo.tech.email!,
+    `Not fixed — back to you: WO #${wo.number} — ${wo.title} (${wo.site?.name ?? ""})`,
+    `Sent back · WO #${wo.number}`,
+    `The store says it isn't fixed`,
+    `${hello(wo.tech)}<br>The GM at ${esc(loc(wo))} checked <b>${esc(wo.title)}</b> and it still needs work. The work order is open again as a return visit.<br><br><b>Their note:</b> ${esc(note)}`,
+    "",
+    woId,
+  );
+}

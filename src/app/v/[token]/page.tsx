@@ -684,7 +684,7 @@ const pill = "inline-flex items-center gap-1.5 rounded-lg bg-white px-3 py-1.5 t
 
 function statusWord(s: string | null) {
   return (
-    { new: "Open", assigned: "Assigned", in_progress: "In progress", on_hold: "On hold", pending_approval: "Pending approval", pending_review: "Work completed — pending review", completed: "Closed", cancelled: "Cancelled" } as Record<string, string>
+    { new: "Open", assigned: "Assigned", in_progress: "In progress", on_hold: "On hold", pending_approval: "Pending approval", pending_review: "Work completed — pending review", awaiting_signoff: "Work approved — waiting for the store to confirm", completed: "Closed", cancelled: "Cancelled" } as Record<string, string>
   )[s ?? ""] ?? s ?? "";
 }
 

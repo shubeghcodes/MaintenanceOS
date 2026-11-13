@@ -1,6 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { OPEN_STATUSES, PRIORITY_LABEL } from "./constants";
+import { WORKABLE_STATUSES, PRIORITY_LABEL } from "./constants";
 import { appUrl, esc, sendEmail } from "./email";
 import { dayLabel, fmtTime } from "./format";
 import type { WoPriority } from "./types";
@@ -47,7 +47,7 @@ export async function sendDaySchedules(
         "site:sites(name,code,address,city,state,phone), asset:assets(name)",
     )
     .eq("scheduled_date", opts.date)
-    .in("status", OPEN_STATUSES)
+    .in("status", WORKABLE_STATUSES)
     .not("assigned_tech_id", "is", null)
     .order("scheduled_start", { ascending: true, nullsFirst: false });
   if (opts.techIds?.length) q = q.in("assigned_tech_id", opts.techIds);
