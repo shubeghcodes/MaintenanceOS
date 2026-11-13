@@ -1,3 +1,4 @@
+import { getCompanyScope, inCompany } from "@/lib/company";
 import Link from "next/link";
 import { Plus } from "lucide-react";
 import { getSession } from "@/lib/auth";
@@ -20,6 +21,7 @@ type Row = ComplianceRequirement & { site: { id: string; name: string; code: str
 export default async function CompliancePage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const sp = await searchParams;
   const { supabase, profile } = await getSession();
+  const { companyId: cid } = await getCompanyScope();
   const { sites } = await getLookups(supabase);
   const isAdmin = profile.role === "admin";
 
@@ -28,6 +30,7 @@ export default async function CompliancePage({ searchParams }: { searchParams: P
     .select("*, site:sites(id,name,code), vendor:vendors(name)")
     .eq("active", true)
     .order("next_due_on");
+  q = inCompany(q, cid);
   if (sp.site) q = q.eq("site_id", sp.site);
   if (sp.category) q = q.eq("category", sp.category);
   const { data } = await q;

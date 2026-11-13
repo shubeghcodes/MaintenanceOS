@@ -1,3 +1,4 @@
+import { getCompanyScope, inCompany } from "@/lib/company";
 import Link from "next/link";
 import { Plus } from "lucide-react";
 import { getSession } from "@/lib/auth";
@@ -13,9 +14,10 @@ export const metadata = { title: "Assets" };
 export default async function AssetsPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const sp = await searchParams;
   const { supabase, profile } = await getSession();
+  const { companyId: cid } = await getCompanyScope();
   const { sites } = await getLookups(supabase);
 
-  let q = supabase.from("assets").select("*, site:sites(id,name,code)").order("name").limit(1000);
+  let q = inCompany(supabase.from("assets").select("*, site:sites(id,name,code)"), cid).order("name").limit(1000);
   if (sp.site) q = q.eq("site_id", sp.site);
   if (sp.category) q = q.eq("category", sp.category);
   if (sp.status) q = q.eq("status", sp.status);

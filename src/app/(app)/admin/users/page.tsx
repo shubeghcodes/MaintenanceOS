@@ -24,7 +24,7 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
   const [{ data: pData }, { data: mData }, lookups] = await Promise.all([
     supabase.from("profiles").select("*").order("active", { ascending: false }).order("role").order("full_name"),
     supabase.from("site_members").select("site_id,user_id"),
-    getLookups(supabase),
+    getLookups(supabase, { allCompanies: true }),
   ]);
   const users = (pData ?? []) as Profile[];
   const members = (mData ?? []) as { site_id: string; user_id: string }[];

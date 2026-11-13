@@ -1,3 +1,4 @@
+import { getCompanyScope } from "@/lib/company";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Plus } from "lucide-react";
@@ -21,7 +22,9 @@ export default async function SitePage({
   const { supabase, profile } = await getSession();
   const { data } = await supabase.from("sites").select("*").eq("id", id).maybeSingle();
   if (!data) notFound();
-  const site = data as Site;
+  const site = data as Site & { company_id?: string };
+  const scope = await getCompanyScope();
+  const companyName = scope.companies.find((c) => c.id === site.company_id)?.name;
   const yearStart = `${new Date().getFullYear()}-01-01`;
 
   const [{ data: woData }, { data: spendData }, { data: aData }, { data: cData }, { data: mData }] = await Promise.all([
@@ -48,7 +51,7 @@ export default async function SitePage({
     <>
       <PageHeader
         title={site.name}
-        subtitle={`${SITE_TYPE_LABEL[site.type]}${site.brand ? ` · ${site.brand}` : ""} · ${[site.address, site.city, site.state].filter(Boolean).join(", ")}`}
+        subtitle={`${companyName ? `${companyName} · ` : ""}${SITE_TYPE_LABEL[site.type]}${site.brand ? ` · ${site.brand}` : ""} · ${[site.address, site.city, site.state].filter(Boolean).join(", ")}`}
         back={{ href: "/sites", label: "Sites" }}
         actions={
           profile.role !== "vendor" && (
@@ -179,7 +182,7 @@ export default async function SitePage({
       {profile.role === "admin" && (
         <div className="mt-8">
           <h2 className="mb-3 text-sm font-semibold text-slate-900">Edit site</h2>
-          <SiteForm site={site} />
+          <SiteForm site={site} companies={scope.companies} />
         </div>
       )}
     </>

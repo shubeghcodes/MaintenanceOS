@@ -1,3 +1,4 @@
+import { getCompanyScope, inCompany } from "@/lib/company";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireRole } from "@/lib/auth";
@@ -17,12 +18,14 @@ export default async function VendorPage({
   const { id } = await params;
   const sp = await searchParams;
   const { supabase, profile } = await requireRole("admin", "tech");
+  const { companyId: cid } = await getCompanyScope();
   const [{ data }, { data: woData }] = await Promise.all([
     supabase.from("vendors").select("*").eq("id", id).maybeSingle(),
     supabase
       .from("work_orders")
       .select("id,number,title,status,created_at,completed_at,total_cost,due_at,site:sites(code,name)")
       .eq("vendor_id", id)
+      .eq(cid ? "company_id" : "vendor_id", cid ?? id)
       .order("created_at", { ascending: false })
       .limit(200),
   ]);

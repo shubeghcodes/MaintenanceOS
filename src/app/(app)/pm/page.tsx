@@ -1,3 +1,4 @@
+import { getCompanyScope, inCompany } from "@/lib/company";
 import Link from "next/link";
 import { Plus } from "lucide-react";
 import { getSession } from "@/lib/auth";
@@ -20,12 +21,14 @@ type Row = PmSchedule & {
 export default async function PmPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const sp = await searchParams;
   const { supabase, profile } = await getSession();
+  const { companyId: cid } = await getCompanyScope();
   const { sites } = await getLookups(supabase);
 
   let q = supabase
     .from("pm_schedules")
     .select("*, site:sites(name,code), asset:assets(id,name), vendor:vendors(name), tech:profiles(full_name,email)")
     .order("next_due_on");
+  q = inCompany(q, cid);
   if (sp.site) q = q.eq("site_id", sp.site);
   if (sp.show !== "all") q = q.eq("active", true);
   const { data, error } = await q;

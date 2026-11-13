@@ -4,11 +4,33 @@ import { Card, Field, Input, Select, Textarea } from "@/components/ui";
 import { SubmitButton } from "@/components/SubmitButton";
 import { saveSite } from "./actions";
 
-export function SiteForm({ site }: { site?: Site }) {
+export function SiteForm({
+  site,
+  companies = [],
+  defaultCompanyId,
+}: {
+  site?: Site & { company_id?: string };
+  companies?: { id: string; name: string; active: boolean }[];
+  defaultCompanyId?: string | null;
+}) {
+  const selectedCompany = site?.company_id ?? defaultCompanyId ?? companies.find((c) => c.active)?.id ?? "";
   return (
     <form action={saveSite}>
       {site && <input type="hidden" name="id" value={site.id} />}
       <Card className="grid gap-4 p-5 sm:grid-cols-2 lg:grid-cols-4">
+        {companies.length > 0 && (
+          <Field label="Company" hint={site ? "Moving a site moves its work orders, assets, PM and compliance with it" : "Which corporation owns this location"} className="sm:col-span-2 lg:col-span-4">
+            <Select name="company_id" defaultValue={selectedCompany} required>
+              {companies
+                .filter((c) => c.active || c.id === selectedCompany)
+                .map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+            </Select>
+          </Field>
+        )}
         <Field label="Name" className="sm:col-span-2">
           <Input name="name" required defaultValue={site?.name} placeholder="e.g. Del Taco #101 – Fullerton" />
         </Field>

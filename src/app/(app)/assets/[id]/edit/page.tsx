@@ -19,7 +19,7 @@ export default async function EditAssetPage({
   const { supabase } = await requireRole("admin", "tech");
   const [{ data }, { sites }] = await Promise.all([
     supabase.from("assets").select("*").eq("id", id).maybeSingle(),
-    getLookups(supabase),
+    getLookups(supabase, { allCompanies: true }),
   ]);
   if (!data) notFound();
   const asset = data as Asset;

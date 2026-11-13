@@ -8,7 +8,7 @@ export type PurchaseRow = Purchase & {
   receipt_url: string | null;
 };
 
-export type PurchaseFilters = { site?: string; from?: string; to?: string; status?: string; method?: string; person?: string; q?: string; category?: string };
+export type PurchaseFilters = { company?: string | null; site?: string; from?: string; to?: string; status?: string; method?: string; person?: string; q?: string; category?: string };
 
 export async function loadPurchases(db: SupabaseClient, f: PurchaseFilters): Promise<PurchaseRow[]> {
   let q = db
@@ -17,6 +17,7 @@ export async function loadPurchases(db: SupabaseClient, f: PurchaseFilters): Pro
     .order("purchase_date", { ascending: false })
     .order("created_at", { ascending: false })
     .limit(3000);
+  if (f.company) q = q.eq("wo.company_id", f.company);
   if (f.site) q = q.eq("wo.site_id", f.site);
   if (f.from) q = q.gte("purchase_date", f.from);
   if (f.to) q = q.lte("purchase_date", f.to);

@@ -1,3 +1,4 @@
+import { getCompanyScope, inCompany } from "@/lib/company";
 import Link from "next/link";
 import { Plus } from "lucide-react";
 import { getSession } from "@/lib/auth";
@@ -15,6 +16,7 @@ type SP = Record<string, string | undefined>;
 export default async function WorkOrdersPage({ searchParams }: { searchParams: Promise<SP> }) {
   const sp = await searchParams;
   const { supabase, profile } = await getSession();
+  const { companyId: cid } = await getCompanyScope();
   const { sites } = await getLookups(supabase);
 
   const status = sp.status ?? "open";
@@ -26,6 +28,7 @@ export default async function WorkOrdersPage({ searchParams }: { searchParams: P
         "tech:profiles!work_orders_assigned_tech_id_fkey(id,full_name,email)",
     )
     .limit(300);
+  q = inCompany(q, cid);
 
   if (status === "open") q = q.in("status", OPEN_STATUSES);
   else if (status === "overdue") q = q.in("status", OPEN_STATUSES).lt("due_at", new Date().toISOString());

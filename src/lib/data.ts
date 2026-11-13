@@ -1,15 +1,19 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Asset, Profile, Site, Vendor } from "./types";
+import { getCompanyScope, inCompany } from "./company";
 
 /** Reference lists used by forms and filters. RLS limits sites/assets to what the viewer can see. */
-export async function getLookups(supabase: SupabaseClient, opts: { assets?: boolean } = {}) {
+export async function getLookups(supabase: SupabaseClient, opts: { assets?: boolean; allCompanies?: boolean } = {}) {
+  // Sites and assets follow the selected company, so pickers only offer that company's locations.
+  // Edit pages pass allCompanies so a record's current site is always in the list.
+  const cid = opts.allCompanies ? null : (await getCompanyScope()).companyId;
   const [sites, vendors, techs, assets] = await Promise.all([
-    supabase.from("sites").select("id,name,code,type").eq("active", true).order("name"),
+    inCompany(supabase.from("sites").select("id,name,code,type").eq("active", true), cid).order("name"),
     supabase.from("vendors").select("id,name,trades,phone").eq("active", true).order("name"),
     supabase.from("profiles").select("id,full_name,email,role").in("role", ["tech", "admin"]).eq("active", true).order("full_name"),
     opts.assets
-      ? supabase.from("assets").select("id,name,tag,site_id,category").neq("status", "retired").order("name")
+      ? inCompany(supabase.from("assets").select("id,name,tag,site_id,category").neq("status", "retired"), cid).order("name")
       : Promise.resolve({ data: [] }),
   ]);
   return {

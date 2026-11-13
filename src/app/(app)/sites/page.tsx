@@ -1,3 +1,4 @@
+import { getCompanyScope, inCompany } from "@/lib/company";
 import Link from "next/link";
 import { FileSpreadsheet, MapPin, Plus } from "lucide-react";
 import { getSession } from "@/lib/auth";
@@ -10,13 +11,17 @@ export const metadata = { title: "Sites" };
 
 export default async function SitesPage() {
   const { supabase, profile } = await getSession();
+  const scope = await getCompanyScope();
+  const cid = scope.companyId;
+  const companyName = new Map(scope.companies.map((c) => [c.id, c.name]));
+  const showCompany = !cid && scope.companies.length > 1;
   const [{ data: sData }, { data: woData }, { data: cData }, { data: aData }] = await Promise.all([
-    supabase.from("sites").select("*").order("active", { ascending: false }).order("name"),
-    supabase.from("work_orders").select("site_id,status,due_at").in("status", OPEN_STATUSES).limit(5000),
-    supabase.from("compliance_requirements").select("site_id,next_due_on").eq("active", true),
-    supabase.from("assets").select("site_id,status").neq("status", "retired"),
+    inCompany(supabase.from("sites").select("*"), cid).order("active", { ascending: false }).order("name"),
+    inCompany(supabase.from("work_orders").select("site_id,status,due_at").in("status", OPEN_STATUSES), cid).limit(5000),
+    inCompany(supabase.from("compliance_requirements").select("site_id,next_due_on").eq("active", true), cid),
+    inCompany(supabase.from("assets").select("site_id,status").neq("status", "retired"), cid),
   ]);
-  const sites = (sData ?? []) as Site[];
+  const sites = (sData ?? []) as (Site & { company_id?: string })[];
   const wos = (woData ?? []) as { site_id: string; status: string; due_at: string | null }[];
   const comp = (cData ?? []) as { site_id: string; next_due_on: string }[];
   const assets = (aData ?? []) as { site_id: string; status: string }[];
@@ -25,7 +30,7 @@ export default async function SitesPage() {
     <>
       <PageHeader
         title="Sites"
-        subtitle={`${sites.length} location${sites.length === 1 ? "" : "s"}`}
+        subtitle={`${scope.company ? `${scope.company.name} · ` : ""}${sites.length} location${sites.length === 1 ? "" : "s"}`}
         actions={
           profile.role === "admin" && (
             <>
@@ -55,7 +60,10 @@ export default async function SitesPage() {
                 <Card className={`h-full p-5 transition hover:border-slate-300 hover:shadow ${s.active ? "" : "opacity-60"}`}>
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <p className="font-mono text-xs text-slate-400">{s.code}</p>
+                      <p className="font-mono text-xs text-slate-400">
+                        {s.code}
+                        {showCompany && s.company_id && <span className="ml-1 font-sans text-brand-700">{s.code ? "· " : ""}{companyName.get(s.company_id)}</span>}
+                      </p>
                       <p className="font-semibold text-slate-900">{s.name}</p>
                     </div>
                     <Badge dot={false}>{SITE_TYPE_LABEL[s.type]}</Badge>

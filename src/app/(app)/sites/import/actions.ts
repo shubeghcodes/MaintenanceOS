@@ -1,5 +1,6 @@
 "use server";
 
+import { getCompanyScope } from "@/lib/company";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { requireRole } from "@/lib/auth";
@@ -129,7 +130,8 @@ export async function importSites(_prev: ImportState, fd: FormData): Promise<Imp
         siteId = existing.id;
       }
     } else {
-      const { data, error } = await supabase.from("sites").insert(full).select("id").single();
+      const { companyId } = await getCompanyScope();
+      const { data, error } = await supabase.from("sites").insert({ ...full, company_id: companyId ?? undefined } as typeof full).select("id").single();
       if (error || !data) problems.push(`Row ${r.line} (${r.name}): ${error?.message ?? "insert failed"}`);
       else {
         created++;

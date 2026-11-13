@@ -12,7 +12,8 @@ Deploys to Vercel (or any Node host) in about 15 minutes.
 
 | Module | What it does |
 |---|---|
-| **Dashboard** | Open / overdue / emergency counts, PM on-time %, compliance overdue, R&M spend MTD, avg close time, "needs attention" queue, compliance due in 30 days, per-site rollup, upcoming PMs, equipment down. |
+| **Companies** | Run several corporations from one login. **Select Company** at the top of the dashboard (and in the sidebar on every page) switches the whole app to that company's locations, work orders, PM, compliance, assets, vendor work and purchases. **All companies** shows everything combined, with a *By company* summary on the dashboard. Add, rename or deactivate companies on **Companies**; new locations are assigned to a company, and work orders, assets, PM schedules and compliance items take the company of their location automatically. Switching never changes data. |
+| **Dashboard** | Locations, completed (30 days), open / overdue / emergency counts, PM on-time %, compliance overdue, R&M spend MTD, avg close time, "needs attention" queue, compliance due in 30 days, per-site rollup, upcoming PMs, equipment down. |
 | **Work orders** | Request → assign → in progress → on hold → complete. Priority SLAs set due dates automatically (Emergency 4h, High 24h, Medium 3d, Low 7d). Tech and/or vendor assignment, NTE with over-limit warning, labor/parts/invoice costs, photos & PDFs, comments, and a full audit trail of every status and assignment change. Mobile-friendly request form with camera upload. |
 | **Schedule (dispatch calendar)** | Week and day views with a row per tech. Drag jobs from the *Unscheduled* list onto a tech and day, drag between techs/days to reassign or reschedule, drag back to unschedule. Shows hours booked per tech per day (flags over 8h), filter by tech, overdue and in-progress markers. Start times and estimated hours are set on the work order. |
 | **My day (techs)** | Phone-first route view of a tech's jobs for the day in time order, with directions, call-site, one-tap *Start work*, and their other unscheduled assignments. Admins can view any tech's day. |
@@ -46,7 +47,7 @@ Row-level security policies in Postgres enforce all of this, so even a direct AP
 
 ### 1. Create the Supabase project
 1. Create a project at supabase.com.
-2. **SQL Editor** → run, in order: `supabase/migrations/0001_schema.sql`, `0003_scheduling.sql`, `0004_vendor_portal.sql`, `0005_compliance_calendar.sql`, `0006_inbound_email.sql`, `0007_purchases.sql`, `0008_grants.sql`. (`0002` is the optional pg_cron file.) Already ran some? Run only the new ones; 0003–0008 are safe to re-run. **Don't skip `0008`**: newer Supabase projects don't give the app access to new tables, and without it every sign-in ends in "Your account is inactive".
+2. **SQL Editor** → run, in order: `supabase/migrations/0001_schema.sql`, `0003_scheduling.sql`, `0004_vendor_portal.sql`, `0005_compliance_calendar.sql`, `0006_inbound_email.sql`, `0007_purchases.sql`, `0008_grants.sql`, `0009_companies.sql`. (`0002` is the optional pg_cron file.) Already ran some? Run only the new ones; 0003–0009 are safe to re-run. `0009` puts all existing sites into a starting company called "My Company" that you can rename. **Don't skip `0008`**: newer Supabase projects don't give the app access to new tables, and without it every sign-in ends in "Your account is inactive".
 3. *(Optional, for a demo)* run `supabase/seed.sql`: 4 sites, 5 vendors, 9 assets, PM schedules, compliance items and sample work orders. Skip it for production, or delete the sample rows later.
 4. **Authentication → URL Configuration:** set *Site URL* to your app URL and add `https://YOUR-APP/auth/callback` to *Redirect URLs* (also `http://localhost:3000/auth/callback` for local dev).
 5. **Authentication → Providers → Email:** turn **off** "Allow new users to sign up". Access is invite-only.
@@ -167,13 +168,14 @@ Invoice status is tracked separately: Not submitted, Submitted, Under review, Ap
 Calendar drag-and-drop is for desktop. On a phone, schedule from the work order's *Assignment & schedule* card instead.
 
 ## Day-one checklist
-1. **Sites:** add each location (code, type, address), or use **Sites → Import from Excel** to load them all at once with each store's manager email. Site type drives the compliance template.
-2. **Compliance:** on the Compliance page, use **Add standard checklist** for each site, then open each item and set the real next-due date from your last certificate. Template frequencies are common defaults; confirm them with your fire marshal, health department, landlord and insurer.
-3. **Vendors:** add your hood, refrigeration/HVAC, plumbing, pest and electrical vendors with COI dates.
-4. **Assets:** start with the equipment that breaks or costs the most (walk-ins, fryers, ice machines, RTUs, hoods). Bulk import via CSV in Supabase **Table Editor → assets → Insert → Import CSV** works well.
-5. **PM schedules:** add from each asset page.
-6. **Schedule:** drag open work onto techs for the week, then send a test schedule email to yourself (make yourself a tech's job, or use day view → *Email schedule*).
-7. **Users:** invite GMs as *Managers* with their site, techs with their coverage sites, and vendor contacts as *Vendors* linked to their company. The **By location** view on Users is the quickest way to staff each site.
+1. **Companies:** rename "My Company" and add your other corporations on **Companies**.
+2. **Sites:** add each location (code, type, address, company), or use **Sites → Import from Excel** to load them all at once with each store's manager email. Site type drives the compliance template.
+3. **Compliance:** on the Compliance page, use **Add standard checklist** for each site, then open each item and set the real next-due date from your last certificate. Template frequencies are common defaults; confirm them with your fire marshal, health department, landlord and insurer.
+4. **Vendors:** add your hood, refrigeration/HVAC, plumbing, pest and electrical vendors with COI dates.
+5. **Assets:** start with the equipment that breaks or costs the most (walk-ins, fryers, ice machines, RTUs, hoods). Bulk import via CSV in Supabase **Table Editor → assets → Insert → Import CSV** works well.
+6. **PM schedules:** add from each asset page.
+7. **Schedule:** drag open work onto techs for the week, then send a test schedule email to yourself (make yourself a tech's job, or use day view → *Email schedule*).
+8. **Users:** invite GMs as *Managers* with their site, techs with their coverage sites, and vendor contacts as *Vendors* linked to their company. The **By location** view on Users is the quickest way to staff each site.
 
 ---
 
