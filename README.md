@@ -40,7 +40,7 @@ Deploys to Vercel (or any Node host) in about 15 minutes.
 | **Super admin** | Everything, in every company, including hourly rates | Everything an admin does, plus: add/remove companies; add, change and remove admins and super admins (and limit admins to companies); set labor rates and location budgets; delete work orders and assets; **approve vendor invoices for payment** and mark them paid. There is always at least one active super admin. |
 | **Admin** | Everything in their companies (all companies unless a super admin limits them), including labor dollars and R&M spend, but not hourly rates | Day-to-day setup, assignments, scheduler, managers/techs/vendors, quotes, receipts; reviews invoices (under review, request revision) but can't approve them for payment |
 | **Manager** (store / property) | Only their assigned sites | Submit requests (an admin approves them), comment, upload photos, withdraw their own requests before work starts |
-| **Tech** | Their assigned sites + anything assigned to them | Work tickets, set status, costs, assign, edit assets, log compliance |
+| **Tech** | Their assigned sites + anything assigned to them | Work tickets, set status, costs, adjust schedule and priority, edit assets, log compliance; submit requests (an admin approves them and assigns who does the work) |
 | **Vendor** | Only work orders dispatched to their company | Start / hold / complete, invoice amount & number, notes, photos |
 
 Row-level security policies in Postgres enforce all of this, so even a direct API call with a manager's or vendor's token can't read other sites' data. Users can't change their own role.
