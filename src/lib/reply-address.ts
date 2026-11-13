@@ -40,3 +40,32 @@ export function parseReplyAddress(raw: string): { dispatchId: string; kind: Repl
   if (expected.length !== given.length || !timingSafeEqual(expected, given)) return null;
   return { dispatchId, kind };
 }
+
+/**
+ * Team reply addresses, for emails to GMs and staff about a work order (no vendor involved):
+ *   wo1023-<work order id>-<signature>-t@reply.yourcompany.com
+ * A reply from that location's GM, or from a tech or admin, is posted as a note on the work order.
+ */
+function teamSig(woId: string) {
+  return createHmac("sha256", linkSecret()).update(`reply:team:${woId}`).digest("hex").slice(0, 12);
+}
+
+export function teamReplyAddress(woId: string, woNumber: number) {
+  const domain = replyDomain();
+  if (!domain) return null;
+  return `wo${woNumber}-${woId.replace(/-/g, "")}-${teamSig(woId)}-t@${domain}`;
+}
+
+export function parseTeamReplyAddress(raw: string): { woId: string } | null {
+  const domain = replyDomain();
+  if (!domain) return null;
+  const addr = (/<([^>]+)>/.exec(raw)?.[1] ?? raw).trim().toLowerCase();
+  const m = /^wo\d+-([0-9a-f]{32})-([0-9a-f]{12})-t@(.+)$/.exec(addr);
+  if (!m || m[3] !== domain) return null;
+  const hex = m[1];
+  const woId = `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  const expected = Buffer.from(teamSig(woId));
+  const given = Buffer.from(m[2]);
+  if (expected.length !== given.length || !timingSafeEqual(expected, given)) return null;
+  return { woId };
+}
