@@ -5,6 +5,8 @@ import { getSession } from "@/lib/auth";
 import { getCompanyScope, getReceiptsToReview, inCompany, WO_COMPANY_COL, WO_COMPANY_JOIN } from "@/lib/company";
 import { CompanySelect } from "@/components/CompanySelect";
 import { loadRmLines } from "@/lib/labor";
+import { loadBudgets } from "@/lib/budgets";
+import { BudgetBar } from "@/components/BudgetBar";
 import { OPEN_STATUSES } from "@/lib/constants";
 import { addDaysISO, daysUntil, fmtDate, fmtFreq, fmtMoney, isOverdue, relativeDue, dueWhen, todayISO } from "@/lib/format";
 import type { AssetStatus, FreqUnit, WoPriority, WoStatus, WoType } from "@/lib/types";
@@ -106,6 +108,12 @@ export default async function Dashboard() {
   const spendMtd = rmMonth.reduce((s, l) => s + l.amount, 0);
   const laborMtd = rmMonth.filter((l) => l.category === "labor").reduce((s, l) => s + l.amount, 0);
   const spendFor = (pred: (l: (typeof rmMonth)[number]) => boolean) => rmMonth.filter(pred).reduce((t, l) => t + l.amount, 0);
+  // Monthly budgets (spent includes labor; non-admins only see % used and what's left).
+  const budgetBySite = new Map((await loadBudgets(supabase, monthStart, monthStart)).map((b) => [b.site_id, b]));
+  const siteBudgets = sites.map((s) => budgetBySite.get(s.id)).filter((b) => b && b.budget != null) as { budget: number; spent: number }[];
+  const budgetTotal = siteBudgets.reduce((t, b) => t + b.budget, 0);
+  const budgetSpent = siteBudgets.reduce((t, b) => t + b.spent, 0);
+  const isAdmin = profile.role === "admin";
 
   // Per-site rollup
   const perSite = sites
@@ -311,7 +319,23 @@ export default async function Dashboard() {
         </Card>
 
         <Card className="lg:col-span-2">
-          <CardHeader title="By site" subtitle="Open work and R&M spend this month" />
+          <CardHeader
+            title="By site"
+            subtitle={siteBudgets.length ? "Open work and budget used this month (labor included)" : "Open work and R&M spend this month"}
+            action={
+              siteBudgets.length > 0 && (
+                <Link href="/sites/budgets" className="text-xs font-medium text-brand-700">
+                  Budgets
+                </Link>
+              )
+            }
+          />
+          {siteBudgets.length > 0 && (
+            <div className="border-b border-slate-100 px-5 py-3">
+              <p className="mb-1.5 text-xs font-medium text-slate-500">All budgeted locations · {fmtMoney(budgetTotal)} budget this month</p>
+              <BudgetBar budget={budgetTotal} spent={budgetSpent} showSpent={isAdmin} />
+            </div>
+          )}
           {perSite.length === 0 ? (
             <EmptyState title="No sites yet." />
           ) : (
@@ -322,7 +346,7 @@ export default async function Dashboard() {
                     <th className="px-5 py-2 font-medium">Site</th>
                     <th className="px-3 py-2 text-right font-medium">Open</th>
                     <th className="px-3 py-2 text-right font-medium">Overdue</th>
-                    <th className="w-1/2 px-5 py-2 font-medium">Spend MTD</th>
+                    <th className="w-1/2 px-5 py-2 font-medium">{siteBudgets.length ? "Budget used" : "Spend MTD"}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -336,12 +360,16 @@ export default async function Dashboard() {
                       <td className="px-3 py-2.5 text-right tabular-nums">{s.open}</td>
                       <td className={`px-3 py-2.5 text-right tabular-nums ${s.overdue ? "font-semibold text-red-700" : "text-slate-400"}`}>{s.overdue}</td>
                       <td className="px-5 py-2.5">
-                        <div className="flex items-center gap-3" title={`${s.name}: ${fmtMoney(s.spend)}`}>
-                          <div className="h-2 flex-1 rounded-full bg-slate-100">
-                            <div className="h-2 rounded-full bg-brand-500" style={{ width: `${(s.spend / maxSpend) * 100}%` }} />
+                        {siteBudgets.length > 0 ? (
+                          <BudgetBar budget={budgetBySite.get(s.id)?.budget ?? null} spent={budgetBySite.get(s.id)?.spent ?? 0} showSpent={isAdmin} compact />
+                        ) : (
+                          <div className="flex items-center gap-3" title={`${s.name}: ${fmtMoney(s.spend)}`}>
+                            <div className="h-2 flex-1 rounded-full bg-slate-100">
+                              <div className="h-2 rounded-full bg-brand-500" style={{ width: `${(s.spend / maxSpend) * 100}%` }} />
+                            </div>
+                            <span className="w-20 text-right text-xs tabular-nums text-slate-700">{fmtMoney(s.spend)}</span>
                           </div>
-                          <span className="w-20 text-right text-xs tabular-nums text-slate-700">{fmtMoney(s.spend)}</span>
-                        </div>
+                        )}
                       </td>
                     </tr>
                   ))}

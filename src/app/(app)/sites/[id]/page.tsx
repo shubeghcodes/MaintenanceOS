@@ -3,11 +3,15 @@ import { getCompanyScope } from "@/lib/company";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Plus } from "lucide-react";
-import { getSession } from "@/lib/auth";
+import { getSession, isSuper } from "@/lib/auth";
+import { addMonthsISO, loadBudgets, monthLabel, monthStartISO } from "@/lib/budgets";
+import { BudgetBar } from "@/components/BudgetBar";
+import { SubmitButton } from "@/components/SubmitButton";
+import { deleteBudgetMonth, saveBudgetMonth, saveSiteBudget } from "../budgets/actions";
 import { OPEN_STATUSES, ROLE_LABEL, SITE_TYPE_LABEL } from "@/lib/constants";
 import { fmtDate, fmtMoney, personName, relativeDue, todayISO } from "@/lib/format";
 import type { AssetStatus, Site, UserRole, WoPriority, WoStatus } from "@/lib/types";
-import { Alert, ButtonLink, Card, CardHeader, DefList, EmptyState, PageHeader, Stat } from "@/components/ui";
+import { Alert, ButtonLink, Card, CardHeader, DefList, EmptyState, Field, Input, PageHeader, Stat } from "@/components/ui";
 import { AssetStatusBadge, DueBadge, OverdueBadge, PriorityBadge, StatusBadge } from "@/components/badges";
 import { SiteForm } from "../SiteForm";
 
@@ -27,6 +31,8 @@ export default async function SitePage({
   const scope = await getCompanyScope();
   const companyName = scope.companies.find((c) => c.id === site.company_id)?.name;
   const yearStart = `${new Date().getFullYear()}-01-01`;
+  const superMe = isSuper(profile);
+  const thisMonth = monthStartISO();
 
   const [{ data: woData }, spendData, { data: aData }, { data: cData }, { data: mData }] = await Promise.all([
     supabase
@@ -40,6 +46,17 @@ export default async function SitePage({
     supabase.from("compliance_requirements").select("id,name,next_due_on").eq("site_id", id).eq("active", true).order("next_due_on"),
     supabase.from("site_members").select("user:profiles(id,full_name,email,role,phone)").eq("site_id", id),
   ]);
+  const [budgetRows, { data: defData }, { data: ovData }] = await Promise.all([
+    loadBudgets(supabase, addMonthsISO(thisMonth, -5), thisMonth, id),
+    supabase.from("site_budgets").select("monthly_amount").eq("site_id", id).maybeSingle(),
+    supabase.from("site_budget_months").select("month,amount,note").eq("site_id", id).gte("month", addMonthsISO(thisMonth, -12)).order("month"),
+  ]);
+  const defaultBudget = defData ? Number((defData as { monthly_amount: number }).monthly_amount) : null;
+  const overrides = ((ovData ?? []) as { month: string; amount: number; note: string | null }[]).map((o) => ({ ...o, amount: Number(o.amount) }));
+  const budgetNow = budgetRows.find((b) => b.month === thisMonth);
+  const budgetHistory = budgetRows.filter((b) => b.month < thisMonth && b.budget != null).reverse();
+  const upcoming = overrides.filter((o) => o.month > thisMonth);
+  const hasBudget = defaultBudget != null || overrides.length > 0;
   const wos = (woData ?? []) as { id: string; number: number; title: string; status: WoStatus; priority: WoPriority; due_at: string | null }[];
   const ytd = spendData.reduce((s, l) => s + l.amount, 0);
   const ytdLabor = spendData.filter((l) => l.category === "labor").reduce((s, l) => s + l.amount, 0);
@@ -64,7 +81,7 @@ export default async function SitePage({
         }
       />
       {sp.error && <Alert>{sp.error}</Alert>}
-      {sp.saved && <Alert tone="good">Site saved.</Alert>}
+      {sp.saved && sp.saved !== "budget" && <Alert tone="good">Site saved.</Alert>}
 
       <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
         <Stat label="Open work orders" value={wos.length} href={`/work-orders?site=${id}`} />
@@ -138,6 +155,44 @@ export default async function SitePage({
         </Card>
 
         <div className="space-y-6">
+          {(hasBudget || superMe) && (
+            <Card>
+              <CardHeader
+                title="Monthly budget"
+                subtitle="R&M spend vs. budget, labor included"
+                action={
+                  <Link href={superMe ? "#budget" : "/sites/budgets"} className="text-xs font-medium text-brand-700">
+                    {superMe ? "Edit" : "All locations"}
+                  </Link>
+                }
+              />
+              <div className="space-y-4 px-5 py-4">
+                <div>
+                  <p className="mb-1.5 text-xs font-medium text-slate-500">
+                    {monthLabel(thisMonth)}
+                    {budgetNow?.budget != null && ` · ${fmtMoney(budgetNow.budget)} budget`}
+                  </p>
+                  <BudgetBar budget={budgetNow?.budget ?? null} spent={budgetNow?.spent ?? 0} showSpent={profile.role === "admin"} />
+                </div>
+                {budgetHistory.length > 0 && (
+                  <ul className="space-y-2 border-t border-slate-100 pt-3">
+                    {budgetHistory.map((b) => (
+                      <li key={b.month} className="grid grid-cols-[4.5rem_1fr] items-start gap-2">
+                        <span className="text-xs text-slate-500">{monthLabel(b.month)}</span>
+                        <BudgetBar budget={b.budget} spent={b.spent} showSpent={profile.role === "admin"} compact />
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {upcoming.length > 0 && (
+                  <p className="border-t border-slate-100 pt-3 text-xs text-slate-500">
+                    Coming up: {upcoming.slice(0, 4).map((o) => `${monthLabel(o.month)} ${fmtMoney(o.amount)}`).join(" · ")}
+                  </p>
+                )}
+                {!hasBudget && <p className="text-xs text-slate-500">No budget set yet.</p>}
+              </div>
+            </Card>
+          )}
           <Card>
             <CardHeader
               title="Team"
@@ -180,6 +235,61 @@ export default async function SitePage({
           )}
         </div>
       </div>
+
+      {superMe && (
+        <div id="budget" className="mt-8 scroll-mt-6">
+          <h2 className="mb-3 text-sm font-semibold text-slate-900">Budget</h2>
+          {sp.saved === "budget" && <Alert tone="good">Budget saved.</Alert>}
+          <Card className="divide-y divide-slate-100">
+            <form action={saveSiteBudget} className="flex flex-wrap items-end gap-3 p-5">
+              <input type="hidden" name="site_id" value={id} />
+              <input type="hidden" name="back" value={`/sites/${id}#budget`} />
+              <Field label="Monthly budget" hint="Normal R&M budget per month, labor included. Leave blank for no budget." className="w-64">
+                <Input name="monthly_amount" inputMode="decimal" defaultValue={defaultBudget != null ? String(defaultBudget) : ""} placeholder="e.g. 2500" />
+              </Field>
+              <SubmitButton variant="secondary">Save</SubmitButton>
+            </form>
+            <div className="p-5">
+              <p className="text-sm font-medium text-slate-700">Different amount for a month</p>
+              <p className="mb-3 text-xs text-slate-500">For months that differ from the normal budget, like a bigger summer HVAC month.</p>
+              {overrides.length > 0 && (
+                <ul className="mb-4 divide-y divide-slate-100 rounded-lg ring-1 ring-slate-200">
+                  {overrides.map((o) => (
+                    <li key={o.month} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
+                      <span>
+                        <b className="font-medium">{monthLabel(o.month)}</b> · {fmtMoney(o.amount)}
+                        {o.note && <span className="text-slate-500"> · {o.note}</span>}
+                      </span>
+                      <form action={deleteBudgetMonth}>
+                        <input type="hidden" name="site_id" value={id} />
+                        <input type="hidden" name="month" value={o.month} />
+                        <input type="hidden" name="back" value={`/sites/${id}#budget`} />
+                        <SubmitButton variant="ghost" size="sm">
+                          Use normal budget
+                        </SubmitButton>
+                      </form>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <form action={saveBudgetMonth} className="flex flex-wrap items-end gap-3">
+                <input type="hidden" name="site_id" value={id} />
+                <input type="hidden" name="back" value={`/sites/${id}#budget`} />
+                <Field label="Month" className="w-44">
+                  <Input type="month" name="month" defaultValue={addMonthsISO(thisMonth, 1).slice(0, 7)} required />
+                </Field>
+                <Field label="Budget" className="w-36">
+                  <Input name="amount" inputMode="decimal" placeholder="e.g. 4000" required />
+                </Field>
+                <Field label="Note (optional)" className="min-w-48 flex-1">
+                  <Input name="note" placeholder="e.g. AC tune-ups" />
+                </Field>
+                <SubmitButton variant="secondary">Set for month</SubmitButton>
+              </form>
+            </div>
+          </Card>
+        </div>
+      )}
 
       {profile.role === "admin" && (
         <div className="mt-8">
