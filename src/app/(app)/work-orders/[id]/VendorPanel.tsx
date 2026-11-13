@@ -11,6 +11,7 @@ import { decideApproval, decideQuote, messageVendor, resendLink, reviewInvoice, 
 type Dispatch = VendorDispatch & { vendor: { id: string; name: string; phone: string | null } | null };
 
 export async function VendorPanel({ supabase, wo, profile }: { supabase: SupabaseClient; wo: WorkOrder; profile: Profile }) {
+  const superAdmin = profile.role === "admin" && !!profile.is_super;
   const canManage = profile.role === "admin" || profile.role === "tech";
   const [{ data: dData }, { data: aData }, { data: iData }, { data: qData }, { data: cData }] = await Promise.all([
     supabase.from("vendor_dispatches").select("*, vendor:vendors(id,name,phone)").eq("work_order_id", wo.id).order("created_at", { ascending: false }),
@@ -317,7 +318,7 @@ export async function VendorPanel({ supabase, wo, profile }: { supabase: Supabas
                 {wo.nte_amount != null && inv.amount > Number(wo.nte_amount) && !["paid", "rejected"].includes(inv.status) && (
                   <p className="mt-1 text-xs font-medium text-orange-700">Over NTE ({fmtMoney(wo.nte_amount)})</p>
                 )}
-                {profile.role === "admin" && i === 0 && ["submitted", "under_review", "approved"].includes(inv.status) && (
+                {profile.role === "admin" && i === 0 && (superAdmin ? ["submitted", "under_review", "approved"] : ["submitted", "under_review"]).includes(inv.status) && (
                   <form className="mt-2 space-y-2">
                     <input type="hidden" name="invoice_id" value={inv.id} />
                     {inv.status === "approved" ? (
@@ -336,7 +337,7 @@ export async function VendorPanel({ supabase, wo, profile }: { supabase: Supabas
                       )}
                       {inv.status !== "approved" && (
                         <>
-                          <SubmitButton size="sm" formAction={reviewInvoice.bind(null, "approved")}>Approve</SubmitButton>
+                          {superAdmin && <SubmitButton size="sm" formAction={reviewInvoice.bind(null, "approved")}>Approve for payment</SubmitButton>}
                           <SubmitButton size="sm" variant="danger" formAction={reviewInvoice.bind(null, "rejected")}>
                             Request revision
                           </SubmitButton>
@@ -344,6 +345,7 @@ export async function VendorPanel({ supabase, wo, profile }: { supabase: Supabas
                       )}
                       {inv.status === "approved" && <SubmitButton size="sm" formAction={reviewInvoice.bind(null, "paid")}>Mark paid</SubmitButton>}
                     </div>
+                    {!superAdmin && <p className="text-[11px] text-slate-500">A super admin approves invoices for payment.</p>}
                   </form>
                 )}
               </div>

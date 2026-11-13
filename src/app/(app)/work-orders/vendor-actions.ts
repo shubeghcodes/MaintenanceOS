@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { getSession } from "@/lib/auth";
+import { getSession, isSuper } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { num, str, todayISO, zonedTimeISO } from "@/lib/format";
 import { hashToken, linkTokenFor } from "@/lib/tokens";
@@ -302,6 +302,7 @@ export async function reviewInvoice(to: InvoiceStatus, fd: FormData) {
   const { data: inv } = await supabase.from("vendor_invoices").select("id,work_order_id,dispatch_id,status,amount,invoice_number").eq("id", invoiceId).single();
   if (!inv) redirect("/vendor-jobs");
   if ((profile as Profile).role !== "admin") fail(inv.work_order_id, "Only admins can review invoices.");
+  if ((to === "approved" || to === "paid") && !isSuper(profile as Profile)) fail(inv.work_order_id, "Only a super admin can approve invoices for payment.");
   if (!NEXT[inv.status as InvoiceStatus].includes(to)) fail(inv.work_order_id, "That invoice has already moved on.");
   const note = str(fd, "note");
   if (to === "rejected" && !note) fail(inv.work_order_id, "Tell the vendor what to correct.");

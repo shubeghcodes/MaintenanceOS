@@ -28,6 +28,7 @@ export async function TimeCard({
   techs: Person[];
 }) {
   const isAdmin = profile.role === "admin";
+  const superAdmin = isAdmin && !!profile.is_super; // only super admins see hourly rates
   const canTime = isAdmin || profile.role === "tech";
   const [{ data: eData, error }, { data: cData }, { data: aData }] = await Promise.all([
     supabase.from("time_entries").select(`${ENTRY_COLS}, user:profiles!time_entries_user_id_fkey(full_name,email)`).eq("work_order_id", woId).order("started_at"),
@@ -147,7 +148,8 @@ export async function TimeCard({
                             )}
                             {isAdmin && c && !void_ && (
                               <span className="block text-xs text-slate-500">
-                                {c.cost_override != null ? "imported" : c.hourly_rate != null ? `@ ${fmtMoney(c.hourly_rate, 2)}/hr` : <span className="text-orange-700">no rate</span>} · {fmtMoney(c.labor_cost, 2)}
+                                {c.cost_override != null ? "imported · " : c.hourly_rate == null ? <span className="text-orange-700">no rate · </span> : superAdmin ? `@ ${fmtMoney(c.hourly_rate, 2)}/hr · ` : ""}
+                                {fmtMoney(c.labor_cost, 2)}
                               </span>
                             )}
                           </span>
@@ -224,7 +226,14 @@ export async function TimeCard({
         )}
         {missingRate && (
           <p className="text-xs text-orange-700">
-            Some time has no hourly rate, so it&apos;s costed at $0. Set the rate on <Link className="font-medium underline" href="/admin/users">Users</Link> and it recalculates automatically.
+            Some time has no hourly rate, so it&apos;s costed at $0.{" "}
+            {superAdmin ? (
+              <>
+                Set the rate on <Link className="font-medium underline" href="/admin/users">Users</Link> and it recalculates automatically.
+              </>
+            ) : (
+              "A super admin can set it on Users; the cost recalculates automatically."
+            )}
           </p>
         )}
 

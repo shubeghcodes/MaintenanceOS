@@ -20,7 +20,8 @@ type Row = TimeEntry & {
 
 export default async function LaborPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const sp = await searchParams;
-  const { supabase } = await requireRole("admin");
+  const { supabase, profile } = await requireRole("admin");
+  const showRates = !!profile.is_super; // hourly rates are super-admin only
   const scope = await getCompanyScope();
   const cid = scope.companyId;
   const period = resolvePeriod(sp.period ?? "this_month", sp.from, sp.to);
@@ -138,7 +139,7 @@ export default async function LaborPage({ searchParams }: { searchParams: Promis
 
       <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
         <Stat label="Labor hours" value={fmtHours(totalHours)} sub={`${entries.length} time entr${entries.length === 1 ? "y" : "ies"}`} />
-        <Stat label="Labor cost" value={fmtMoney(totalCost, 2)} sub={totalHours ? `${fmtMoney(totalCost / totalHours, 2)}/hr average` : "—"} />
+        <Stat label="Labor cost" value={fmtMoney(totalCost, 2)} sub={showRates && totalHours ? `${fmtMoney(totalCost / totalHours, 2)}/hr average` : `${fmtHours(totalHours)} hrs`} />
         <Stat label="Work orders worked" value={allWos.size} sub={`${doneWos.size} completed`} />
         <Stat label="Timers open now" value={running.length} sub={running.filter((r) => r.status === "running").length + " running"} tone={running.length ? "warning" : undefined} />
       </div>
@@ -172,7 +173,7 @@ export default async function LaborPage({ searchParams }: { searchParams: Promis
               <Th className="text-right">Completed</Th>
               <Th className="text-right">Hours</Th>
               <Th className="text-right">Labor cost</Th>
-              <Th className="text-right">Avg rate</Th>
+              {showRates && <Th className="text-right">Avg rate</Th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -199,7 +200,7 @@ export default async function LaborPage({ searchParams }: { searchParams: Promis
                 <Td className="text-right tabular-nums">{s.completed.size}</Td>
                 <Td className="text-right tabular-nums">{fmtHours(s.hours)}</Td>
                 <Td className="text-right tabular-nums">{fmtMoney(s.cost, 2)}</Td>
-                <Td className="text-right tabular-nums text-slate-500">{s.hours ? fmtMoney(s.cost / s.hours, 2) : "—"}</Td>
+                {showRates && <Td className="text-right tabular-nums text-slate-500">{s.hours ? fmtMoney(s.cost / s.hours, 2) : "—"}</Td>}
               </tr>
             ))}
             {techRows.length > 1 && (
@@ -209,7 +210,7 @@ export default async function LaborPage({ searchParams }: { searchParams: Promis
                 <Td className="text-right tabular-nums">{doneWos.size}</Td>
                 <Td className="text-right tabular-nums">{fmtHours(totalHours)}</Td>
                 <Td className="text-right tabular-nums">{fmtMoney(totalCost, 2)}</Td>
-                <Td />
+                {showRates && <Td />}
               </tr>
             )}
           </tbody>
@@ -230,7 +231,7 @@ export default async function LaborPage({ searchParams }: { searchParams: Promis
               <Th>Visit</Th>
               <Th>Time</Th>
               <Th className="text-right">Hours</Th>
-              <Th className="text-right">Rate</Th>
+              {showRates && <Th className="text-right">Rate</Th>}
               <Th className="text-right">Cost</Th>
             </tr>
           </thead>
@@ -258,7 +259,7 @@ export default async function LaborPage({ searchParams }: { searchParams: Promis
                     {fmtClockTime(e.started_at)}–{e.ended_at ? fmtClockTime(e.ended_at) : e.status === "running" ? "now" : "paused"}
                   </Td>
                   <Td className="text-right tabular-nums">{fmtHours(hoursOf(e))}</Td>
-                  <Td className="text-right tabular-nums text-slate-500">{c?.cost_override != null ? "imported" : c?.hourly_rate != null ? fmtMoney(c.hourly_rate, 2) : "—"}</Td>
+                  {showRates && <Td className="text-right tabular-nums text-slate-500">{c?.cost_override != null ? "imported" : c?.hourly_rate != null ? fmtMoney(c.hourly_rate, 2) : "—"}</Td>}
                   <Td className="text-right tabular-nums">{fmtMoney(costOf(e), 2)}</Td>
                 </tr>
               );

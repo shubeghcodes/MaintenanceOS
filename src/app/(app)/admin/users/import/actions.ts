@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
-import { requireRole } from "@/lib/auth";
+import { isSuper, requireRole } from "@/lib/auth";
 import { getCompanyScope } from "@/lib/company";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { todayISO } from "@/lib/format";
@@ -106,6 +106,11 @@ function annotate(rows: UserImportRow[], ctx: Awaited<ReturnType<typeof loadCont
     }
 
     const existing = r.email ? ctx.byEmail.get(r.email) : undefined;
+    if (!isSuper(ctx.me) && (r.role === "admin" || existing?.role === "admin")) r.errors.push("Only a super admin can add or change admins");
+    if (r.hourly_rate != null && !isSuper(ctx.me)) {
+      r.warnings.push("Hourly rate ignored: only a super admin sets rates");
+      r.hourly_rate = null;
+    }
     if (existing) {
       if (existing.role === "vendor") r.errors.push("This email is a vendor login; change it on the Users page");
       if (existing.id === ctx.me.id && r.roleGiven && r.role !== existing.role) r.errors.push("You can’t change your own role");

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireRole } from "@/lib/auth";
+import { requireSuper } from "@/lib/auth";
 import { getCompanyScope } from "@/lib/company";
 import { OPEN_STATUSES } from "@/lib/constants";
 import { Alert, Badge, Card, CardHeader, Field, Input, PageHeader, Textarea } from "@/components/ui";
@@ -10,7 +10,7 @@ export const metadata = { title: "Companies" };
 
 export default async function CompaniesPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const sp = await searchParams;
-  const { supabase } = await requireRole("admin");
+  const { supabase } = await requireSuper();
   const scope = await getCompanyScope();
 
   if (!scope.enabled) {

@@ -1,4 +1,4 @@
-import { requireRole } from "@/lib/auth";
+import { isSuper, requireRole } from "@/lib/auth";
 import { getLookups } from "@/lib/data";
 import { ROLE_LABEL } from "@/lib/constants";
 import { personName } from "@/lib/format";
@@ -15,8 +15,9 @@ import { fmtDate, fmtMoney, todayISO } from "@/lib/format";
 
 export const metadata = { title: "Users" };
 
-const ROLE_HELP: Record<UserRole, string> = {
-  admin: "Everything: setup, all sites, scheduler, users.",
+const ROLE_HELP: Record<UserRole | "super_admin", string> = {
+  super_admin: "Everything, plus companies, admins, labor rates, deletes and paying invoices.",
+  admin: "Runs operations for their companies: setup, dispatch, approvals, managers and techs.",
   manager: "Submits and tracks requests for their sites.",
   tech: "Works tickets, logs costs, edits assets at their sites.",
   vendor: "Sees and updates only jobs dispatched to their company.",
@@ -46,6 +47,32 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
   const today = todayISO();
   const currentRate = (uid: string) => rates.find((r) => r.user_id === uid && r.effective_from <= today);
   const hasServiceKey = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const superMe = isSuper(me);
+  // Role choices: only super admins can make admins or super admins.
+  const roleOptions: [string, string][] = [
+    ...(superMe ? ([["super_admin", "Super admin"], ["admin", "Admin"]] as [string, string][]) : []),
+    ["manager", ROLE_LABEL.manager],
+    ["tech", ROLE_LABEL.tech],
+    ["vendor", ROLE_LABEL.vendor],
+  ];
+  const { data: acData } = await supabase.from("admin_companies").select("user_id,company_id");
+  const adminCompanies = (acData ?? []) as { user_id: string; company_id: string }[];
+  const companyName = new Map(scope.companies.map((c) => [c.id, c.name]));
+  const scopeOf = (uid: string) => adminCompanies.filter((a) => a.user_id === uid).map((a) => a.company_id);
+  const CompanyChecks = ({ selected }: { selected: string[] }) => (
+    <fieldset className="md:col-span-4">
+      <legend className="mb-1 text-sm font-medium text-slate-700">Companies this admin manages</legend>
+      <p className="mb-2 text-xs text-slate-500">Admins only. Leave all unticked for every company. Super admins always see everything.</p>
+      <div className="flex flex-wrap gap-2">
+        {scope.companies.map((c) => (
+          <label key={c.id} className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm ring-1 ring-slate-200 has-[:checked]:bg-brand-50 has-[:checked]:ring-brand-500">
+            <input type="checkbox" name="admin_company_ids" value={c.id} defaultChecked={selected.includes(c.id)} className="rounded border-slate-300" />
+            {c.name}
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  );
   const view = sp.view === "sites" || sp.site ? "sites" : "users";
 
   return (
@@ -115,9 +142,9 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
             </Field>
             <Field label="Role">
               <Select name="role" defaultValue="manager">
-                {(Object.keys(ROLE_LABEL) as UserRole[]).map((r) => (
-                  <option key={r} value={r}>
-                    {ROLE_LABEL[r]}
+                {roleOptions.map(([v, l]) => (
+                  <option key={v} value={v}>
+                    {l}
                   </option>
                 ))}
               </Select>
@@ -137,6 +164,7 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
               <p className="mb-2 text-xs text-slate-500">Managers and techs only see the locations you pick. Admins see every location; vendor logins see only their jobs.</p>
               <LocationPicker sites={locations} companies={pickerCompanies} />
             </fieldset>
+            {superMe && <CompanyChecks selected={[]} />}
             <div className="md:col-span-4">
               <SubmitButton pendingText="Sending…">Send invite</SubmitButton>
             </div>
@@ -145,9 +173,9 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
       </Card>
 
       <div className="mb-3 grid gap-2 text-xs text-slate-500 sm:grid-cols-2 lg:grid-cols-4">
-        {(Object.keys(ROLE_HELP) as UserRole[]).map((r) => (
+        {(Object.keys(ROLE_HELP) as (UserRole | "super_admin")[]).map((r) => (
           <p key={r}>
-            <b className="text-slate-700">{ROLE_LABEL[r]}:</b> {ROLE_HELP[r]}
+            <b className="text-slate-700">{r === "super_admin" ? "Super admin" : ROLE_LABEL[r]}:</b> {ROLE_HELP[r]}
           </p>
         ))}
       </div>
@@ -155,6 +183,9 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
       <div className="space-y-3">
         {users.map((u) => {
           const userSites = members.filter((m) => m.user_id === u.id).map((m) => m.site_id);
+          const uSuper = isSuper(u);
+          const canEdit = superMe || u.role !== "admin";
+          const uScope = scopeOf(u.id);
           return (
             <Card key={u.id} className={u.active ? "" : "opacity-60"}>
               <details>
@@ -166,23 +197,29 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
                     <p className="text-xs text-slate-500">{u.email}</p>
                   </div>
                   <Badge tone={u.role === "admin" ? "info" : "neutral"} dot={false}>
-                    {ROLE_LABEL[u.role]}
+                    {uSuper ? "Super admin" : ROLE_LABEL[u.role]}
                   </Badge>
                   <span className="text-xs text-slate-500">
                     {u.role === "vendor"
                       ? lookups.vendors.find((v) => v.id === u.vendor_id)?.name ?? "No vendor linked"
                       : u.role === "admin"
-                        ? "All sites"
+                        ? uSuper || !uScope.length
+                          ? "All companies"
+                          : uScope.map((id) => companyName.get(id) ?? "—").join(", ")
                         : `${userSites.length} site${userSites.length === 1 ? "" : "s"}`}
                   </span>
-                  {(u.role === "tech" || u.role === "admin") && (
+                  {superMe && (u.role === "tech" || u.role === "admin") && (
                     <span className={`text-xs tabular-nums ${currentRate(u.id) ? "text-slate-600" : u.role === "tech" ? "font-medium text-orange-700" : "text-slate-400"}`}>
                       {currentRate(u.id) ? `${fmtMoney(currentRate(u.id)!.hourly_rate, 2)}/hr` : "No rate"}
                     </span>
                   )}
                   {!u.active && <Badge tone="muted">Inactive</Badge>}
-                  <span className="text-xs font-medium text-brand-700">Edit</span>
+                  <span className="text-xs font-medium text-brand-700">{canEdit ? "Edit" : "View"}</span>
                 </summary>
+                {!canEdit && (
+                  <p className="border-t border-slate-100 px-5 py-4 text-sm text-slate-600">Only a super admin can change admins and super admins.</p>
+                )}
+                {canEdit && (
                 <form action={updateUser} className="grid gap-4 border-t border-slate-100 p-5 md:grid-cols-4">
                   <input type="hidden" name="id" value={u.id} />
                   <Field label="Name">
@@ -192,10 +229,10 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
                     <Input name="phone" defaultValue={u.phone ?? ""} />
                   </Field>
                   <Field label="Role">
-                    <Select name="role" defaultValue={u.role}>
-                      {(Object.keys(ROLE_LABEL) as UserRole[]).map((r) => (
-                        <option key={r} value={r}>
-                          {ROLE_LABEL[r]}
+                    <Select name="role" defaultValue={uSuper ? "super_admin" : u.role}>
+                      {roleOptions.map(([v, l]) => (
+                        <option key={v} value={v}>
+                          {l}
                         </option>
                       ))}
                     </Select>
@@ -218,11 +255,13 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
                     <input type="checkbox" name="active" defaultChecked={u.active} className="rounded border-slate-300" />
                     Active (can sign in)
                   </label>
+                  {superMe && u.role === "admin" && !uSuper && <CompanyChecks selected={uScope} />}
                   <div className="md:col-span-3 md:text-right">
                     <SubmitButton size="sm">Save user</SubmitButton>
                   </div>
                 </form>
-                {(u.role === "tech" || u.role === "admin") && (
+                )}
+                {superMe && (u.role === "tech" || u.role === "admin") && (
                   <div className="border-t border-slate-100 bg-slate-50/60 p-5">
                     <p className="text-sm font-medium text-slate-800">Labor rate</p>
                     <p className="mb-3 text-xs text-slate-500">

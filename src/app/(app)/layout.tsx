@@ -1,5 +1,5 @@
 import { Sidebar } from "@/components/Sidebar";
-import { getSession } from "@/lib/auth";
+import { getSession, isSuper, roleLabelOf } from "@/lib/auth";
 import { getCompanyScope, getReceiptsToReview } from "@/lib/company";
 import { ROLE_LABEL } from "@/lib/constants";
 import { personName } from "@/lib/format";
@@ -12,7 +12,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const showPicker = scope.enabled && profile.role !== "vendor" && (profile.role === "admin" || scope.companies.length > 1);
   return (
     <div className="min-h-screen">
-      <Sidebar role={profile.role} name={personName(profile)} roleLabel={ROLE_LABEL[profile.role]}
+      <Sidebar role={profile.role} name={personName(profile)} roleLabel={roleLabelOf(profile, ROLE_LABEL)}
+        isSuper={isSuper(profile)}
         companyPicker={showPicker ? { companies: scope.companies, value: scope.companyId } : null}
         receiptsToReview={receiptsToReview}
       />

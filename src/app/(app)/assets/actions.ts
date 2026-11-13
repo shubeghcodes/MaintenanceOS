@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { getSession } from "@/lib/auth";
+import { getSession, isSuper } from "@/lib/auth";
 import { saveAttachments } from "@/lib/attachments";
 import { num, str } from "@/lib/format";
 
@@ -45,7 +45,7 @@ export async function saveAsset(fd: FormData) {
 export async function deleteAsset(fd: FormData) {
   const { supabase, profile } = await getSession();
   const id = str(fd, "id")!;
-  if (profile.role !== "admin") redirect(`/assets/${id}?error=Only+admins+can+delete+assets`);
+  if (!isSuper(profile)) redirect(`/assets/${id}?error=Only+a+super+admin+can+delete+assets`);
   const { error } = await supabase.from("assets").delete().eq("id", id);
   if (error) redirect(`/assets/${id}?error=${encodeURIComponent(error.message)}`);
   revalidatePath("/assets");

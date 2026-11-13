@@ -155,7 +155,7 @@ export default async function Dashboard() {
         <div className="flex flex-wrap items-end gap-3">
           {scope.enabled && profile.role !== "manager" && (
             <div className="w-64">
-              <CompanySelect companies={scope.companies} value={cid} canManage={profile.role === "admin"} label="Select Company" />
+              <CompanySelect companies={scope.companies} value={cid} canManage={!!profile.is_super && profile.role === "admin"} label="Select Company" />
             </div>
           )}
           <ButtonLink href="/work-orders/new">

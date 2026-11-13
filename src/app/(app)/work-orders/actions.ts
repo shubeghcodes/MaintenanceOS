@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { getSession } from "@/lib/auth";
+import { getSession, isSuper } from "@/lib/auth";
 import { saveAttachments } from "@/lib/attachments";
 import { num, str, zonedTimeISO } from "@/lib/format";
 import type { WoStatus } from "@/lib/types";
@@ -164,7 +164,7 @@ export async function uploadWoFiles(fd: FormData) {
 export async function deleteWorkOrder(fd: FormData) {
   const { supabase, profile } = await getSession();
   const id = str(fd, "id")!;
-  if (profile.role !== "admin") fail(id, "Only admins can delete work orders");
+  if (!isSuper(profile)) fail(id, "Only a super admin can delete work orders");
   const { error } = await supabase.from("work_orders").delete().eq("id", id);
   if (error) fail(id, error.message);
   revalidatePath("/work-orders");
