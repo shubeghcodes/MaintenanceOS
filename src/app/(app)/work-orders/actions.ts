@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
-import { emailApprovalNeeded, emailRequesterApproved, emailRequesterDeclined, emailTechAssigned, emailTechSentBack } from "@/lib/wo-notify";
+import { emailApprovalNeeded, emailGmsNote, emailRequesterApproved, emailRequesterDeclined, emailTechAssigned, emailTechSentBack } from "@/lib/wo-notify";
 import { afterClosed, afterWorkDone } from "@/lib/signoff";
 import { sendAndRecord } from "@/lib/dispatch";
 import { ACTIVE_DISPATCH } from "@/lib/constants";
@@ -227,6 +227,7 @@ export async function setStatus(status: WoStatus, fd: FormData) {
 
   if (note) {
     await supabase.from("work_order_events").insert({ work_order_id: id, user_id: profile.id, kind: "comment", body: note });
+    after(() => emailGmsNote(id, { body: note, authorId: profile.id }));
   }
   // Store jobs now wait for the GM's sign-off; others close and send the closing emails.
   if (status === "completed" && wo.status !== "completed") after(() => afterWorkDone(id, profile.id));
@@ -295,6 +296,7 @@ export async function addComment(fd: FormData) {
       .from("work_order_events")
       .insert({ work_order_id: id, user_id: profile.id, kind: "comment", body });
     if (error) fail(id, error.message);
+    after(() => emailGmsNote(id, { body, authorId: profile.id }));
   }
   revalidatePath(`/work-orders/${id}`);
 }

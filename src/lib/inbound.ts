@@ -1,4 +1,5 @@
 import "server-only";
+import { emailGmsNote } from "./wo-notify";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { resendApiBase } from "./email";
@@ -173,6 +174,7 @@ export async function processInboundEmail(
       meta: { ...meta, files: saved.length },
     });
     await notifyManagement(db, ctx, "email_reply", label, { note: `${body}${saved.length ? `\n\n📎 ${saved.length} attachment(s) added` : ""}` });
+    await emailGmsNote(woId, { body, authorLabel: label });
     return finish("vendor_reply", { work_order_id: woId, dispatch_id: route.dispatchId, attachment_count: saved.length });
   }
 
@@ -189,6 +191,7 @@ export async function processInboundEmail(
       visibility: shared ? "shared" : "internal",
       meta: { ...meta, ...(shared ? { to_vendor: true } : {}), files: saved.length },
     });
+    await emailGmsNote(woId, { body: shared ? `(Message to the vendor) ${body}` : body, authorId: staff!.id });
     if (shared && dispatchRow && ACTIVE_DISPATCH.includes((dispatchRow as { status: string }).status as never)) {
       await sendAndRecord(db, route.dispatchId, (dispatchRow as { token_version: number }).token_version, "message", { note: body });
     }

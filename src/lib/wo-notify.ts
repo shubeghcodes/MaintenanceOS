@@ -225,3 +225,34 @@ export async function emailTechSentBack(woId: string, actorId: string, note: str
     woId,
   );
 }
+
+/**
+ * A tech, vendor or admin wrote a note on a work order: email the location's GMs.
+ * Notes written by GMs themselves don't send one. `authorId` is the profile for staff (null for vendors).
+ */
+export async function emailGmsNote(woId: string, note: { body: string; authorId?: string | null; authorLabel?: string | null }) {
+  const text = note.body?.trim();
+  if (!text) return;
+  const { db, wo } = await load(woId);
+  if (!wo) return;
+  let author = note.authorLabel ?? "Vendor";
+  if (note.authorId) {
+    const { data: p } = await db.from("profiles").select("full_name,email,role").eq("id", note.authorId).maybeSingle();
+    const person = p as { full_name: string | null; email: string | null; role: string } | null;
+    if (!person || person.role === "manager") return;
+    author = `${person.full_name ?? person.email ?? "Staff"} (${person.role === "admin" ? "Admin" : person.role === "vendor" ? "Vendor" : "Technician"})`;
+  }
+  const { data: siteRow } = await db.from("work_orders").select("site_id").eq("id", woId).single();
+  const gms = (await siteGms(db, (siteRow as { site_id: string }).site_id)).filter((g) => g.id !== note.authorId);
+  if (!gms.length) return;
+  await send(
+    gms.map((g) => g.email!),
+    `New note on WO #${wo.number} — ${wo.title}`,
+    `New note · WO #${wo.number}`,
+    wo.title,
+    `<b>${esc(author)}</b> added a note on this work order for ${esc(loc(wo))}:<div style="margin-top:10px;padding:12px;background:#f8fafc;border-radius:8px;color:#0f172a">${esc(text).replace(/\n/g, "<br>")}</div>`,
+    "",
+    woId,
+    "Open work order",
+  );
+}

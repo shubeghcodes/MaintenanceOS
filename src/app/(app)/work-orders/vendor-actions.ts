@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
-import { emailRequesterApproved, emailRequesterVendorAssigned } from "@/lib/wo-notify";
+import { emailGmsNote, emailRequesterApproved, emailRequesterVendorAssigned } from "@/lib/wo-notify";
 import { afterWorkDone } from "@/lib/signoff";
 import { redirect } from "next/navigation";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -187,6 +187,7 @@ export async function messageVendor(fd: FormData) {
   const { data: d } = await supabase.from("vendor_dispatches").select("id,work_order_id,token_version,status").eq("id", id).single();
   if (!d || !body) redirect("/vendor-jobs");
   await logEvent(supabase, { work_order_id: d.work_order_id, user_id: profile.id, kind: "comment", body, visibility: "shared", meta: { to_vendor: true } });
+  after(() => emailGmsNote(d.work_order_id, { body: `(Message to the vendor) ${body}`, authorId: profile.id }));
   const res = ACTIVE_DISPATCH.includes(d.status) || d.status === "closed" ? await sendAndRecord(supabase, id, d.token_version, "message", { note: body }) : null;
   refresh(d.work_order_id);
   back(d.work_order_id, res && !res.ok ? `error=${encodeURIComponent(`Message saved, email failed: ${res.error}`)}` : "vendor=messaged");
@@ -283,7 +284,10 @@ export async function reviewWork(decision: "close" | "send_back", fd: FormData) 
       .update({ status: "completed", resolution_notes: d.completion_notes })
       .eq("id", d.work_order_id);
     if (error) fail(d.work_order_id, error.message);
-    if (note) await logEvent(supabase, { work_order_id: d.work_order_id, user_id: profile.id, kind: "comment", body: `Review: ${note}`, visibility: "shared" });
+    if (note) {
+      await logEvent(supabase, { work_order_id: d.work_order_id, user_id: profile.id, kind: "comment", body: `Review: ${note}`, visibility: "shared" });
+      after(() => emailGmsNote(d.work_order_id, { body: `Review of the vendor's work: ${note}`, authorId: profile.id }));
+    }
     // Store jobs go to the GM for sign-off first; others close now and the vendor and requester are told.
     after(() => afterWorkDone(d.work_order_id, profile.id));
   } else {
@@ -291,6 +295,7 @@ export async function reviewWork(decision: "close" | "send_back", fd: FormData) 
     await supabase.from("vendor_dispatches").update({ status: "in_progress", completed_at: null }).eq("id", id);
     await supabase.from("work_orders").update({ status: "in_progress" }).eq("id", d.work_order_id);
     await logEvent(supabase, { work_order_id: d.work_order_id, user_id: profile.id, kind: "comment", body: `Sent back to vendor: ${note}`, visibility: "shared" });
+    after(() => emailGmsNote(d.work_order_id, { body: `Sent back to the vendor: ${note}`, authorId: profile.id }));
     await sendAndRecord(supabase, id, d.token_version, "sent_back", { note });
   }
   refresh(d.work_order_id);
