@@ -7,14 +7,12 @@ import clsx from "clsx";
 import {
   Boxes,
   Briefcase,
-  PiggyBank,
-  Timer,
+  BarChart3,
   Building2,
   CalendarClock,
   CalendarDays,
   ListChecks,
   Send,
-  Receipt,
   ClipboardList,
   LayoutDashboard,
   LogOut,
@@ -34,9 +32,7 @@ const NAV: { href: string; label: string; icon: typeof Wrench; roles: UserRole[]
   { href: "/work-orders", label: "Work orders", icon: ClipboardList, roles: ["admin", "manager", "tech", "vendor"] },
   { href: "/schedule", label: "Schedule", icon: CalendarDays, roles: ["admin", "tech"] },
   { href: "/vendor-jobs", label: "Vendor work", icon: Send, roles: ["admin", "tech"] },
-  { href: "/purchases", label: "Purchases", icon: Receipt, roles: ["admin", "tech"] },
-  { href: "/rm", label: "R&M spending", icon: PiggyBank, roles: ["admin"] },
-  { href: "/labor", label: "Technician labor", icon: Timer, roles: ["admin"] },
+  { href: "/analytics", label: "Analytics", icon: BarChart3, roles: ["admin"] },
   { href: "/pm", label: "Preventive maint.", icon: CalendarClock, roles: ["admin", "manager", "tech"] },
   { href: "/compliance", label: "Compliance", icon: ShieldCheck, roles: ["admin", "manager", "tech"] },
   { href: "/assets", label: "Assets", icon: Boxes, roles: ["admin", "manager", "tech"] },
@@ -48,7 +44,22 @@ const NAV: { href: string; label: string; icon: typeof Wrench; roles: UserRole[]
 
 type CompanyPicker = { companies: { id: string; name: string; active: boolean }[]; value: string | null } | null;
 
-export function Sidebar({ role, name, roleLabel, companyPicker }: { role: UserRole; name: string; roleLabel: string; companyPicker?: CompanyPicker }) {
+// Pages that live under the Analytics item.
+const ANALYTICS_PATHS = ["/analytics", "/rm", "/labor", "/purchases"];
+
+export function Sidebar({
+  role,
+  name,
+  roleLabel,
+  companyPicker,
+  receiptsToReview = 0,
+}: {
+  role: UserRole;
+  name: string;
+  roleLabel: string;
+  companyPicker?: CompanyPicker;
+  receiptsToReview?: number;
+}) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const items = NAV.filter((n) => n.roles.includes(role));
@@ -56,7 +67,8 @@ export function Sidebar({ role, name, roleLabel, companyPicker }: { role: UserRo
   const nav = (
     <nav className="flex flex-1 flex-col gap-0.5 px-3">
       {items.map(({ href, label, icon: Icon }) => {
-        const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
+        const active =
+          href === "/" ? pathname === "/" : href === "/analytics" ? ANALYTICS_PATHS.some((p) => pathname.startsWith(p)) : pathname.startsWith(href);
         return (
           <Link
             key={href}
@@ -69,6 +81,11 @@ export function Sidebar({ role, name, roleLabel, companyPicker }: { role: UserRo
           >
             <Icon className="h-4 w-4" aria-hidden />
             {label}
+            {href === "/analytics" && receiptsToReview > 0 && (
+              <span className="ml-auto rounded-full bg-amber-400 px-1.5 py-0.5 text-[11px] font-semibold text-slate-900" title={`${receiptsToReview} receipt(s) to review`}>
+                {receiptsToReview}
+              </span>
+            )}
           </Link>
         );
       })}

@@ -1,4 +1,5 @@
-import { getCompanyScope } from "@/lib/company";
+import { getCompanyScope, getReceiptsToReview } from "@/lib/company";
+import { AnalyticsTabs } from "@/components/AnalyticsTabs";
 import Link from "next/link";
 import { Download, Receipt } from "lucide-react";
 import { requireRole } from "@/lib/auth";
@@ -13,7 +14,7 @@ export const dynamic = "force-dynamic";
 
 export default async function PurchasesPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const sp = await searchParams;
-  const { supabase } = await requireRole("admin", "tech");
+  const { supabase, profile } = await requireRole("admin", "tech");
   const today = todayISO();
   // Default: this month, unless a status queue is selected (then all dates).
   const f = { ...sp, from: sp.from ?? (sp.status || sp.all ? undefined : today.slice(0, 8) + "01"), to: sp.to };
@@ -71,6 +72,7 @@ export default async function PurchasesPage({ searchParams }: { searchParams: Pr
           </ButtonLink>
         }
       />
+      {profile.role === "admin" && <AnalyticsTabs active="purchases" reviewCount={await getReceiptsToReview()} />}
       {sp.error && <Alert>{sp.error}</Alert>}
 
       <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">

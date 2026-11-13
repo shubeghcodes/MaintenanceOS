@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireRole } from "@/lib/auth";
-import { getCompanyScope, inCompany } from "@/lib/company";
+import { getCompanyScope, getReceiptsToReview, inCompany } from "@/lib/company";
+import { AnalyticsTabs } from "@/components/AnalyticsTabs";
 import { fmtDate, fmtMoney, personName } from "@/lib/format";
 import { ENTRY_COLS, fmtClockTime, fmtHours, secondsNow, type EntryCost, type TimeEntry } from "@/lib/labor";
 import { PERIODS, resolvePeriod } from "@/lib/periods";
@@ -94,6 +95,7 @@ export default async function LaborPage({ searchParams }: { searchParams: Promis
     <>
       <PageHeader title="Technician labor" subtitle={`${scope.company?.name ?? "All companies"} · ${fmtDate(period.from)} – ${fmtDate(period.to)}`} />
 
+      <AnalyticsTabs active="labor" reviewCount={await getReceiptsToReview()} />
       <form className="mb-5 flex flex-wrap items-end gap-3" action="/labor">
         <Field label="Period">
           <Select name="period" defaultValue={period.key}>
@@ -132,9 +134,6 @@ export default async function LaborPage({ searchParams }: { searchParams: Promis
           </Select>
         </Field>
         <button className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700">Show</button>
-        <Link href="/rm" className="ml-auto text-sm font-medium text-brand-700">
-          R&amp;M spending →
-        </Link>
       </form>
 
       <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">

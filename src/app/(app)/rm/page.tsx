@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireRole } from "@/lib/auth";
-import { getCompanyScope, inCompany } from "@/lib/company";
+import { getCompanyScope, getReceiptsToReview, inCompany } from "@/lib/company";
+import { AnalyticsTabs } from "@/components/AnalyticsTabs";
 import { fmtDate, fmtMoney } from "@/lib/format";
 import { fmtHours, loadRmLines, RM_CATEGORY_LABEL, type RmLine } from "@/lib/labor";
 import { MONTHS, PERIODS, resolvePeriod } from "@/lib/periods";
@@ -83,6 +84,7 @@ export default async function RmPage({ searchParams }: { searchParams: Promise<R
         subtitle={`${scope.company?.name ?? "All companies"}${sp.site ? ` · ${siteName.get(sp.site) ?? ""}` : ""} · ${fmtDate(period.from)} – ${fmtDate(period.to)}`}
       />
 
+      <AnalyticsTabs active="rm" reviewCount={await getReceiptsToReview()} />
       <form className="mb-5 flex flex-wrap items-end gap-3" action="/rm">
         <Field label="Period">
           <Select name="period" defaultValue={period.key}>
@@ -110,9 +112,6 @@ export default async function RmPage({ searchParams }: { searchParams: Promise<R
           </Select>
         </Field>
         <button className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700">Show</button>
-        <Link href="/labor" className="ml-auto text-sm font-medium text-brand-700">
-          Technician labor →
-        </Link>
       </form>
 
       <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
