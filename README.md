@@ -26,8 +26,8 @@ Deploys to Vercel (or any Node host) in about 15 minutes.
 | **External vendor work orders** | **Assign to External Vendor** on any work order emails the job (location, store #, address, issue, priority, photos attached, special instructions) with a secure **View Work Order** link. **No vendor account needed.** From their phone, vendors accept/decline, start work (timestamped), post updates with before/after photos, materials and parts/visit needs, request approval for extra work, mark complete, and submit invoices (with revisions) from the same link, now or later. You get an email for every vendor action, review approvals, completed work and invoices on the work order, and track everything on **Vendor work**. |
 | **Email replies → work order** | Every vendor email has its own reply address for that work order. When a vendor hits Reply, their message (minus the quoted original) and any photos/PDFs are posted on the work order's activity, visible to them on their link, and you're alerted. Staff can reply over email too: replying to a vendor's message emails the vendor, and replying to a vendor-activity alert adds an internal note. |
 | **Vendors** | Trades, contacts, after-hours numbers, license, COI expiration tracking, rates, rating, YTD spend, on-time rate, job history. |
-| **Sites** | Location cards with open/overdue/compliance/down counts; site page with everything for that location plus its team. **Import from Excel** adds or updates many sites at once from an .xlsx or .csv (template included), and a *Manager Email* column gives each manager access to just their store(s). |
-| **Users** | Invite by email, set role, link vendor logins to a vendor company, assign sites. |
+| **Sites** | Location cards with open/overdue/compliance/down counts; site page with everything for that location plus its team (admins get an *Add / manage* link to that location's people). **Import from Excel** adds or updates many sites at once from an .xlsx or .csv (template included), and a *Manager Email* column gives each manager access to just their store(s). |
+| **Users** | Invite by email, set role, link vendor logins to a vendor company, assign sites. Two views: **By user** and **By location**. By location lists each site's managers and techs, with *Remove* (from that site only), *Add an existing user*, and *Invite someone new to this location* (site preselected). Inviting an email that already has a login just adds them to the site. |
 
 ### Roles (enforced in the database, not just the UI)
 
@@ -173,7 +173,7 @@ Calendar drag-and-drop is for desktop. On a phone, schedule from the work order'
 4. **Assets:** start with the equipment that breaks or costs the most (walk-ins, fryers, ice machines, RTUs, hoods). Bulk import via CSV in Supabase **Table Editor → assets → Insert → Import CSV** works well.
 5. **PM schedules:** add from each asset page.
 6. **Schedule:** drag open work onto techs for the week, then send a test schedule email to yourself (make yourself a tech's job, or use day view → *Email schedule*).
-7. **Users:** invite GMs as *Managers* with their site, techs with their coverage sites, and vendor contacts as *Vendors* linked to their company.
+7. **Users:** invite GMs as *Managers* with their site, techs with their coverage sites, and vendor contacts as *Vendors* linked to their company. The **By location** view on Users is the quickest way to staff each site.
 
 ---
 
