@@ -1,3 +1,4 @@
+import { loadRmLines } from "@/lib/labor";
 import { getCompanyScope } from "@/lib/company";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -27,20 +28,21 @@ export default async function SitePage({
   const companyName = scope.companies.find((c) => c.id === site.company_id)?.name;
   const yearStart = `${new Date().getFullYear()}-01-01`;
 
-  const [{ data: woData }, { data: spendData }, { data: aData }, { data: cData }, { data: mData }] = await Promise.all([
+  const [{ data: woData }, spendData, { data: aData }, { data: cData }, { data: mData }] = await Promise.all([
     supabase
       .from("work_orders")
       .select("id,number,title,status,priority,due_at")
       .eq("site_id", id)
       .in("status", OPEN_STATUSES)
       .order("due_at"),
-    supabase.from("work_orders").select("total_cost").eq("site_id", id).eq("status", "completed").gte("completed_at", yearStart),
+    loadRmLines(supabase, { from: yearStart, to: todayISO(), siteId: id }),
     supabase.from("assets").select("id,name,category,status").eq("site_id", id).neq("status", "retired").order("name"),
     supabase.from("compliance_requirements").select("id,name,next_due_on").eq("site_id", id).eq("active", true).order("next_due_on"),
     supabase.from("site_members").select("user:profiles(id,full_name,email,role,phone)").eq("site_id", id),
   ]);
   const wos = (woData ?? []) as { id: string; number: number; title: string; status: WoStatus; priority: WoPriority; due_at: string | null }[];
-  const ytd = (spendData ?? []).reduce((s, r) => s + Number(r.total_cost || 0), 0);
+  const ytd = spendData.reduce((s, l) => s + l.amount, 0);
+  const ytdLabor = spendData.filter((l) => l.category === "labor").reduce((s, l) => s + l.amount, 0);
   const assets = (aData ?? []) as { id: string; name: string; category: string; status: AssetStatus }[];
   const comp = (cData ?? []) as { id: string; name: string; next_due_on: string }[];
   const members = ((mData ?? []) as unknown as { user: { id: string; full_name: string | null; email: string | null; role: UserRole; phone: string | null } | null }[])
@@ -66,7 +68,7 @@ export default async function SitePage({
 
       <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
         <Stat label="Open work orders" value={wos.length} href={`/work-orders?site=${id}`} />
-        <Stat label="R&M spend YTD" value={fmtMoney(ytd)} />
+        <Stat label="R&M spend YTD" value={fmtMoney(ytd)} sub={ytdLabor ? `Incl. ${fmtMoney(ytdLabor)} internal labor` : undefined} href={profile.role === "admin" ? `/rm?period=ytd&site=${id}` : undefined} />
         <Stat label="Assets" value={assets.length} sub={`${assets.filter((a) => a.status === "down").length} down`} href={`/assets?site=${id}`} />
         <Stat label="Compliance items" value={comp.length} sub={`${comp.filter((c) => c.next_due_on < todayISO()).length} overdue`} href={`/compliance?site=${id}`} />
       </div>

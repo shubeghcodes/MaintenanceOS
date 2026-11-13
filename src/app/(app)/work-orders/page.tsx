@@ -1,3 +1,4 @@
+import { laborCostByWo } from "@/lib/labor";
 import { getCompanyScope, inCompany } from "@/lib/company";
 import Link from "next/link";
 import { Plus } from "lucide-react";
@@ -70,6 +71,9 @@ export default async function WorkOrdersPage({ searchParams }: { searchParams: P
     tech: { id: string; full_name: string | null; email: string | null } | null;
   };
   const rows = (data ?? []) as unknown as Row[];
+  // Admins see the full R&M cost, including internal labor.
+  const labor = profile.role === "admin" ? await laborCostByWo(supabase, rows.map((r) => r.id)) : new Map<string, { labor_cost: number }>();
+  for (const r of rows) r.total_cost = Number(r.total_cost || 0) + Number(labor.get(r.id)?.labor_cost ?? 0);
 
   // Emergencies float to the top of open lists; otherwise keep due-date order (stable sort).
   if (status === "open" || status === "overdue") {

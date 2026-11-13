@@ -7,7 +7,8 @@ import Link from "next/link";
 import clsx from "clsx";
 import { Alert, Badge, Card, CardHeader, Field, Input, PageHeader, Select } from "@/components/ui";
 import { SubmitButton } from "@/components/SubmitButton";
-import { addSiteMember, inviteUser, removeSiteMember, updateUser } from "./actions";
+import { addSiteMember, inviteUser, removeSiteMember, setLaborRate, updateUser } from "./actions";
+import { fmtDate, fmtMoney, todayISO } from "@/lib/format";
 
 export const metadata = { title: "Users" };
 
@@ -28,6 +29,11 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
   ]);
   const users = (pData ?? []) as Profile[];
   const members = (mData ?? []) as { site_id: string; user_id: string }[];
+  // Hourly rates (admin only by row security). Newest first per person.
+  const { data: rData } = await supabase.from("tech_rates").select("id,user_id,hourly_rate,effective_from,note,created_at").order("effective_from", { ascending: false });
+  const rates = (rData ?? []) as { id: string; user_id: string; hourly_rate: number; effective_from: string; note: string | null; created_at: string }[];
+  const today = todayISO();
+  const currentRate = (uid: string) => rates.find((r) => r.user_id === uid && r.effective_from <= today);
   const hasServiceKey = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
   const view = sp.view === "sites" || sp.site ? "sites" : "users";
 
@@ -39,6 +45,7 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
       {sp.added && <Alert tone="good">{sp.added} now has access.</Alert>}
       {sp.removed && <Alert tone="good">Removed from the location.</Alert>}
       {sp.saved && <Alert tone="good">User updated.</Alert>}
+      {sp.rate && <Alert tone="good">Labor rate saved. Time already logged from that date was recalculated.</Alert>}
 
       <div className="mb-5 inline-flex rounded-lg bg-slate-100 p-1 text-sm">
         {(
@@ -148,6 +155,11 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
                         ? "All sites"
                         : `${userSites.length} site${userSites.length === 1 ? "" : "s"}`}
                   </span>
+                  {(u.role === "tech" || u.role === "admin") && (
+                    <span className={`text-xs tabular-nums ${currentRate(u.id) ? "text-slate-600" : u.role === "tech" ? "font-medium text-orange-700" : "text-slate-400"}`}>
+                      {currentRate(u.id) ? `${fmtMoney(currentRate(u.id)!.hourly_rate, 2)}/hr` : "No rate"}
+                    </span>
+                  )}
                   {!u.active && <Badge tone="muted">Inactive</Badge>}
                   <span className="text-xs font-medium text-brand-700">Edit</span>
                 </summary>
@@ -190,6 +202,44 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
                     <SubmitButton size="sm">Save user</SubmitButton>
                   </div>
                 </form>
+                {(u.role === "tech" || u.role === "admin") && (
+                  <div className="border-t border-slate-100 bg-slate-50/60 p-5">
+                    <p className="text-sm font-medium text-slate-800">Labor rate</p>
+                    <p className="mb-3 text-xs text-slate-500">
+                      Used to cost this person&apos;s timed work. Each visit uses the rate in effect on the day it started. Only admins can see rates.
+                    </p>
+                    <form action={setLaborRate} className="flex flex-wrap items-end gap-2">
+                      <input type="hidden" name="user_id" value={u.id} />
+                      <Field label="Hourly rate ($)">
+                        <Input name="hourly_rate" inputMode="decimal" required placeholder="25.00" className="w-28" />
+                      </Field>
+                      <Field label="Effective from">
+                        <Input type="date" name="effective_from" required defaultValue={today} />
+                      </Field>
+                      <Field label="Note (optional)">
+                        <Input name="note" placeholder="e.g. Annual raise" />
+                      </Field>
+                      <SubmitButton size="md" variant="secondary" pendingText="Saving…">
+                        Save rate
+                      </SubmitButton>
+                    </form>
+                    {rates.some((r) => r.user_id === u.id) && (
+                      <ul className="mt-3 space-y-1 text-xs text-slate-600">
+                        {rates
+                          .filter((r) => r.user_id === u.id)
+                          .map((r) => (
+                            <li key={r.id} className="flex gap-2">
+                              <span className="w-24 tabular-nums font-medium">{fmtMoney(r.hourly_rate, 2)}/hr</span>
+                              <span>from {fmtDate(r.effective_from)}</span>
+                              {r.effective_from > today && <Badge tone="info" dot={false}>Upcoming</Badge>}
+                              {currentRate(u.id)?.id === r.id && <Badge tone="good" dot={false}>Current</Badge>}
+                              {r.note && <span className="text-slate-500">· {r.note}</span>}
+                            </li>
+                          ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
               </details>
             </Card>
           );

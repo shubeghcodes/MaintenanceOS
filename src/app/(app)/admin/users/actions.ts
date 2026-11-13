@@ -128,3 +128,20 @@ export async function updateUser(fd: FormData) {
   revalidatePath("/admin/users");
   redirect("/admin/users?saved=1");
 }
+
+/** Set a technician's hourly labor rate from a date (keeps history; recosts their time from that date). */
+export async function setLaborRate(fd: FormData) {
+  const { supabase, profile } = await requireRole("admin");
+  const userId = str(fd, "user_id");
+  const rate = Number(String(fd.get("hourly_rate") ?? "").replace(/[$,\s]/g, ""));
+  const from = str(fd, "effective_from");
+  if (!userId || !from || !Number.isFinite(rate) || rate < 0) redirect("/admin/users?error=" + encodeURIComponent("Enter a valid hourly rate and date"));
+  const { error } = await supabase
+    .from("tech_rates")
+    .upsert({ user_id: userId, hourly_rate: rate, effective_from: from, note: str(fd, "note"), created_by: profile.id }, { onConflict: "user_id,effective_from" });
+  if (error) redirect("/admin/users?error=" + encodeURIComponent(error.message));
+  revalidatePath("/admin/users");
+  revalidatePath("/labor");
+  revalidatePath("/rm");
+  redirect("/admin/users?rate=1");
+}

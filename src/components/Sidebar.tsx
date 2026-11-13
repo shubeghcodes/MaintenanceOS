@@ -7,6 +7,8 @@ import clsx from "clsx";
 import {
   Boxes,
   Briefcase,
+  PiggyBank,
+  Timer,
   Building2,
   CalendarClock,
   CalendarDays,
@@ -33,6 +35,8 @@ const NAV: { href: string; label: string; icon: typeof Wrench; roles: UserRole[]
   { href: "/schedule", label: "Schedule", icon: CalendarDays, roles: ["admin", "tech"] },
   { href: "/vendor-jobs", label: "Vendor work", icon: Send, roles: ["admin", "tech"] },
   { href: "/purchases", label: "Purchases", icon: Receipt, roles: ["admin", "tech"] },
+  { href: "/rm", label: "R&M spending", icon: PiggyBank, roles: ["admin"] },
+  { href: "/labor", label: "Technician labor", icon: Timer, roles: ["admin"] },
   { href: "/pm", label: "Preventive maint.", icon: CalendarClock, roles: ["admin", "manager", "tech"] },
   { href: "/compliance", label: "Compliance", icon: ShieldCheck, roles: ["admin", "manager", "tech"] },
   { href: "/assets", label: "Assets", icon: Boxes, roles: ["admin", "manager", "tech"] },

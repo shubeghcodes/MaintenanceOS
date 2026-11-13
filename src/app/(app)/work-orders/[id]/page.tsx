@@ -13,6 +13,23 @@ import { Attachments } from "@/components/Attachments";
 import { addComment, deleteWorkOrder, setStatus, updateAssignment, updateCosts, uploadWoFiles } from "../actions";
 import { VendorPanel } from "./VendorPanel";
 import { ReceiptsCard } from "./ReceiptsCard";
+import { TimeCard } from "./TimeCard";
+import { fmtHours } from "@/lib/labor";
+
+const TIMER_NOTICE: Record<string, string> = {
+  started: "Timer started.",
+  resumed: "Timer resumed.",
+  paused: "Timer paused.",
+  stopped: "Timer stopped. Hours were added to this work order.",
+  added: "Time added and recorded in the adjustment history.",
+  edited: "Time adjusted and recorded in the adjustment history.",
+  voided: "Time entry voided and recorded in the adjustment history.",
+};
+function timerNotice(v: string) {
+  const m = v.match(/^(\w+?)_paused_(\d+)$/);
+  if (m) return `${TIMER_NOTICE[m[1]] ?? "Timer started."} Your timer on work order #${m[2]} was paused, since only one timer can run at a time.`;
+  return TIMER_NOTICE[v];
+}
 
 const RECEIPT_NOTICE: Record<string, string> = {
   added: "Receipt saved and added to this work order's cost.",
@@ -108,6 +125,13 @@ export default async function WorkOrderPage({
     (e) => profile.role !== "vendor" || e.visibility === "shared",
   );
 
+  const { data: laborRow } =
+    profile.role === "admin" ? await supabase.from("wo_labor_costs").select("hours,labor_cost,missing_rate").eq("work_order_id", id).maybeSingle() : { data: null };
+  const labor = laborRow as { hours: number; labor_cost: number; missing_rate: boolean } | null;
+  const laborCost = Number(labor?.labor_cost ?? 0);
+  const partsTotal = Number(wo.purchases_cost || 0) + Number(wo.parts_cost || 0);
+  const rmTotal = Number(wo.total_cost || 0) + laborCost;
+
   const role = profile.role;
   const canAssign = role === "admin" || role === "tech";
   const canCost = role !== "manager";
@@ -140,6 +164,7 @@ export default async function WorkOrderPage({
       {sp.created && <Alert tone="good">Submitted. You’ll see updates on this page.</Alert>}
       {sp.vendor && VENDOR_NOTICE[sp.vendor] && <Alert tone="good">{VENDOR_NOTICE[sp.vendor]}</Alert>}
       {sp.receipt && RECEIPT_NOTICE[sp.receipt] && <Alert tone="good">{RECEIPT_NOTICE[sp.receipt]}</Alert>}
+      {sp.timer && timerNotice(sp.timer) && <Alert tone="good">{timerNotice(sp.timer)}</Alert>}
       <AutoRefresh seconds={30} />
 
       <div className="grid gap-6 lg:grid-cols-3">
@@ -180,6 +205,10 @@ export default async function WorkOrderPage({
               </div>
             )}
           </Card>
+
+          {role !== "vendor" && role !== "manager" && (
+            <TimeCard supabase={supabase} woId={id} woStatus={wo.status} visit={wo.visit ?? 1} profile={profile} techs={lookups?.techs ?? []} />
+          )}
 
           {role !== "vendor" && <ReceiptsCard supabase={supabase} woId={id} profile={profile} open={!!sp.add_receipt} />}
 
@@ -360,17 +389,9 @@ export default async function WorkOrderPage({
               <form action={updateCosts} className="space-y-3 p-5">
                 <input type="hidden" name="id" value={id} />
                 {role !== "vendor" && (
-                  <div className="grid grid-cols-3 gap-3">
-                    <Field label="Labor hrs">
-                      <Input name="labor_hours" inputMode="decimal" defaultValue={wo.labor_hours || ""} />
-                    </Field>
-                    <Field label="Labor $">
-                      <Input name="labor_cost" inputMode="decimal" defaultValue={wo.labor_cost || ""} />
-                    </Field>
-                    <Field label="Other parts $">
-                      <Input name="parts_cost" inputMode="decimal" defaultValue={wo.parts_cost || ""} title="Parts not entered as receipts (e.g. from stock)" />
-                    </Field>
-                  </div>
+                  <Field label="Other parts $" hint="Parts not entered as receipts (e.g. from stock)">
+                    <Input name="parts_cost" inputMode="decimal" defaultValue={wo.parts_cost || ""} />
+                  </Field>
                 )}
                 <div className="grid grid-cols-2 gap-3">
                   <Field label="Vendor invoice $">
@@ -383,34 +404,45 @@ export default async function WorkOrderPage({
                 <Field label="Resolution notes">
                   <Textarea name="resolution_notes" rows={2} defaultValue={wo.resolution_notes ?? ""} />
                 </Field>
-                <dl className="space-y-1 rounded-lg bg-slate-50 p-3 text-xs">
-                  {[
-                    ["Labor", wo.labor_cost],
-                    ["Receipts & purchases", wo.purchases_cost],
-                    ["Other parts", wo.parts_cost],
-                    ["Vendor invoice", wo.vendor_invoice_amount],
-                  ].map(([k, v]) => (
-                    <div key={k as string} className="flex justify-between">
-                      <dt className="text-slate-500">
-                        {k === "Receipts & purchases" ? (
-                          <a href="#receipts" className="hover:text-brand-700">
-                            {k}
-                          </a>
-                        ) : (
-                          k
-                        )}
-                      </dt>
-                      <dd className="tabular-nums text-slate-800">{fmtMoney(Number(v), 2)}</dd>
-                    </div>
-                  ))}
-                </dl>
-                {wo.nte_amount != null && wo.total_cost > wo.nte_amount && (
+                <table className="w-full overflow-hidden rounded-lg bg-slate-50 text-xs">
+                  <thead>
+                    <tr className="text-left text-slate-500">
+                      <th className="px-3 pb-1 pt-2 font-medium">Expense category</th>
+                      <th className="px-3 pb-1 pt-2 text-right font-medium">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td className="px-3 py-1 text-slate-600">
+                        <a href="#time" className="hover:text-brand-700">
+                          Internal technician labor ({fmtHours(wo.labor_hours)} hrs)
+                        </a>
+                      </td>
+                      <td className="px-3 py-1 text-right tabular-nums text-slate-800">{role === "admin" ? fmtMoney(laborCost, 2) : <span className="text-slate-400">Admin only</span>}</td>
+                    </tr>
+                    <tr>
+                      <td className="px-3 py-1 text-slate-600">
+                        <a href="#receipts" className="hover:text-brand-700">
+                          Parts &amp; materials
+                        </a>
+                      </td>
+                      <td className="px-3 py-1 text-right tabular-nums text-slate-800">{fmtMoney(partsTotal, 2)}</td>
+                    </tr>
+                    <tr>
+                      <td className="px-3 py-1 text-slate-600">Outside vendor costs</td>
+                      <td className="px-3 py-1 text-right tabular-nums text-slate-800">{fmtMoney(wo.vendor_invoice_amount, 2)}</td>
+                    </tr>
+                    <tr className="border-t border-slate-200 font-semibold text-slate-900">
+                      <td className="px-3 pb-2 pt-1.5">{role === "admin" ? "Total R&M cost" : "Total (excl. internal labor)"}</td>
+                      <td className="px-3 pb-2 pt-1.5 text-right tabular-nums">{fmtMoney(role === "admin" ? rmTotal : wo.total_cost, 2)}</td>
+                    </tr>
+                  </tbody>
+                </table>
+                {labor?.missing_rate && <p className="text-xs text-orange-700">Some labor has no hourly rate set. Set it on Users.</p>}
+                {wo.nte_amount != null && (role === "admin" ? rmTotal : wo.total_cost) > wo.nte_amount && (
                   <Alert tone="serious">Total exceeds the not-to-exceed amount — get approval.</Alert>
                 )}
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-slate-600">
-                    Total <b className="tabular-nums text-slate-900">{fmtMoney(wo.total_cost, 2)}</b>
-                  </span>
+                <div className="flex items-center justify-end">
                   <SubmitButton size="sm" variant="secondary">Save costs</SubmitButton>
                 </div>
               </form>

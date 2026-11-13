@@ -1,3 +1,4 @@
+import { laborCostByWo } from "@/lib/labor";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Pencil, Plus } from "lucide-react";
@@ -37,6 +38,10 @@ export default async function AssetPage({
     listAttachments(supabase, "asset", id),
   ]);
   const wos = (woData ?? []) as { id: string; number: number; title: string; status: WoStatus; priority: WoPriority; created_at: string; completed_at: string | null; total_cost: number }[];
+  if (profile.role === "admin") {
+    const labor = await laborCostByWo(supabase, wos.map((w) => w.id));
+    for (const w of wos) w.total_cost = Number(w.total_cost || 0) + Number(labor.get(w.id)?.labor_cost ?? 0);
+  }
   const pms = (pmData ?? []) as { id: string; title: string; frequency_interval: number; frequency_unit: FreqUnit; next_due_on: string; active: boolean }[];
 
   const lifetime = wos.reduce((s, w) => s + Number(w.total_cost || 0), 0);

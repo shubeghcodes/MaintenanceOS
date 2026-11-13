@@ -125,11 +125,8 @@ export async function updateCosts(fd: FormData) {
     invoice_number: str(fd, "invoice_number"),
     resolution_notes: str(fd, "resolution_notes"),
   };
-  if (profile.role !== "vendor") {
-    patch.labor_hours = num(fd, "labor_hours") ?? 0;
-    patch.labor_cost = num(fd, "labor_cost") ?? 0;
-    patch.parts_cost = num(fd, "parts_cost") ?? 0;
-  }
+  // Labor comes from time entries now; only other parts are typed in here.
+  if (profile.role !== "vendor") patch.parts_cost = num(fd, "parts_cost") ?? 0;
   const { error } = await supabase.from("work_orders").update(patch).eq("id", id);
   if (error) fail(id, error.message);
   revalidatePath(`/work-orders/${id}`);
