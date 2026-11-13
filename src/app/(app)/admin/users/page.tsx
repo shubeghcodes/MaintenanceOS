@@ -7,6 +7,8 @@ import Link from "next/link";
 import clsx from "clsx";
 import { Alert, Badge, Card, CardHeader, Field, Input, PageHeader, Select } from "@/components/ui";
 import { SubmitButton } from "@/components/SubmitButton";
+import { LocationPicker } from "@/components/LocationPicker";
+import { getCompanyScope } from "@/lib/company";
 import { addSiteMember, inviteUser, removeSiteMember, setLaborRate, updateUser } from "./actions";
 import { fmtDate, fmtMoney, todayISO } from "@/lib/format";
 
@@ -28,6 +30,14 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
     getLookups(supabase, { allCompanies: true }),
   ]);
   const users = (pData ?? []) as Profile[];
+  // Every active location with its company, for the location picker.
+  const [{ data: locData }, scope] = await Promise.all([
+    supabase.from("sites").select("id,name,code,city,company_id").eq("active", true).order("code", { nullsFirst: false }).order("name"),
+    getCompanyScope(),
+  ]);
+  const locations = (locData ?? []) as { id: string; name: string; code: string | null; city: string | null; company_id: string | null }[];
+  // Selected company first in the picker.
+  const pickerCompanies = [...scope.companies].sort((a, b) => (a.id === scope.companyId ? -1 : b.id === scope.companyId ? 1 : 0));
   const members = (mData ?? []) as { site_id: string; user_id: string }[];
   // Hourly rates (admin only by row security). Newest first per person.
   const { data: rData } = await supabase.from("tech_rates").select("id,user_id,hourly_rate,effective_from,note,created_at").order("effective_from", { ascending: false });
@@ -114,8 +124,9 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
               </Select>
             </Field>
             <fieldset className="md:col-span-4">
-              <legend className="mb-1 text-sm font-medium text-slate-700">Sites (managers & techs)</legend>
-              <SiteChecks sites={lookups.sites} selected={[]} />
+              <legend className="mb-1 text-sm font-medium text-slate-700">Locations</legend>
+              <p className="mb-2 text-xs text-slate-500">Managers and techs only see the locations you pick. Admins see every location; vendor logins see only their jobs.</p>
+              <LocationPicker sites={locations} companies={pickerCompanies} />
             </fieldset>
             <div className="md:col-span-4">
               <SubmitButton pendingText="Sending…">Send invite</SubmitButton>
@@ -191,8 +202,8 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
                     </Select>
                   </Field>
                   <fieldset className="md:col-span-4">
-                    <legend className="mb-1 text-sm font-medium text-slate-700">Sites</legend>
-                    <SiteChecks sites={lookups.sites} selected={userSites} />
+                    <legend className="mb-1 text-sm font-medium text-slate-700">Locations</legend>
+                    <LocationPicker sites={locations} companies={pickerCompanies} selected={userSites} />
                   </fieldset>
                   <label className="flex items-center gap-2 text-sm">
                     <input type="checkbox" name="active" defaultChecked={u.active} className="rounded border-slate-300" />
@@ -426,16 +437,3 @@ function SitesView({
   );
 }
 
-function SiteChecks({ sites, selected }: { sites: { id: string; name: string; code: string | null }[]; selected: string[] }) {
-  if (!sites.length) return <p className="text-sm text-slate-500">No sites yet.</p>;
-  return (
-    <div className="flex flex-wrap gap-2">
-      {sites.map((s) => (
-        <label key={s.id} className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm ring-1 ring-slate-200 has-[:checked]:bg-brand-50 has-[:checked]:ring-brand-500">
-          <input type="checkbox" name="site_ids" value={s.id} defaultChecked={selected.includes(s.id)} className="rounded border-slate-300" />
-          {s.code ?? s.name}
-        </label>
-      ))}
-    </div>
-  );
-}

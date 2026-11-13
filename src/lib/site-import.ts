@@ -15,8 +15,6 @@ export const IMPORT_COLUMNS = [
   { key: "zip", label: "ZIP", required: false, example: "92832", help: "" },
   { key: "phone", label: "Phone", required: false, example: "(714) 555-0100", help: "" },
   { key: "sq_ft", label: "Sq Ft", required: false, example: "2400", help: "" },
-  { key: "manager_email", label: "Manager Email", required: false, example: "gm.fullerton@example.com", help: "The manager(s) who should see this site. Separate several with commas. New emails get an invite." },
-  { key: "manager_name", label: "Manager Name", required: false, example: "Maria Lopez", help: "Used when inviting a new manager." },
 ] as const;
 
 type ColKey = (typeof IMPORT_COLUMNS)[number]["key"];
@@ -33,8 +31,6 @@ const ALIASES: Record<string, ColKey> = {
   zip: "zip", zipcode: "zip", postalcode: "zip", postal: "zip",
   phone: "phone", phonenumber: "phone", storephone: "phone",
   sqft: "sq_ft", squarefeet: "sq_ft", squarefootage: "sq_ft", size: "sq_ft",
-  manageremail: "manager_email", manageremails: "manager_email", manager: "manager_email", gmemail: "manager_email", gm: "manager_email", email: "manager_email",
-  managername: "manager_name", gmname: "manager_name",
 };
 
 const normHeader = (h: string) => {
@@ -55,8 +51,6 @@ export type ImportRow = {
   zip: string | null;
   phone: string | null;
   sq_ft: number | null;
-  manager_emails: string[];
-  manager_name: string | null;
   errors: string[];
   warnings: string[];
 };
@@ -74,7 +68,6 @@ function toType(v: string | null, warnings: string[], errors: string[]): SiteTyp
   return "qsr";
 }
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function buildRow(line: number, rec: Partial<Record<ColKey, string>>): ImportRow {
   const errors: string[] = [];
@@ -92,15 +85,6 @@ function buildRow(line: number, rec: Partial<Record<ColKey, string>>): ImportRow
     if (Number.isFinite(n) && n > 0) sq = Math.round(n);
     else warnings.push(`Sq Ft “${sqRaw}” ignored`);
   }
-  const emails = (clean("manager_email") ?? "")
-    .split(/[,;\s]+/)
-    .map((e) => e.toLowerCase().replace(/^mailto:/, ""))
-    .filter(Boolean);
-  const goodEmails: string[] = [];
-  for (const e of emails) {
-    if (EMAIL_RE.test(e)) goodEmails.push(e);
-    else errors.push(`Manager email “${e}” isn’t a valid email`);
-  }
   const name = clean("name");
   if (!name) errors.push("Name is required");
   return {
@@ -116,8 +100,6 @@ function buildRow(line: number, rec: Partial<Record<ColKey, string>>): ImportRow
     zip,
     phone: clean("phone"),
     sq_ft: sq,
-    manager_emails: Array.from(new Set(goodEmails)),
-    manager_name: clean("manager_name"),
     errors,
     warnings,
   };
@@ -213,7 +195,7 @@ export async function parseSiteFile(file: File): Promise<{ rows: ImportRow[]; un
       if (k && cells[ci] != null && !rec[k]) rec[k] = String(cells[ci]);
     });
     // Skip the template's example row if it was left in.
-    if (rec.code === "DT-1042" && rec.manager_email === "gm.fullerton@example.com") continue;
+    if (rec.code === "DT-1042" && rec.name === "Del Taco Fullerton") continue;
     rows.push(buildRow(i + 1, rec));
     if (rows.length > MAX_IMPORT_ROWS) throw new Error(`Up to ${MAX_IMPORT_ROWS} sites per upload. Split the file and upload in parts.`);
   }
@@ -287,6 +269,6 @@ export async function buildTemplate(companies: string[] = []): Promise<ArrayBuff
   help.addRow({});
   help.addRow({ c: "Tips", h: "Replace the grey example row with your locations, one per row. * = required." });
   help.addRow({ c: "", h: "Re-uploading the same file updates matching sites (by Store #, or by Name if no Store #). Blank cells never erase existing data." });
-  help.addRow({ c: "", h: "Managers only see the sites they're assigned to. An admin sees everything." });
+  help.addRow({ c: "", h: "To give managers and techs access, invite them on the Users page and pick their locations there." });
   return (await wb.xlsx.writeBuffer()) as ArrayBuffer;
 }
