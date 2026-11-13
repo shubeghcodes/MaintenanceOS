@@ -1,5 +1,5 @@
 -- =====================================================================
--- MaintainOS — Receipts / purchases tied to work orders
+-- MaintenanceOS — Receipts / purchases tied to work orders
 -- Run after 0006. Safe to re-run.
 -- =====================================================================
 

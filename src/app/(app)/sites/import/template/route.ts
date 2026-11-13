@@ -14,7 +14,7 @@ export async function GET() {
   return new Response(buf, {
     headers: {
       "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      "Content-Disposition": 'attachment; filename="MaintainOS-sites-template.xlsx"',
+      "Content-Disposition": 'attachment; filename="MaintenanceOS-sites-template.xlsx"',
       "Cache-Control": "no-store",
     },
   });

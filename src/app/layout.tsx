@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: { default: "MaintainOS", template: "%s · MaintainOS" },
+  title: { default: "MaintenanceOS", template: "%s · MaintenanceOS" },
   description: "Maintenance, assets, PM and compliance for every location.",
 };
 export const viewport: Viewport = { width: "device-width", initialScale: 1 };

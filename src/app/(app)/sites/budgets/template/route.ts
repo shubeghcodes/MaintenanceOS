@@ -45,7 +45,7 @@ export async function GET(req: Request) {
   return new Response(buf, {
     headers: {
       "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      "Content-Disposition": `attachment; filename="MaintainOS-budgets-${first.slice(0, 7)}.xlsx"`,
+      "Content-Disposition": `attachment; filename="MaintenanceOS-budgets-${first.slice(0, 7)}.xlsx"`,
       "Cache-Control": "no-store",
     },
   });

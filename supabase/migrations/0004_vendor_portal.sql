@@ -1,5 +1,5 @@
 -- =====================================================================
--- MaintainOS — External vendor work orders (emailed secure links,
+-- MaintenanceOS — External vendor work orders (emailed secure links,
 -- no-login vendor portal, approvals, invoices).
 -- Run after 0001 and 0003. Safe to re-run.
 -- =====================================================================

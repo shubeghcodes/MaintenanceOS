@@ -22,7 +22,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-600">
             <Wrench className="h-5 w-5 text-white" aria-hidden />
           </div>
-          <span className="text-xl font-semibold">MaintainOS</span>
+          <span className="text-xl font-semibold">MaintenanceOS</span>
         </div>
         <Card className="p-6">
           <h1 className="mb-4 text-lg font-semibold">Sign in</h1>

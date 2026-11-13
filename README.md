@@ -1,4 +1,4 @@
-# MaintainOS — CMMS
+# MaintenanceOS — CMMS
 
 Internal maintenance platform for QSR, dine-in and commercial real estate sites:
 work orders, preventive maintenance, compliance, assets, vendors, and a live dashboard.
@@ -65,7 +65,7 @@ After that, invite everyone else from the app's **Users** page.
 
 ### 3. Set up schedule emails (Resend)
 1. Create a free account at resend.com and verify a sending domain (e.g. `yourcompany.com`). It takes a few DNS records.
-2. Create an API key and set `RESEND_API_KEY` and `EMAIL_FROM` (e.g. `MaintainOS <dispatch@yourcompany.com>`). Optionally set `EMAIL_REPLY_TO` so tech replies reach dispatch.
+2. Create an API key and set `RESEND_API_KEY` and `EMAIL_FROM` (e.g. `MaintenanceOS <dispatch@yourcompany.com>`). Optionally set `EMAIL_REPLY_TO` so tech replies reach dispatch.
 3. Make sure every tech has an email on their profile (they do if you invited them) and set `NEXT_PUBLIC_SITE_URL` to your real app URL, since the email buttons link there.
 
 4. Set `LINK_SIGNING_SECRET` (a long random string) for vendor links, and optionally `NEXT_PUBLIC_COMPANY_NAME` and `VENDOR_NOTIFY_EMAILS`.

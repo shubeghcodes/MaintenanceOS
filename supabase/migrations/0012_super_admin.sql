@@ -1,5 +1,5 @@
 -- =====================================================================
--- MaintainOS — Super admin + company-scoped admins
+-- MaintenanceOS — Super admin + company-scoped admins
 -- Run after 0011. Safe to re-run.
 --
 -- Super admin (profiles.is_super, role 'admin'): everything. Only super admins can

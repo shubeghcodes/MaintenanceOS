@@ -14,7 +14,7 @@ import { acceptJob, addCost, completeWork, declineJob, postUpdate, removeCost, r
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Work order", robots: { index: false, follow: false }, referrer: "no-referrer" };
 
-const COMPANY = process.env.NEXT_PUBLIC_COMPANY_NAME || "MaintainOS";
+const COMPANY = process.env.NEXT_PUBLIC_COMPANY_NAME || "MaintenanceOS";
 
 const VENDOR_STATUS: Record<DispatchStatus, [string, "info" | "warning" | "serious" | "good" | "muted" | "critical"]> = {
   sent: ["Awaiting your response", "info"],

@@ -113,7 +113,7 @@ export function Sidebar({
       <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-500">
         <Wrench className="h-4 w-4 text-white" aria-hidden />
       </div>
-      <span className="text-base font-semibold text-white">MaintainOS</span>
+      <span className="text-base font-semibold text-white">MaintenanceOS</span>
     </div>
   );
 
@@ -129,7 +129,7 @@ export function Sidebar({
       <div className="sticky top-0 z-30 flex items-center justify-between bg-slate-900 px-4 py-3 lg:hidden">
         <div className="flex items-center gap-2">
           <Wrench className="h-4 w-4 text-brand-100" aria-hidden />
-          <span className="font-semibold text-white">MaintainOS</span>
+          <span className="font-semibold text-white">MaintenanceOS</span>
         </div>
         <button onClick={() => setOpen(true)} className="text-slate-200" aria-label="Open menu">
           <Menu className="h-5 w-5" />

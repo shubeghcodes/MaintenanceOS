@@ -142,7 +142,7 @@ export function renderScheduleEmail(techName: string, date: string, jobs: Job[])
   const html = `<!doctype html><html><body style="margin:0;background:#f1f5f9">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:24px 12px"><tr><td align="center">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:12px;padding:24px">
-      <tr><td style="font:600 13px -apple-system,Segoe UI,Arial,sans-serif;color:#2c58c4">MaintainOS</td></tr>
+      <tr><td style="font:600 13px -apple-system,Segoe UI,Arial,sans-serif;color:#2c58c4">MaintenanceOS</td></tr>
       <tr><td style="padding-top:8px;font:600 20px/28px -apple-system,Segoe UI,Arial,sans-serif;color:#0f172a">Good morning, ${esc(first)}</td></tr>
       <tr><td style="padding:4px 0 16px;font:14px/20px -apple-system,Segoe UI,Arial,sans-serif;color:#475569">
         ${esc(day)}: <b>${jobs.length} job${jobs.length === 1 ? "" : "s"}</b>${hours ? `, about ${hours} hours` : ""}.

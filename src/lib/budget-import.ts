@@ -17,7 +17,7 @@ export type BudgetSite = {
 export async function buildBudgetTemplate(sites: BudgetSite[], firstMonth: string): Promise<ArrayBuffer> {
   const months = Array.from({ length: 12 }, (_, i) => addMonthsISO(firstMonth, i));
   const wb = new ExcelJS.Workbook();
-  wb.creator = "MaintainOS";
+  wb.creator = "MaintenanceOS";
   const ws = wb.addWorksheet("Budgets", {
     views: [{ state: "frozen", ySplit: 1, xSplit: 2 }],
   });

@@ -1,5 +1,5 @@
 -- =====================================================================
--- MaintainOS — Vendor costs and quotes
+-- MaintenanceOS — Vendor costs and quotes
 -- Run after 0009. Safe to re-run.
 --
 -- vendor_cost_lines: costs a vendor itemizes on their work order link

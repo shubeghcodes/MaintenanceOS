@@ -216,7 +216,7 @@ export async function parseSiteFile(file: File): Promise<{ rows: ImportRow[]; un
 /** Builds the downloadable template workbook. */
 export async function buildTemplate(companies: string[] = []): Promise<ArrayBuffer> {
   const wb = new ExcelJS.Workbook();
-  wb.creator = "MaintainOS";
+  wb.creator = "MaintenanceOS";
   const ws = wb.addWorksheet("Sites", { views: [{ state: "frozen", ySplit: 1 }] });
   ws.columns = IMPORT_COLUMNS.map((c) => ({
     header: c.required ? `${c.label} *` : c.label,

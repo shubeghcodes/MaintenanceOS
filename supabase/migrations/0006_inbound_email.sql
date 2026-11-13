@@ -1,5 +1,5 @@
 -- =====================================================================
--- MaintainOS — Email replies land on the work order
+-- MaintenanceOS — Email replies land on the work order
 -- Run after 0005. Safe to re-run.
 -- =====================================================================
 
