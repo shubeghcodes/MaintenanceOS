@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getSession } from "@/lib/auth";
+import { getSession, isSuper } from "@/lib/auth";
 import { getLookups } from "@/lib/data";
 import { listAttachments } from "@/lib/attachments";
 import { CATEGORIES, PRIORITY_LABEL, STATUS_LABEL, TYPE_LABEL } from "@/lib/constants";
@@ -449,7 +449,7 @@ export default async function WorkOrderPage({
             </Card>
           )}
 
-          {role === "admin" && (
+          {isSuper(profile) && (
             <form action={deleteWorkOrder} className="text-right">
               <input type="hidden" name="id" value={id} />
               <SubmitButton size="sm" variant="ghost" confirm="Permanently delete this work order and its history?">

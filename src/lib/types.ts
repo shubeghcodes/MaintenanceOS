@@ -20,6 +20,7 @@ export interface Profile {
   role: UserRole;
   vendor_id: string | null;
   active: boolean;
+  is_super?: boolean;
 }
 
 export interface Site {

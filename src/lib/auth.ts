@@ -25,6 +25,20 @@ export async function requireRole(...roles: UserRole[]) {
   return session;
 }
 
+/** Super admin: the owner level (companies, admins, labor rates, deletes, paying invoices). */
+export const isSuper = (p: Pick<Profile, "role" | "is_super"> | null | undefined) => !!p && p.role === "admin" && !!p.is_super;
+
+export async function requireSuper() {
+  const session = await getSession();
+  if (!isSuper(session.profile)) redirect("/");
+  return session;
+}
+
+/** Display label for a person's role, with Super admin for super admins. */
+export function roleLabelOf(p: Pick<Profile, "role" | "is_super">, labels: Record<UserRole, string>) {
+  return isSuper(p) ? "Super admin" : labels[p.role];
+}
+
 export const can = {
   manageSetup: (p: Profile) => p.role === "admin",
   createWorkOrder: (p: Profile) => p.role !== "vendor",

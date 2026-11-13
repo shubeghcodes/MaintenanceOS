@@ -26,7 +26,7 @@ import {
 import type { UserRole } from "@/lib/types";
 import { CompanySelect } from "./CompanySelect";
 
-const NAV: { href: string; label: string; icon: typeof Wrench; roles: UserRole[] }[] = [
+const NAV: { href: string; label: string; icon: typeof Wrench; roles: UserRole[]; superOnly?: boolean }[] = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard, roles: ["admin", "manager", "tech"] },
   { href: "/my-day", label: "My day", icon: ListChecks, roles: ["tech"] },
   { href: "/work-orders", label: "Work orders", icon: ClipboardList, roles: ["admin", "manager", "tech", "vendor"] },
@@ -38,7 +38,7 @@ const NAV: { href: string; label: string; icon: typeof Wrench; roles: UserRole[]
   { href: "/assets", label: "Assets", icon: Boxes, roles: ["admin", "manager", "tech"] },
   { href: "/sites", label: "Sites", icon: Building2, roles: ["admin", "manager", "tech"] },
   { href: "/vendors", label: "Vendors", icon: Truck, roles: ["admin", "tech"] },
-  { href: "/companies", label: "Companies", icon: Briefcase, roles: ["admin"] },
+  { href: "/companies", label: "Companies", icon: Briefcase, roles: ["admin"], superOnly: true },
   { href: "/admin/users", label: "Users", icon: Users, roles: ["admin"] },
 ];
 
@@ -53,16 +53,18 @@ export function Sidebar({
   roleLabel,
   companyPicker,
   receiptsToReview = 0,
+  isSuper = false,
 }: {
   role: UserRole;
   name: string;
   roleLabel: string;
   companyPicker?: CompanyPicker;
   receiptsToReview?: number;
+  isSuper?: boolean;
 }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
-  const items = NAV.filter((n) => n.roles.includes(role));
+  const items = NAV.filter((n) => n.roles.includes(role) && (!n.superOnly || isSuper));
 
   const nav = (
     <nav className="flex flex-1 flex-col gap-0.5 px-3">
@@ -117,7 +119,7 @@ export function Sidebar({
 
   const picker = companyPicker && (
     <div className="px-4 pb-4">
-      <CompanySelect companies={companyPicker.companies} value={companyPicker.value} canManage={role === "admin"} variant="dark" label="Company" />
+      <CompanySelect companies={companyPicker.companies} value={companyPicker.value} canManage={isSuper} variant="dark" label="Company" />
     </div>
   );
 

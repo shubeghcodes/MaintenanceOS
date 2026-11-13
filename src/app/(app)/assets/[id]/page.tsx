@@ -2,7 +2,7 @@ import { laborCostByWo } from "@/lib/labor";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Pencil, Plus } from "lucide-react";
-import { getSession } from "@/lib/auth";
+import { getSession, isSuper } from "@/lib/auth";
 import { listAttachments } from "@/lib/attachments";
 import { daysUntil, fmtDate, fmtFreq, fmtMoney, relativeDue, dueWhen, } from "@/lib/format";
 import type { Asset, FreqUnit, WoPriority, WoStatus } from "@/lib/types";
@@ -164,7 +164,7 @@ export default async function AssetPage({
             )}
           </Card>
 
-          {profile.role === "admin" && (
+          {isSuper(profile) && (
             <form action={deleteAsset} className="text-right">
               <input type="hidden" name="id" value={id} />
               <SubmitButton size="sm" variant="ghost" confirm="Delete this asset? Its PM schedules are deleted too; work orders are kept.">

@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { getSession, requireRole } from "@/lib/auth";
+import { getSession, requireSuper } from "@/lib/auth";
 import { COMPANY_COOKIE } from "@/lib/company";
 import { str } from "@/lib/format";
 
@@ -23,7 +23,7 @@ export async function setCompany(id: string) {
 }
 
 export async function saveCompany(fd: FormData) {
-  const { supabase } = await requireRole("admin");
+  const { supabase } = await requireSuper();
   const id = str(fd, "id");
   const name = str(fd, "name");
   if (!name) redirect(`/companies?error=${encodeURIComponent("Company name is required")}`);
