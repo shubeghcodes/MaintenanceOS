@@ -152,11 +152,6 @@ export default async function Dashboard() {
               <CompanySelect companies={scope.companies} value={cid} canManage={profile.role === "admin"} label="Select Company" />
             </div>
           )}
-          {scope.enabled && profile.role === "admin" && (
-            <ButtonLink href="/companies?new=1" variant="secondary">
-              <Plus className="h-4 w-4" aria-hidden /> Add New Company
-            </ButtonLink>
-          )}
           <ButtonLink href="/work-orders/new">
             <Plus className="h-4 w-4" aria-hidden /> {profile.role === "manager" ? "Submit request" : "New work order"}
           </ButtonLink>
