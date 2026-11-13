@@ -95,3 +95,6 @@ drop trigger if exists sites_cascade_company on public.sites;
 create trigger sites_cascade_company after update of company_id on public.sites
   for each row when (old.company_id is distinct from new.company_id)
   execute function public.sites_cascade_company();
+
+-- These run only from triggers; don't expose them through the API.
+revoke execute on function public.default_company_id(), public.sites_default_company(), public.set_company_from_site(), public.sites_cascade_company() from public, anon, authenticated;
