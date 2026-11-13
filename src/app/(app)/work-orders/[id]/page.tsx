@@ -10,7 +10,7 @@ import { Alert, Card, CardHeader, DefList, Field, Input, PageHeader, Select, Tex
 import { OverdueBadge, PriorityBadge, StatusBadge, TypeBadge } from "@/components/badges";
 import { SubmitButton } from "@/components/SubmitButton";
 import { Attachments } from "@/components/Attachments";
-import { addComment, deleteWorkOrder, setStatus, updateAssignment, updateCosts, uploadWoFiles } from "../actions";
+import { addComment, approveWorkOrder, deleteWorkOrder, rejectWorkOrder, setStatus, updateAssignment, updateCosts, uploadWoFiles } from "../actions";
 import { VendorPanel } from "./VendorPanel";
 import { ReceiptsCard } from "./ReceiptsCard";
 import { TimeCard } from "./TimeCard";
@@ -69,6 +69,8 @@ type Detail = WorkOrder & {
 /** Which status buttons each role sees from each status. */
 function nextStatuses(role: Profile["role"], current: WoStatus, isRequester: boolean): WoStatus[] {
   if (current === "completed" || current === "cancelled") return role === "admin" ? ["in_progress"] : [];
+  // Requests are approved or rejected in the approval card; only the requester can withdraw one.
+  if (current === "requested") return role === "manager" && isRequester ? ["cancelled"] : [];
   switch (role) {
     case "admin":
       return (["in_progress", "on_hold", "completed", "cancelled"] as WoStatus[]).filter((s) => s !== current);
@@ -133,7 +135,8 @@ export default async function WorkOrderPage({
   const rmTotal = Number(wo.total_cost || 0) + laborCost;
 
   const role = profile.role;
-  const canAssign = role === "admin" || role === "tech";
+  const awaiting = wo.status === "requested";
+  const canAssign = role === "admin" && !awaiting;
   const canCost = role !== "manager";
   const statuses = nextStatuses(role, wo.status, wo.requested_by === profile.id);
   const closed = wo.status === "completed" || wo.status === "cancelled";
@@ -161,7 +164,18 @@ export default async function WorkOrderPage({
         }
       />
       {sp.error && <Alert>{sp.error}</Alert>}
-      {sp.created && <Alert tone="good">Submitted. You’ll see updates on this page.</Alert>}
+      {sp.created && (
+        <Alert tone="good">
+          {sp.created === "requested"
+            ? "Submitted for approval. An admin will review it and assign the right tech or vendor. You’ll get an email once it’s approved."
+            : "Submitted. You’ll see updates on this page."}
+        </Alert>
+      )}
+      {sp.approved && <Alert tone="good">Request approved{wo.tech || wo.vendor ? " and assigned" : ""}. The requester has been emailed.</Alert>}
+      {sp.rejected && <Alert tone="good">Request not approved and closed. The requester has been emailed the reason.</Alert>}
+      {awaiting && role !== "admin" && !sp.created && (
+        <Alert tone="warning">Waiting for admin approval. Once approved, an admin assigns it to a technician or vendor.</Alert>
+      )}
       {sp.vendor && VENDOR_NOTICE[sp.vendor] && <Alert tone="good">{VENDOR_NOTICE[sp.vendor]}</Alert>}
       {sp.receipt && RECEIPT_NOTICE[sp.receipt] && <Alert tone="good">{RECEIPT_NOTICE[sp.receipt]}</Alert>}
       {sp.timer && timerNotice(sp.timer) && <Alert tone="good">{timerNotice(sp.timer)}</Alert>}
@@ -206,7 +220,7 @@ export default async function WorkOrderPage({
             )}
           </Card>
 
-          {role !== "vendor" && role !== "manager" && (
+          {role !== "vendor" && role !== "manager" && !awaiting && (
             <TimeCard supabase={supabase} woId={id} woStatus={wo.status} visit={wo.visit ?? 1} profile={profile} techs={lookups?.techs ?? []} />
           )}
 
@@ -273,7 +287,87 @@ export default async function WorkOrderPage({
         </div>
 
         <div className="space-y-6">
-          {role !== "vendor" && <VendorPanel supabase={supabase} wo={wo} profile={profile} />}
+          {role === "admin" && awaiting && lookups && (
+            <Card id="approve" className="scroll-mt-6 ring-2 ring-orange-200">
+              <CardHeader
+                title="Approve this request"
+                subtitle={`Requested by ${personName(wo.requester)} · ${fmtDateTime(wo.created_at)}`}
+              />
+              <form action={approveWorkOrder} className="space-y-3 p-5">
+                <input type="hidden" name="id" value={id} />
+                <Field label="Assign technician" hint="Or approve and send it to an outside vendor below.">
+                  <Select name="assigned_tech_id" defaultValue="">
+                    <option value="">— Assign later —</option>
+                    {lookups.techs.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {personName(t)}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+                <div className="grid grid-cols-3 gap-3 rounded-lg bg-slate-50 p-3">
+                  <Field label="Schedule date">
+                    <Input type="date" name="scheduled_date" />
+                  </Field>
+                  <Field label="Start">
+                    <Input type="time" name="scheduled_start" step={900} />
+                  </Field>
+                  <Field label="Est. hrs">
+                    <Input name="estimated_hours" inputMode="decimal" />
+                  </Field>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="Priority">
+                    <Select name="priority" defaultValue={wo.priority}>
+                      {Object.entries(PRIORITY_LABEL).map(([k, v]) => (
+                        <option key={k} value={k}>
+                          {v}
+                        </option>
+                      ))}
+                    </Select>
+                  </Field>
+                  <Field label="Category">
+                    <Select name="category" defaultValue={wo.category}>
+                      {CATEGORIES.map((c) => (
+                        <option key={c}>{c}</option>
+                      ))}
+                    </Select>
+                  </Field>
+                  <Field label="Type">
+                    <Select name="type" defaultValue={wo.type}>
+                      {Object.entries(TYPE_LABEL).map(([k, v]) => (
+                        <option key={k} value={k}>
+                          {v}
+                        </option>
+                      ))}
+                    </Select>
+                  </Field>
+                  <Field label="Due date">
+                    <Input type="date" name="due_date" defaultValue={toDateInput(wo.due_at)} />
+                  </Field>
+                </div>
+                <Field label="Note to requester (optional)">
+                  <Input name="note" placeholder="e.g. Tech will be there Tuesday morning" />
+                </Field>
+                <div className="flex flex-wrap gap-2">
+                  <SubmitButton size="sm">Approve</SubmitButton>
+                  <SubmitButton size="sm" variant="secondary" name="then" value="vendor">
+                    Approve &amp; send to vendor
+                  </SubmitButton>
+                </div>
+              </form>
+              <form action={rejectWorkOrder} className="space-y-2 border-t border-slate-100 p-5">
+                <input type="hidden" name="id" value={id} />
+                <Field label="Not needed?" hint="Closes the request. The requester is emailed your reason.">
+                  <Input name="reason" placeholder="Reason, e.g. duplicate of #1042" required />
+                </Field>
+                <SubmitButton size="sm" variant="danger" confirm="Reject this request?">
+                  Reject request
+                </SubmitButton>
+              </form>
+            </Card>
+          )}
+          {role !== "vendor" && !awaiting && <VendorPanel supabase={supabase} wo={wo} profile={profile} />}
           {statuses.length > 0 && (
             <Card>
               <CardHeader title="Update status" />

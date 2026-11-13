@@ -20,7 +20,7 @@ export default async function DispatchPage({
 }) {
   const { id } = await params;
   const sp = await searchParams;
-  const { supabase } = await requireRole("admin", "tech");
+  const { supabase } = await requireRole("admin");
 
   const [{ data }, { data: vData }, { count: fileCount }, { data: live }] = await Promise.all([
     supabase.from("work_orders").select("*, site:sites(name,code,address,city)").eq("id", id).maybeSingle(),

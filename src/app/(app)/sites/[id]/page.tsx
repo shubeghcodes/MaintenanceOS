@@ -8,7 +8,7 @@ import { addMonthsISO, loadBudgets, monthLabel, monthStartISO } from "@/lib/budg
 import { BudgetBar } from "@/components/BudgetBar";
 import { SubmitButton } from "@/components/SubmitButton";
 import { deleteBudgetMonth, saveBudgetMonth, saveSiteBudget } from "../budgets/actions";
-import { OPEN_STATUSES, ROLE_LABEL, SITE_TYPE_LABEL } from "@/lib/constants";
+import { ROLE_LABEL, SITE_TYPE_LABEL, UNFINISHED_STATUSES } from "@/lib/constants";
 import { fmtDate, fmtMoney, personName, relativeDue, todayISO } from "@/lib/format";
 import type { AssetStatus, Site, UserRole, WoPriority, WoStatus } from "@/lib/types";
 import { Alert, ButtonLink, Card, CardHeader, DefList, EmptyState, Field, Input, PageHeader, Stat } from "@/components/ui";
@@ -39,7 +39,7 @@ export default async function SitePage({
       .from("work_orders")
       .select("id,number,title,status,priority,due_at")
       .eq("site_id", id)
-      .in("status", OPEN_STATUSES)
+      .in("status", UNFINISHED_STATUSES)
       .order("due_at"),
     loadRmLines(supabase, { from: yearStart, to: todayISO(), siteId: id }),
     supabase.from("assets").select("id,name,category,status").eq("site_id", id).neq("status", "retired").order("name"),

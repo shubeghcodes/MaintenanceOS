@@ -30,16 +30,20 @@ export const ROLE_LABEL: Record<UserRole, string> = {
 };
 
 export const STATUS_LABEL: Record<WoStatus, string> = {
+  requested: "Awaiting approval",
   new: "New",
   assigned: "Assigned",
   in_progress: "In progress",
   on_hold: "On hold",
-  pending_approval: "Pending approval",
+  pending_approval: "Vendor approval",
   pending_review: "Pending review",
   completed: "Completed",
   cancelled: "Cancelled",
 };
+/** Approved, unfinished work. Requests still awaiting approval are separate (status "requested"). */
 export const OPEN_STATUSES: WoStatus[] = ["new", "assigned", "in_progress", "on_hold", "pending_approval", "pending_review"];
+/** Everything not finished, including requests awaiting approval (for work order lists). */
+export const UNFINISHED_STATUSES: WoStatus[] = ["requested", ...OPEN_STATUSES];
 
 export const PRIORITY_LABEL: Record<WoPriority, string> = {
   emergency: "Emergency",
@@ -74,6 +78,7 @@ export const FREQ_UNIT_LABEL: Record<FreqUnit, string> = { day: "day", week: "we
 export type Tone = "neutral" | "info" | "good" | "warning" | "serious" | "critical" | "muted";
 
 export const STATUS_TONE: Record<WoStatus, Tone> = {
+  requested: "serious",
   new: "info",
   assigned: "info",
   in_progress: "warning",

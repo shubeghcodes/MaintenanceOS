@@ -5,6 +5,7 @@ import { zonedTimeISO } from "./format";
 import { hashToken, linkTokenFor, vendorLink } from "./tokens";
 import { emailVendor, loadDispatchContext, workOrderAttachmentsForEmail, type VendorEmailKind } from "./vendor-notify";
 import type { WoPriority } from "./types";
+import { notifyRequester } from "./wo-notify";
 
 /** Send (or re-send) a vendor email and record the outcome on the dispatch. */
 export async function sendAndRecord(
@@ -73,7 +74,7 @@ export async function createDispatch(db: SupabaseClient, input: CreateDispatchIn
   if (input.priority) woPatch.priority = input.priority;
   if (input.nteAmount !== undefined) woPatch.nte_amount = input.nteAmount;
   if (input.requestedBy && input.priority) woPatch.due_at = zonedTimeISO(input.requestedBy);
-  if (wo.status === "new") woPatch.status = "assigned";
+  if (wo.status === "new" || wo.status === "requested") woPatch.status = "assigned"; // sending to a vendor approves a request
   const { error: woErr } = await db.from("work_orders").update(woPatch).eq("id", input.woId);
   if (woErr) return { ok: false as const, error: woErr.message };
 
@@ -102,5 +103,6 @@ export async function createDispatch(db: SupabaseClient, input: CreateDispatchIn
     `${input.reason ?? "Sent to external vendor"} (${input.contactEmail})${res.ok ? "" : ` — email ${"skipped" in res && res.skipped ? "not configured" : "FAILED"}`}`,
   );
   if (input.instructions) await event("comment", `Instructions for vendor: ${input.instructions}`, "shared");
+  await notifyRequester(input.woId, "vendor_assigned", input.createdBy);
   return { ok: true as const, dispatchId: id, emailOk: res.ok, emailError: res.ok ? null : res.error };
 }

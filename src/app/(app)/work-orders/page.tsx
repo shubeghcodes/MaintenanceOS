@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Plus } from "lucide-react";
 import { getSession } from "@/lib/auth";
 import { getLookups } from "@/lib/data";
-import { OPEN_STATUSES, PRIORITY_LABEL, STATUS_LABEL, TYPE_LABEL } from "@/lib/constants";
+import { PRIORITY_LABEL, STATUS_LABEL, TYPE_LABEL, UNFINISHED_STATUSES } from "@/lib/constants";
 import { fmtDateTime, fmtMoney, isOverdue, personName } from "@/lib/format";
 import type { WoPriority, WoStatus, WoType } from "@/lib/types";
 import { Button, ButtonLink, Card, EmptyState, Input, PageHeader, Select, Table, Td, Th } from "@/components/ui";
@@ -31,8 +31,8 @@ export default async function WorkOrdersPage({ searchParams }: { searchParams: P
     .limit(300);
   q = inCompany(q, cid);
 
-  if (status === "open") q = q.in("status", OPEN_STATUSES);
-  else if (status === "overdue") q = q.in("status", OPEN_STATUSES).lt("due_at", new Date().toISOString());
+  if (status === "open") q = q.in("status", UNFINISHED_STATUSES);
+  else if (status === "overdue") q = q.in("status", UNFINISHED_STATUSES).lt("due_at", new Date().toISOString());
   else if (status !== "all") q = q.eq("status", status);
   if (sp.site) q = q.eq("site_id", sp.site);
   if (sp.priority) q = q.eq("priority", sp.priority);
@@ -49,7 +49,7 @@ export default async function WorkOrdersPage({ searchParams }: { searchParams: P
 
   // Open work: most urgent first. Closed: most recent first.
   q =
-    status === "open" || status === "overdue"
+    status === "open" || status === "overdue" || status === "requested"
       ? q.order("due_at", { ascending: true, nullsFirst: false })
       : q.order("created_at", { ascending: false });
 
@@ -76,7 +76,7 @@ export default async function WorkOrdersPage({ searchParams }: { searchParams: P
   for (const r of rows) r.total_cost = Number(r.total_cost || 0) + Number(labor.get(r.id)?.labor_cost ?? 0);
 
   // Emergencies float to the top of open lists; otherwise keep due-date order (stable sort).
-  if (status === "open" || status === "overdue") {
+  if (status === "open" || status === "overdue" || status === "requested") {
     rows.sort((a, b) => Number(b.priority === "emergency") - Number(a.priority === "emergency"));
   }
 

@@ -4,6 +4,7 @@ import { PRIORITY_LABEL } from "./constants";
 import { appUrl, esc, sendEmail, type EmailAttachment, type EmailResult } from "./email";
 import { fmtDate, fmtMoney } from "./format";
 import { replyAddress } from "./reply-address";
+import { adminEmailsForSite } from "./wo-notify";
 import type { WoPriority } from "./types";
 
 /** Everything the vendor and management emails need about one dispatched job. */
@@ -27,6 +28,7 @@ export type DispatchContext = {
     priority: WoPriority;
     nte_amount: number | null;
     location_detail: string | null;
+    site_id?: string;
   };
   site: { name: string; code: string | null; address: string | null; city: string | null; state: string | null; zip: string | null; phone: string | null } | null;
   asset: { name: string; manufacturer: string | null; model: string | null; serial_number: string | null } | null;
@@ -39,7 +41,7 @@ export async function loadDispatchContext(db: SupabaseClient, dispatchId: string
     .select(
       "id,contact_name,contact_email,contact_phone,instructions,requested_by,created_by,token_expires_at,quote_required," +
         "vendor:vendors(id,name)," +
-        "wo:work_orders(id,number,title,description,priority,nte_amount,location_detail," +
+        "wo:work_orders(id,number,title,description,priority,nte_amount,location_detail,site_id," +
         "site:sites(name,code,address,city,state,zip,phone), asset:assets(name,manufacturer,model,serial_number))",
     )
     .eq("id", dispatchId)
@@ -57,7 +59,7 @@ export async function loadDispatchContext(db: SupabaseClient, dispatchId: string
 const FONT = "-apple-system,Segoe UI,Roboto,Arial,sans-serif";
 const siteAddress = (s: DispatchContext["site"]) => [s?.address, [s?.city, s?.state].filter(Boolean).join(", "), s?.zip].filter(Boolean).join(" ");
 
-function shell(opts: { eyebrow: string; title: string; intro?: string; body?: string; button?: { label: string; url: string }; footer?: string }) {
+export function shell(opts: { eyebrow: string; title: string; intro?: string; body?: string; button?: { label: string; url: string }; footer?: string }) {
   return `<!doctype html><html><body style="margin:0;background:#f1f5f9">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:24px 12px"><tr><td align="center">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:580px;background:#fff;border-radius:12px;padding:24px;font:14px/21px ${FONT};color:#334155">
@@ -70,7 +72,7 @@ ${opts.button ? `<tr><td style="padding-top:20px"><a href="${opts.button.url}" s
 </table></td></tr></table></body></html>`;
 }
 
-function detailTable(rows: [string, string | null | undefined][]) {
+export function detailTable(rows: [string, string | null | undefined][]) {
   return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e2e8f0;border-radius:8px">${rows
     .filter(([, v]) => v)
     .map(
@@ -86,7 +88,7 @@ const vendorFooter = (c: DispatchContext) =>
 
 // ------------------------------------------------------------------ vendor emails
 
-export type VendorEmailKind = "assigned" | "updated" | "approval_decision" | "quote_decision" | "invoice_decision" | "message" | "reminder" | "new_link" | "sent_back";
+export type VendorEmailKind = "assigned" | "updated" | "approval_decision" | "quote_decision" | "invoice_decision" | "message" | "reminder" | "new_link" | "sent_back" | "closed";
 
 export async function emailVendor(
   c: DispatchContext,
@@ -145,6 +147,11 @@ export async function emailVendor(
     title = ok ? `Additional work approved — #${n}` : `Additional work not approved — #${n}`;
     intro = `${hi}<br>Your request${extra.amount != null ? ` (${fmtMoney(extra.amount, 2)})` : ""} for work order #${n} was <b>${ok ? "approved" : "not approved"}</b>.${extra.note ? `<br><br><b>Note:</b> ${esc(extra.note)}` : ""}${ok ? "<br><br>You can proceed." : ""}`;
     body = linkNote;
+  } else if (kind === "closed") {
+    subject = `Work approved: work order #${n}`;
+    title = `Work approved and closed — #${n}`;
+    intro = `${hi}<br>We've reviewed and <b>approved</b> the completed work on work order #${n}, and the work order is now closed. Thank you.${extra.note ? `<br><br><b>Note:</b> ${esc(extra.note)}` : ""}<br><br>If you haven't sent your invoice yet, you can still submit it from the work order page.`;
+    body = linkNote;
   } else if (kind === "quote_decision") {
     const ok = extra.decision === "approved";
     subject = `${ok ? "Quote approved" : "Quote not approved"}: work order #${n}`;
@@ -199,7 +206,7 @@ export async function notifyManagement(
   actor: string,
   detail: { note?: string | null; amount?: number | null; invoiceNumber?: string | null } = {},
 ) {
-  const recipients = await managementRecipients(db, c.dispatch.created_by);
+  const recipients = await managementRecipients(db, c.dispatch.created_by, c.wo.site_id ?? null);
   if (!recipients.length) return { ok: false as const, error: "No recipients" };
   const n = c.wo.number;
   const who = kind === "unverified_email" ? actor : `${actor} (${c.vendor.name})`;
@@ -243,12 +250,14 @@ export async function notifyManagement(
   });
 }
 
-/** Admins + whoever dispatched the job, plus VENDOR_NOTIFY_EMAILS (comma-separated). */
-async function managementRecipients(db: SupabaseClient, createdBy: string | null) {
-  const { data } = await db.from("profiles").select("id,email,role,active").or(`role.eq.admin${createdBy ? `,id.eq.${createdBy}` : ""}`);
-  const emails = new Set(
-    ((data ?? []) as { email: string | null; active: boolean }[]).filter((p) => p.active && p.email).map((p) => p.email!.toLowerCase()),
-  );
+/** Admins who cover this location's company (super admins and unrestricted admins always), whoever dispatched the job, plus VENDOR_NOTIFY_EMAILS (comma-separated). */
+async function managementRecipients(db: SupabaseClient, createdBy: string | null, siteId: string | null) {
+  const emails = new Set(await adminEmailsForSite(siteId));
+  if (createdBy) {
+    const { data } = await db.from("profiles").select("email,active").eq("id", createdBy).maybeSingle();
+    const p = data as { email: string | null; active: boolean } | null;
+    if (p?.active && p.email) emails.add(p.email.toLowerCase());
+  }
   (process.env.VENDOR_NOTIFY_EMAILS ?? "")
     .split(",")
     .map((e) => e.trim().toLowerCase())

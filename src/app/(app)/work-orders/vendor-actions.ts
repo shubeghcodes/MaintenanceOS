@@ -3,7 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { after } from "next/server";
 import { getSession, isSuper } from "@/lib/auth";
+import { notifyRequester } from "@/lib/wo-notify";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { num, str, todayISO, zonedTimeISO } from "@/lib/format";
 import { hashToken, linkTokenFor } from "@/lib/tokens";
@@ -40,6 +42,7 @@ function refresh(woId: string) {
 export async function dispatchToVendor(fd: FormData) {
   const { supabase, profile } = await staff();
   const woId = str(fd, "work_order_id")!;
+  if (profile.role !== "admin") fail(woId, "Only an admin can assign work orders to a vendor.");
   const formBack: (msg: string) => never = (msg) => redirect(`/work-orders/${woId}/dispatch?error=${encodeURIComponent(msg)}`);
 
   const contactEmail = str(fd, "contact_email")?.toLowerCase();
@@ -275,6 +278,9 @@ export async function reviewWork(decision: "close" | "send_back", fd: FormData) 
       .eq("id", d.work_order_id);
     if (error) fail(d.work_order_id, error.message);
     if (note) await logEvent(supabase, { work_order_id: d.work_order_id, user_id: profile.id, kind: "comment", body: `Review: ${note}`, visibility: "shared" });
+    await sendAndRecord(supabase, id, d.token_version, "closed", { note });
+    const woId = d.work_order_id as string;
+    after(() => notifyRequester(woId, "completed", profile.id));
   } else {
     if (!note) fail(d.work_order_id, "Tell the vendor what needs follow-up.");
     await supabase.from("vendor_dispatches").update({ status: "in_progress", completed_at: null }).eq("id", id);

@@ -2,7 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { getSession, isSuper } from "@/lib/auth";
+import { after } from "next/server";
+import { getSession, isSuper, requireRole } from "@/lib/auth";
+import { notifyAdminsOfRequest, notifyRequester, notifyTechAssigned } from "@/lib/wo-notify";
 import { saveAttachments } from "@/lib/attachments";
 import { num, str, zonedTimeISO } from "@/lib/format";
 import type { WoStatus } from "@/lib/types";
@@ -15,7 +17,8 @@ export async function createWorkOrder(fd: FormData) {
   const { supabase, profile } = await getSession();
   if (profile.role === "vendor") fail(null, "Vendors can't create work orders");
 
-  const isStaff = profile.role === "admin" || profile.role === "tech";
+  // Only admins assign and schedule; everyone else's work order goes in for approval.
+  const isAdmin = profile.role === "admin";
   const dueDate = str(fd, "due_date");
   const row = {
     site_id: str(fd, "site_id"),
@@ -26,7 +29,8 @@ export async function createWorkOrder(fd: FormData) {
     location_detail: str(fd, "location_detail"),
     priority: str(fd, "priority") ?? "medium",
     requested_by: profile.id,
-    ...(isStaff && {
+    ...(profile.role === "tech" && { type: str(fd, "type") ?? "reactive" }),
+    ...(isAdmin && {
       type: str(fd, "type") ?? "reactive",
       assigned_tech_id: str(fd, "assigned_tech_id"),
       vendor_id: str(fd, "vendor_id"),
@@ -39,19 +43,23 @@ export async function createWorkOrder(fd: FormData) {
   };
   if (!row.site_id || !row.title) fail(null, "Site and title are required");
 
-  const { data, error } = await supabase.from("work_orders").insert(row).select("id").single();
+  const { data, error } = await supabase.from("work_orders").insert(row).select("id,status,priority,assigned_tech_id").single();
   if (error || !data) fail(null, error?.message ?? "Could not create work order");
 
   await saveAttachments(supabase, "work_order", data.id, profile.id, fd.getAll("files"));
+  const woId = data.id as string;
+  if (data.status === "requested" && (data.priority === "emergency" || data.priority === "high")) after(() => notifyAdminsOfRequest(woId));
+  if (data.assigned_tech_id) after(() => notifyTechAssigned(woId, profile.id));
   revalidatePath("/work-orders");
-  redirect(`/work-orders/${data.id}?created=1`);
+  revalidatePath("/");
+  redirect(`/work-orders/${woId}?created=${data.status === "requested" ? "requested" : "1"}`);
 }
 
 const ALLOWED: Record<string, WoStatus[]> = {
   admin: ["new", "assigned", "in_progress", "on_hold", "completed", "cancelled"],
   tech: ["assigned", "in_progress", "on_hold", "completed"],
   vendor: ["in_progress", "on_hold", "completed"],
-  manager: ["cancelled"], // managers can withdraw their own request while it's still new
+  manager: ["cancelled"], // managers can withdraw their own request until it's approved
 };
 
 /** Bound per button: setStatus.bind(null, "completed"). */
@@ -64,9 +72,10 @@ export async function setStatus(status: WoStatus, fd: FormData) {
 
   const { data: wo } = await supabase.from("work_orders").select("status,requested_by").eq("id", id).single();
   if (!wo) fail(id, "Work order not found");
-  if (profile.role === "manager" && (wo.status !== "new" || wo.requested_by !== profile.id)) {
-    fail(id, "Only new requests you submitted can be cancelled");
+  if (profile.role === "manager" && (!["requested", "new"].includes(wo.status) || wo.requested_by !== profile.id)) {
+    fail(id, "Only requests you submitted that haven't been assigned yet can be cancelled");
   }
+  if (wo.status === "requested" && status !== "cancelled") fail(id, "Approve the request first");
 
   const patch: Record<string, unknown> = { status };
   if (status === "completed") {
@@ -81,6 +90,7 @@ export async function setStatus(status: WoStatus, fd: FormData) {
   if (note) {
     await supabase.from("work_order_events").insert({ work_order_id: id, user_id: profile.id, kind: "comment", body: note });
   }
+  if (status === "completed" && wo.status !== "completed") after(() => notifyRequester(id, "completed", profile.id));
   revalidatePath(`/work-orders/${id}`);
   revalidatePath("/work-orders");
   revalidatePath("/my-day");
@@ -91,8 +101,9 @@ export async function setStatus(status: WoStatus, fd: FormData) {
 export async function updateAssignment(fd: FormData) {
   const { supabase, profile } = await getSession();
   const id = str(fd, "id")!;
-  if (!(profile.role === "admin" || profile.role === "tech")) fail(id, "Not allowed");
+  if (profile.role !== "admin") fail(id, "Only an admin can assign work orders");
 
+  const { data: before } = await supabase.from("work_orders").select("assigned_tech_id").eq("id", id).single();
   const dueDate = str(fd, "due_date");
   const { error } = await supabase
     .from("work_orders")
@@ -110,9 +121,75 @@ export async function updateAssignment(fd: FormData) {
     })
     .eq("id", id);
   if (error) fail(id, error.message);
+  const techId = str(fd, "assigned_tech_id");
+  if (techId && techId !== before?.assigned_tech_id) after(() => notifyTechAssigned(id, profile.id));
   revalidatePath(`/work-orders/${id}`);
   revalidatePath("/schedule");
   revalidatePath("/my-day");
+}
+
+/** Admin approves a request, optionally assigning a technician and schedule in the same step. */
+export async function approveWorkOrder(fd: FormData) {
+  const { supabase, profile } = await requireRole("admin");
+  const id = str(fd, "id")!;
+  const { data: wo } = await supabase.from("work_orders").select("status").eq("id", id).single();
+  if (!wo) fail(id, "Work order not found");
+  if (wo.status !== "requested") fail(id, "This work order has already been approved or closed");
+
+  const dueDate = str(fd, "due_date");
+  const techId = str(fd, "assigned_tech_id");
+  const scheduled = str(fd, "scheduled_date");
+  const { error } = await supabase
+    .from("work_orders")
+    .update({
+      status: "new", // becomes "assigned" automatically when a tech is set
+      assigned_tech_id: techId,
+      priority: str(fd, "priority") ?? "medium",
+      category: str(fd, "category") ?? "Other",
+      type: str(fd, "type") ?? "reactive",
+      scheduled_date: scheduled,
+      scheduled_start: scheduled ? str(fd, "scheduled_start") : null,
+      estimated_hours: num(fd, "estimated_hours"),
+      nte_amount: num(fd, "nte_amount"),
+      ...(dueDate && { due_at: zonedTimeISO(dueDate) }),
+    })
+    .eq("id", id);
+  if (error) fail(id, error.message);
+
+  const note = str(fd, "note");
+  await supabase
+    .from("work_order_events")
+    .insert({ work_order_id: id, user_id: profile.id, kind: "system", body: `Approved request${note ? `: ${note}` : ""}` });
+
+  after(async () => {
+    await notifyRequester(id, "approved", profile.id, note);
+    if (techId) await notifyTechAssigned(id, profile.id);
+  });
+  revalidatePath(`/work-orders/${id}`);
+  revalidatePath("/work-orders");
+  revalidatePath("/schedule");
+  revalidatePath("/my-day");
+  revalidatePath("/");
+  if (fd.get("then") === "vendor") redirect(`/work-orders/${id}/dispatch`);
+  redirect(`/work-orders/${id}?approved=1`);
+}
+
+/** Admin turns down a request (closed as cancelled) with a reason the requester sees. */
+export async function rejectWorkOrder(fd: FormData) {
+  const { supabase, profile } = await requireRole("admin");
+  const id = str(fd, "id")!;
+  const reason = str(fd, "reason");
+  if (!reason) fail(id, "Add a reason so the requester knows why");
+  const { data: wo } = await supabase.from("work_orders").select("status").eq("id", id).single();
+  if (wo?.status !== "requested") fail(id, "Only requests awaiting approval can be rejected");
+  const { error } = await supabase.from("work_orders").update({ status: "cancelled" }).eq("id", id);
+  if (error) fail(id, error.message);
+  await supabase.from("work_order_events").insert({ work_order_id: id, user_id: profile.id, kind: "comment", body: `Request not approved: ${reason}` });
+  after(() => notifyRequester(id, "rejected", profile.id, reason));
+  revalidatePath(`/work-orders/${id}`);
+  revalidatePath("/work-orders");
+  revalidatePath("/");
+  redirect(`/work-orders/${id}?rejected=1`);
 }
 
 export async function updateCosts(fd: FormData) {

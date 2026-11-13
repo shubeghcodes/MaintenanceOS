@@ -149,6 +149,16 @@ export default async function Dashboard() {
 
   const firstName = (profile.full_name ?? "").split(" ")[0];
   const receiptsToReview = await getReceiptsToReview();
+  // Requests from GMs and techs waiting for an admin to approve and assign (row security limits company-limited admins).
+  const [{ count: toApprove }, { count: urgentToApprove }] =
+    profile.role === "admin"
+      ? await Promise.all([
+          inCompany(supabase.from("work_orders").select("id", { count: "exact", head: true }).eq("status", "requested"), cid),
+          inCompany(supabase.from("work_orders").select("id", { count: "exact", head: true }).eq("status", "requested").eq("priority", "emergency"), cid),
+        ])
+      : [{ count: 0 }, { count: 0 }];
+  const approvals = toApprove ?? 0;
+  const urgentApprovals = urgentToApprove ?? 0;
 
   return (
     <>
@@ -172,9 +182,14 @@ export default async function Dashboard() {
         </div>
       </div>
 
-      {vendorAction.approvals + vendorAction.reviews + vendorAction.invoices + vendorAction.quotes + receiptsToReview > 0 && (
+      {approvals + vendorAction.approvals + vendorAction.reviews + vendorAction.invoices + vendorAction.quotes + receiptsToReview > 0 && (
         <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg bg-orange-50 px-4 py-3 text-sm text-orange-950 ring-1 ring-inset ring-orange-200">
           <b>Waiting on you:</b>
+          {approvals > 0 && (
+            <Link href="/work-orders?status=requested" className={`underline-offset-2 hover:underline ${urgentApprovals ? "font-semibold text-red-700" : ""}`}>
+              {approvals} request{approvals > 1 ? "s" : ""} to approve{urgentApprovals ? ` (${urgentApprovals} emergency)` : ""}
+            </Link>
+          )}
           {receiptsToReview > 0 && (
             <Link href="/purchases?status=review" className="underline-offset-2 hover:underline">
               {receiptsToReview} receipt{receiptsToReview > 1 ? "s" : ""} to review

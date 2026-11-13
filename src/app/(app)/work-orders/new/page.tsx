@@ -22,6 +22,7 @@ export default async function NewWorkOrderPage({
   const { sites, vendors, techs, assets } = await getLookups(supabase, { assets: true });
   const isStaff = profile.role === "admin" || profile.role === "tech";
   const isManager = profile.role === "manager";
+  const isAdmin = profile.role === "admin";
 
   return (
     <>
@@ -95,6 +96,8 @@ export default async function NewWorkOrderPage({
                   ))}
                 </Select>
               </Field>
+              {isAdmin && (
+              <>
               <Field label="Assign technician">
                 <Select name="assigned_tech_id" defaultValue="">
                   <option value="">— Unassigned —</option>
@@ -134,10 +137,19 @@ export default async function NewWorkOrderPage({
                   <Input name="nte_amount" inputMode="decimal" placeholder="0" />
                 </Field>
               </div>
+              </>
+              )}
             </Card>
           )}
+          {!isAdmin && (
+            <p className="text-sm text-slate-600">
+              An admin reviews each request, then assigns it to the right technician or vendor. You’ll get an email when it’s approved.
+              {" "}
+              <b>Emergencies</b> alert the admins right away.
+            </p>
+          )}
 
-          <SubmitButton pendingText="Submitting…">{isManager ? "Submit request" : "Create work order"}</SubmitButton>
+          <SubmitButton pendingText="Submitting…">{isAdmin ? "Create work order" : "Submit for approval"}</SubmitButton>
         </div>
       </form>
     </>
