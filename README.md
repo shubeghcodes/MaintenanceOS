@@ -15,6 +15,8 @@ Deploys to Vercel (or any Node host) in about 15 minutes.
 | **Companies** | Run several corporations from one login. **Select Company** at the top of the dashboard (and in the sidebar on every page) switches the whole app to that company's locations, work orders, PM, compliance, assets, vendor work and purchases. **All companies** shows everything combined, with a *By company* summary on the dashboard. Add, rename or deactivate companies on **Companies**; new locations are assigned to a company, and work orders, assets, PM schedules and compliance items take the company of their location automatically. Switching never changes data. |
 | **Dashboard** | Locations, completed (30 days), open / overdue / emergency counts, PM on-time %, compliance overdue, R&M spend MTD, avg close time, "needs attention" queue, compliance due in 30 days, per-site rollup, upcoming PMs, equipment down. |
 | **Work orders** | Request → assign → in progress → on hold → complete. Priority SLAs set due dates automatically (Emergency 4h, High 24h, Medium 3d, Low 7d). Tech and/or vendor assignment, NTE with over-limit warning, labor/parts/invoice costs, photos & PDFs, comments, and a full audit trail of every status and assignment change. Mobile-friendly request form with camera upload. |
+| **Time & labor** | Techs **start, pause, resume and stop** a timer on any work order (from the work order or *My day*); the clock shows h:mm:ss. Several techs can time the same job independently, and starting a second timer pauses your first, so a tech never has two running. **Reopening** a completed work order makes the next time a separate *return visit*; earlier visits are never reset. Each entry records date, tech, start, end and hours (decimal in reports). Admins can add, adjust or void time with a required reason, kept in an **adjustment history**. |
+| **Labor cost & R&M** | Each tech/admin has an **hourly rate with history** on *Users* (admins only can see rates). Every entry is costed at the rate in effect on the day it was worked: *labor cost = hours × rate*, and a back-dated rate recalculates automatically. Work orders show a cost table (Internal technician labor with hours, Parts & materials, Outside vendor costs, Total R&M). **R&M spending** breaks spend down by category, location, company, work order and month/quarter/year; **Technician labor** shows each tech's work orders, hours and labor cost with filters for tech, location, company and dates. The dashboard's R&M spend includes labor for admins. Techs and GMs see hours, never labor dollars. |
 | **Schedule (dispatch calendar)** | Week and day views with a row per tech. Drag jobs from the *Unscheduled* list onto a tech and day, drag between techs/days to reassign or reschedule, drag back to unschedule. Shows hours booked per tech per day (flags over 8h), filter by tech, overdue and in-progress markers. Start times and estimated hours are set on the work order. |
 | **My day (techs)** | Phone-first route view of a tech's jobs for the day in time order, with directions, call-site, one-tap *Start work*, and their other unscheduled assignments. Admins can view any tech's day. |
 | **Schedule emails** | Every morning each tech gets an email of that day's jobs (time, site, address with map link, priority, est. hours) with buttons that open each job and their *My day* page in the app. Admins can also send or resend from the calendar: per tech in day view, or to all techs for any day. Sends are logged so the morning job never double-sends. |
@@ -47,7 +49,7 @@ Row-level security policies in Postgres enforce all of this, so even a direct AP
 
 ### 1. Create the Supabase project
 1. Create a project at supabase.com.
-2. **SQL Editor** → run, in order: `supabase/migrations/0001_schema.sql`, `0003_scheduling.sql`, `0004_vendor_portal.sql`, `0005_compliance_calendar.sql`, `0006_inbound_email.sql`, `0007_purchases.sql`, `0008_grants.sql`, `0009_companies.sql`, `0010_vendor_costs_quotes.sql`. (`0002` is the optional pg_cron file.) Already ran some? Run only the new ones; 0003–0010 are safe to re-run. `0009` puts all existing sites into a starting company called "My Company" that you can rename. **Don't skip `0008`**: newer Supabase projects don't give the app access to new tables, and without it every sign-in ends in "Your account is inactive".
+2. **SQL Editor** → run, in order: `supabase/migrations/0001_schema.sql`, `0003_scheduling.sql`, `0004_vendor_portal.sql`, `0005_compliance_calendar.sql`, `0006_inbound_email.sql`, `0007_purchases.sql`, `0008_grants.sql`, `0009_companies.sql`, `0010_vendor_costs_quotes.sql`, `0011_labor_time.sql`. (`0002` is the optional pg_cron file.) Already ran some? Run only the new ones; 0003–0011 are safe to re-run. `0011` turns any labor typed on existing work orders into a time entry, keeping its hours and dollars. `0009` puts all existing sites into a starting company called "My Company" that you can rename. **Don't skip `0008`**: newer Supabase projects don't give the app access to new tables, and without it every sign-in ends in "Your account is inactive".
 3. *(Optional, for a demo)* run `supabase/seed.sql`: 4 sites, 5 vendors, 9 assets, PM schedules, compliance items and sample work orders. Skip it for production, or delete the sample rows later.
 4. **Authentication → URL Configuration:** set *Site URL* to your app URL and add `https://YOUR-APP/auth/callback` to *Redirect URLs* (also `http://localhost:3000/auth/callback` for local dev).
 5. **Authentication → Providers → Email:** turn **off** "Allow new users to sign up". Access is invite-only.
@@ -115,6 +117,15 @@ Not on Vercel? Either call `GET /api/cron/generate` daily with header `Authoriza
 
 ---
 
+### Time & labor workflow
+1. Set each technician's **hourly rate** on *Users → (person) → Labor rate*. Add a new rate with an effective date for raises; history is kept.
+2. On site, the tech taps **Start work** on *My day* (or **Start timer** on the work order). Lunch or a parts run? **Pause**, then **Resume**. Done for this visit? **Stop**. Completing the work order stops any open timers.
+3. Needs a return trip? Reopen the work order. The next timer is logged as *Visit 2*, and the first visit's time stays as it was.
+4. Forgot the timer? An admin opens the work order's *Time & labor* card: **Add time manually**, or **Adjust or void** an entry. A reason is required and every change is logged.
+5. Review spend on **R&M spending** and each tech's hours and cost on **Technician labor**.
+
+How R&M spend is dated: labor on the day it was worked, receipts on their purchase date, other parts and vendor invoices when the work order is completed. Running timers count toward hours live and toward cost each time they're paused or stopped.
+
 ### Receipts workflow
 1. Buying parts for a job? On the phone, open **My day → Add receipt** (or the work order's *Receipts & purchases*). Take a photo, then enter the store, total and how it was paid. It takes about 20 seconds.
 2. The receipt is added to the work order's cost right away and appears on **Purchases** as *Needs review*.
@@ -122,7 +133,7 @@ Not on Vercel? Either call `GET /api/cron/generate` daily with header `Authoriza
 4. Personal-card purchases show as *Owed to employees* until an admin marks them reimbursed (with a check # or payroll reference).
 5. At month end, filter **Purchases** by date and export the CSV for accounting.
 
-Work order cost = labor + receipts + other parts (stock items without a receipt) + vendor invoice.
+Work order R&M cost = internal technician labor (from time entries) + receipts + other parts (stock items without a receipt) + vendor invoice. Labor dollars are stored in admin-only tables, so `work_orders.total_cost` holds the non-labor part and admins see labor added on top.
 
 ### Compliance workflow
 1. Each compliance item has a default vendor and a reminder window ("remind days before", default 21).

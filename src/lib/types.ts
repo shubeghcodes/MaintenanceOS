@@ -90,6 +90,7 @@ export interface WorkOrder {
   due_at: string | null;
   nte_amount: number | null;
   labor_hours: number;
+  visit?: number;
   labor_cost: number;
   parts_cost: number;
   vendor_invoice_amount: number;

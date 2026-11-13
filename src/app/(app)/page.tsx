@@ -4,6 +4,7 @@ import { Plus } from "lucide-react";
 import { getSession } from "@/lib/auth";
 import { getCompanyScope, inCompany, WO_COMPANY_COL, WO_COMPANY_JOIN } from "@/lib/company";
 import { CompanySelect } from "@/components/CompanySelect";
+import { loadRmLines } from "@/lib/labor";
 import { OPEN_STATUSES } from "@/lib/constants";
 import { addDaysISO, daysUntil, fmtDate, fmtFreq, fmtMoney, isOverdue, relativeDue, dueWhen, todayISO } from "@/lib/format";
 import type { AssetStatus, FreqUnit, WoPriority, WoStatus, WoType } from "@/lib/types";
@@ -100,8 +101,11 @@ export default async function Dashboard() {
   const avgHours = reactive30.length
     ? reactive30.reduce((s, w) => s + (new Date(w.completed_at).getTime() - new Date(w.created_at).getTime()) / 3_600_000, 0) / reactive30.length
     : null;
-  const monthDone = done.filter((w) => w.completed_at.slice(0, 10) >= monthStart);
-  const spendMtd = monthDone.reduce((s, w) => s + Number(w.total_cost || 0), 0);
+  // R&M spend this month from the cost ledger: internal labor (admins only), receipts, other parts, vendor invoices.
+  const rmMonth = await loadRmLines(supabase, { from: monthStart, to: today, companyId: cid });
+  const spendMtd = rmMonth.reduce((s, l) => s + l.amount, 0);
+  const laborMtd = rmMonth.filter((l) => l.category === "labor").reduce((s, l) => s + l.amount, 0);
+  const spendFor = (pred: (l: (typeof rmMonth)[number]) => boolean) => rmMonth.filter(pred).reduce((t, l) => t + l.amount, 0);
 
   // Per-site rollup
   const perSite = sites
@@ -109,7 +113,7 @@ export default async function Dashboard() {
       ...s,
       open: open.filter((w) => w.site_id === s.id).length,
       overdue: overdue.filter((w) => w.site_id === s.id).length,
-      spend: monthDone.filter((w) => w.site_id === s.id).reduce((t, w) => t + Number(w.total_cost || 0), 0),
+      spend: spendFor((l) => l.site_id === s.id),
     }))
     .sort((a, b) => b.spend - a.spend || b.open - a.open);
   const maxSpend = Math.max(1, ...perSite.map((s) => s.spend));
@@ -126,7 +130,7 @@ export default async function Dashboard() {
             open: open.filter((w) => w.company_id === c.id).length,
             overdue: overdue.filter((w) => w.company_id === c.id).length,
             completed: completed30.filter((w) => w.company_id === c.id).length,
-            spend: monthDone.filter((w) => w.company_id === c.id).reduce((t, w) => t + Number(w.total_cost || 0), 0),
+            spend: spendFor((l) => l.company_id === c.id),
           }))
           .filter((c) => c.active || c.sites || c.open)
       : [];
@@ -199,7 +203,14 @@ export default async function Dashboard() {
         <Stat
           label="R&M spend MTD"
           value={fmtMoney(spendMtd)}
-          sub={avgHours == null ? "Completed work this month" : `Avg reactive close: ${avgHours < 48 ? `${avgHours.toFixed(1)} h` : `${(avgHours / 24).toFixed(1)} d`}`}
+          href={profile.role === "admin" ? "/rm" : undefined}
+          sub={
+            profile.role === "admin"
+              ? `Incl. ${fmtMoney(laborMtd)} internal labor`
+              : avgHours == null
+                ? "Parts and vendor costs this month"
+                : `Avg reactive close: ${avgHours < 48 ? `${avgHours.toFixed(1)} h` : `${(avgHours / 24).toFixed(1)} d`}`
+          }
         />
       </div>
 
@@ -287,7 +298,7 @@ export default async function Dashboard() {
         </Card>
 
         <Card className="lg:col-span-2">
-          <CardHeader title="By site" subtitle="Open work and completed spend this month" />
+          <CardHeader title="By site" subtitle="Open work and R&M spend this month" />
           {perSite.length === 0 ? (
             <EmptyState title="No sites yet." />
           ) : (
