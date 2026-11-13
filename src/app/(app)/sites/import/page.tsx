@@ -17,8 +17,9 @@ export default async function ImportSitesPage() {
       />
       {scope.enabled && (
         <p className="mb-4 text-sm text-slate-600">
-          New sites will be added to <b>{scope.company?.name ?? scope.companies.find((c) => c.active)?.name ?? "your first company"}</b>
-          {scope.company ? "" : " (pick a company in the dropdown to choose another)"}. Existing sites keep their company.
+          Rows with a <b>Company</b> go to that company. Rows without one go to{" "}
+          <b>{scope.company?.name ?? scope.companies.find((c) => c.active)?.name ?? "your first company"}</b>
+          {scope.company ? "" : " (pick a company in the dropdown to choose another)"}, and existing sites keep theirs.
         </p>
       )}
       <ImportClient />

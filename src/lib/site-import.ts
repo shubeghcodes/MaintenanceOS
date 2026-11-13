@@ -4,6 +4,7 @@ import type { SiteType } from "./types";
 
 /** Columns the import understands. Header names are matched loosely (case, spaces and punctuation ignored). */
 export const IMPORT_COLUMNS = [
+  { key: "company", label: "Company", required: false, example: "Sunrise Foods Inc", help: "Which company owns this location. Must match a name on the Companies page (see the Companies sheet). Blank = the company selected in the app when you import; existing sites keep theirs. A different company here moves an existing site, with its work orders and history." },
   { key: "code", label: "Store #", required: false, example: "DT-1042", help: "Store number or site code. Used to match existing sites, so re-uploading updates instead of duplicating." },
   { key: "name", label: "Name", required: true, example: "Del Taco Fullerton", help: "Location name (required)." },
   { key: "type", label: "Type", required: false, example: "QSR", help: "QSR, Dine-in or CRE. Drives the compliance checklist. Blank = QSR." },
@@ -21,6 +22,7 @@ export const IMPORT_COLUMNS = [
 type ColKey = (typeof IMPORT_COLUMNS)[number]["key"];
 
 const ALIASES: Record<string, ColKey> = {
+  company: "company", companyname: "company", corporation: "company", corp: "company", entity: "company", legalentity: "company", owner: "company", ownercompany: "company", franchisee: "company", operator: "company",
   code: "code", storecode: "code", sitecode: "code", store: "code", storeno: "code", storenumber: "code", store_: "code", unit: "code", unitnumber: "code", locationcode: "code", id: "code",
   name: "name", sitename: "name", storename: "name", location: "name", locationname: "name",
   type: "type", sitetype: "type", locationtype: "type", category: "type",
@@ -42,6 +44,7 @@ const normHeader = (h: string) => {
 
 export type ImportRow = {
   line: number; // spreadsheet row number, for messages
+  company: string | null;
   code: string | null;
   name: string | null;
   type: SiteType;
@@ -102,6 +105,7 @@ function buildRow(line: number, rec: Partial<Record<ColKey, string>>): ImportRow
   if (!name) errors.push("Name is required");
   return {
     line,
+    company: clean("company"),
     code: clean("code"),
     name,
     type: toType(clean("type"), warnings, errors),
@@ -227,7 +231,7 @@ export async function parseSiteFile(file: File): Promise<{ rows: ImportRow[]; un
 }
 
 /** Builds the downloadable template workbook. */
-export async function buildTemplate(): Promise<ArrayBuffer> {
+export async function buildTemplate(companies: string[] = []): Promise<ArrayBuffer> {
   const wb = new ExcelJS.Workbook();
   wb.creator = "MaintainOS";
   const ws = wb.addWorksheet("Sites", { views: [{ state: "frozen", ySplit: 1 }] });
@@ -238,7 +242,7 @@ export async function buildTemplate(): Promise<ArrayBuffer> {
   }));
   ws.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
   ws.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF3459BF" } };
-  ws.addRow(Object.fromEntries(IMPORT_COLUMNS.map((c) => [c.key, c.example])));
+  ws.addRow(Object.fromEntries(IMPORT_COLUMNS.map((c) => [c.key, c.key === "company" && companies[0] ? companies[0] : c.example])));
   ws.getRow(2).font = { italic: true, color: { argb: "FF64748B" } };
   // Text format for codes, ZIPs and phones so Excel keeps leading zeros.
   for (const k of ["code", "zip", "phone"]) ws.getColumn(k).numFmt = "@";
@@ -252,6 +256,25 @@ export async function buildTemplate(): Promise<ArrayBuffer> {
       errorTitle: "Type",
       error: "Pick QSR, Dine-in or CRE",
     };
+  }
+
+  // Companies sheet + dropdown so names match exactly.
+  if (companies.length) {
+    const cs = wb.addWorksheet("Companies");
+    cs.columns = [{ header: "Company (use these exact names)", key: "n", width: 40 }];
+    cs.getRow(1).font = { bold: true };
+    companies.forEach((n) => cs.addRow({ n }));
+    const companyCol = ws.getColumn("company").letter;
+    for (let r = 2; r <= 1001; r++) {
+      ws.getCell(`${companyCol}${r}`).dataValidation = {
+        type: "list",
+        allowBlank: true,
+        formulae: [`Companies!$A$2:$A$${companies.length + 1}`],
+        showErrorMessage: true,
+        errorTitle: "Company",
+        error: "Pick a company from the list (add new companies on the Companies page first)",
+      };
+    }
   }
 
   const help = wb.addWorksheet("Instructions");

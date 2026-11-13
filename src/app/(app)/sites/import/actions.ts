@@ -8,7 +8,13 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { parseSiteFile, type ImportRow } from "@/lib/site-import";
 import type { UserRole } from "@/lib/types";
 
-export type PreviewRow = ImportRow & { action: "create" | "update" | "skip"; managerNotes: string[] };
+export type PreviewRow = ImportRow & {
+  action: "create" | "update" | "skip";
+  managerNotes: string[];
+  companyId: string | null; // company the site will end up in (null = default for new sites)
+  companyLabel: string | null;
+  companyNote: string | null; // e.g. "Moves from A to B"
+};
 
 export type ImportState =
   | { stage: "idle" }
@@ -18,7 +24,7 @@ export type ImportState =
       fileName: string;
       rows: PreviewRow[];
       unknownHeaders: string[];
-      counts: { create: number; update: number; skip: number; newManagers: number };
+      counts: { create: number; update: number; skip: number; newManagers: number; moves: number };
     }
   | {
       stage: "done";
@@ -30,22 +36,41 @@ export type ImportState =
       problems: string[];
     };
 
-type ExistingSite = { id: string; code: string | null; name: string };
+type ExistingSite = { id: string; code: string | null; name: string; company_id: string | null };
+type Company = { id: string; name: string; legal_name: string | null; active: boolean };
+
+/** Loose company-name key: case, punctuation and spaces ignored. */
+const coKey = (s: string) => s.toLowerCase().replace(/&/g, "and").replace(/[^a-z0-9]/g, "");
+/** Same, also without a trailing legal suffix (Inc, LLC, Corp…). */
+const coBase = (s: string) => coKey(s).replace(/(incorporated|inc|llc|lllp|llp|lp|ltd|limited|corporation|corp|company|co|pllc|pc)$/, "");
 type ExistingProfile = { id: string; email: string | null; role: UserRole; active: boolean };
 
 async function loadContext() {
   const { supabase } = await requireRole("admin");
-  const [{ data: s }, { data: p }] = await Promise.all([
-    supabase.from("sites").select("id,code,name"),
+  const [{ data: s }, { data: p }, scope] = await Promise.all([
+    supabase.from("sites").select("id,code,name,company_id"),
     supabase.from("profiles").select("id,email,role,active"),
+    getCompanyScope(),
   ]);
   const sites = (s ?? []) as ExistingSite[];
+  const companies = scope.companies as Company[];
+  const companyName = new Map(companies.map((c) => [c.id, c.name]));
+  // Exact (loose) match on name or legal name first, then ignoring Inc/LLC-style suffixes if that's unambiguous.
+  const findCompany = (raw: string): Company | "ambiguous" | null => {
+    const exact = companies.filter((c) => coKey(c.name) === coKey(raw) || (c.legal_name && coKey(c.legal_name) === coKey(raw)));
+    if (exact.length === 1) return exact[0];
+    if (exact.length > 1) return "ambiguous";
+    const base = companies.filter((c) => coBase(c.name) === coBase(raw) || (c.legal_name && coBase(c.legal_name) === coBase(raw)));
+    if (base.length === 1) return base[0];
+    return base.length > 1 ? "ambiguous" : null;
+  };
+  const defaultCompanyId = scope.companyId ?? companies.find((c) => c.active)?.id ?? null;
   const profiles = (p ?? []) as ExistingProfile[];
   const byCode = new Map(sites.filter((x) => x.code).map((x) => [x.code!.toLowerCase(), x]));
   const byName = new Map(sites.map((x) => [x.name.toLowerCase(), x]));
   const byEmail = new Map(profiles.filter((x) => x.email).map((x) => [x.email!.toLowerCase(), x]));
   const match = (r: ImportRow) => (r.code ? byCode.get(r.code.toLowerCase()) : undefined) ?? (r.name ? byName.get(r.name.toLowerCase()) : undefined);
-  return { supabase, match, byEmail };
+  return { supabase, match, byEmail, findCompany, companyName, defaultCompanyId, companiesEnabled: scope.enabled };
 }
 
 function annotate(rows: ImportRow[], ctx: Awaited<ReturnType<typeof loadContext>>): PreviewRow[] {
@@ -58,8 +83,25 @@ function annotate(rows: ImportRow[], ctx: Awaited<ReturnType<typeof loadContext>
       else if (p.role === "admin") managerNotes.push(`${e}: admin, already sees every site`);
       else managerNotes.push(`${e}: existing ${p.role}${p.active ? "" : " (inactive)"}`);
     }
-    const action = r.errors.length ? "skip" : ctx.match(r) ? "update" : "create";
-    return { ...r, action, managerNotes };
+    const existing = ctx.match(r);
+    let companyId: string | null = null;
+    let companyNote: string | null = null;
+    if (r.company && ctx.companiesEnabled) {
+      const c = ctx.findCompany(r.company);
+      if (c === "ambiguous") r.errors.push(`Company “${r.company}” matches more than one company; use the exact name`);
+      else if (!c) r.errors.push(`Company “${r.company}” not found. Add it on the Companies page first, or fix the spelling`);
+      else {
+        companyId = c.id;
+        if (c.name !== r.company) companyNote = `Matched to ${c.name}`;
+        if (existing?.company_id && existing.company_id !== c.id) companyNote = `Moves from ${ctx.companyName.get(existing.company_id) ?? "another company"} to ${c.name}`;
+      }
+    } else if (existing) {
+      companyId = existing.company_id;
+    } else {
+      companyId = ctx.defaultCompanyId;
+    }
+    const action = r.errors.length ? "skip" : existing ? "update" : "create";
+    return { ...r, action, managerNotes, companyId, companyLabel: companyId ? ctx.companyName.get(companyId) ?? null : null, companyNote };
   });
 }
 
@@ -90,6 +132,7 @@ export async function importSites(_prev: ImportState, fd: FormData): Promise<Imp
         update: rows.filter((r) => r.action === "update").length,
         skip: rows.filter((r) => r.action === "skip").length,
         newManagers: newEmails.size,
+        moves: rows.filter((r) => r.action === "update" && r.companyNote?.startsWith("Moves")).length,
       },
     };
   }
@@ -122,7 +165,9 @@ export async function importSites(_prev: ImportState, fd: FormData): Promise<Imp
     const existing = ctx.match(r);
     if (existing) {
       // Only overwrite fields that have a value in the file; blanks never erase data.
-      const patch = Object.fromEntries(Object.entries(full).filter(([, v]) => v !== null && v !== undefined));
+      const patch: Record<string, unknown> = Object.fromEntries(Object.entries(full).filter(([, v]) => v !== null && v !== undefined));
+      // A company in the file moves the site (its work orders, assets and history follow it).
+      if (r.company && r.companyId && r.companyId !== existing.company_id) patch.company_id = r.companyId;
       const { error } = await supabase.from("sites").update(patch).eq("id", existing.id);
       if (error) problems.push(`Row ${r.line} (${r.name}): ${error.message}`);
       else {
@@ -130,8 +175,7 @@ export async function importSites(_prev: ImportState, fd: FormData): Promise<Imp
         siteId = existing.id;
       }
     } else {
-      const { companyId } = await getCompanyScope();
-      const { data, error } = await supabase.from("sites").insert({ ...full, company_id: companyId ?? undefined } as typeof full).select("id").single();
+      const { data, error } = await supabase.from("sites").insert({ ...full, company_id: r.companyId ?? undefined } as typeof full).select("id").single();
       if (error || !data) problems.push(`Row ${r.line} (${r.name}): ${error?.message ?? "insert failed"}`);
       else {
         created++;

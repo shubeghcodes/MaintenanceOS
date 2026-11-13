@@ -24,7 +24,7 @@ export function ImportClient() {
       <Card>
         <CardHeader
           title="1. Fill in the template"
-          subtitle="One location per row. Store #, Name, Type, address, and the manager’s email."
+          subtitle="One location per row. Company, Store #, Name, Type, address, and the manager’s email."
           action={
             <a href="/sites/import/template" className={btnClass("secondary", "sm")}>
               <Download className="h-4 w-4" aria-hidden /> Download template
@@ -36,7 +36,11 @@ export function ImportClient() {
           <li>
             <b>Manager Email</b> gives that person access to that location only. Several managers? Separate emails with commas. One manager over several stores? Use the same email on each row.
           </li>
-          <li>Re-uploading updates matching sites (by Store #, or Name). Blank cells never erase existing data.</li>
+          <li>
+            <b>Company</b> puts each location in the right corporation. Use the names on the template&apos;s Companies sheet (or the Companies page). Leave it blank to use
+            the company selected in the dropdown. A company that isn&apos;t found is flagged, never created.
+          </li>
+          <li>Re-uploading updates matching sites (by Store #, or Name). Blank cells never erase existing data. A different Company moves the site, with its work orders and history.</li>
         </ul>
       </Card>
 
@@ -82,6 +86,7 @@ export function ImportClient() {
                 `${state.counts.update} to update`,
                 state.counts.skip ? `${state.counts.skip} with problems (will be skipped)` : null,
                 state.counts.newManagers ? `${state.counts.newManagers} new manager${state.counts.newManagers === 1 ? "" : "s"} to invite` : null,
+                state.counts.moves ? `${state.counts.moves} moving to another company` : null,
               ]
                 .filter(Boolean)
                 .join(" · ")}
@@ -107,6 +112,7 @@ export function ImportClient() {
                 <tr>
                   <Th>Row</Th>
                   <Th></Th>
+                  <Th>Company</Th>
                   <Th>Store #</Th>
                   <Th>Name</Th>
                   <Th>Type</Th>
@@ -123,6 +129,11 @@ export function ImportClient() {
                       {r.action === "create" && <Badge tone="good">New</Badge>}
                       {r.action === "update" && <Badge tone="info">Update</Badge>}
                       {r.action === "skip" && <Badge tone="critical">Skip</Badge>}
+                    </Td>
+                    <Td className="text-xs">
+                      {r.companyLabel ?? (r.company ? <span className="text-red-700">{r.company}</span> : <span className="text-slate-400">—</span>)}
+                      {r.companyNote && <div className={r.companyNote.startsWith("Moves") ? "font-medium text-amber-700" : "text-slate-500"}>{r.companyNote}</div>}
+                      {!r.company && r.companyLabel && <div className="text-slate-400">{r.action === "update" ? "unchanged" : "selected company"}</div>}
                     </Td>
                     <Td className="font-mono text-xs">{r.code ?? "—"}</Td>
                     <Td className="font-medium text-slate-900">{r.name ?? "—"}</Td>
