@@ -1,6 +1,8 @@
 "use server";
 
 import { cookies, headers } from "next/headers";
+import { emailGmsNote } from "@/lib/wo-notify";
+import { after } from "next/server";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -100,6 +102,7 @@ export async function declineJob(token: string, fd: FormData) {
   const { data: wo } = await c.db.from("work_orders").select("assigned_tech_id,status").eq("id", c.d.work_order_id).single();
   await setWoStatus(c, wo?.assigned_tech_id ? "assigned" : "new", { clearVendor: true });
   await log(c, "vendor", `Declined the work order: ${reason}`);
+  after(() => emailGmsNote(c.d.work_order_id, { body: `Declined the job: ${reason}`, authorLabel: c.actor }));
   await tell(c, "declined", { note: reason });
   done(c, "declined");
 }
@@ -137,6 +140,7 @@ export async function postUpdate(token: string, fd: FormData) {
 
   const r = await log(c, "vendor_update", notes ?? "Uploaded photos", { materials, needs }, key);
   if (r.duplicate) go(token, "ok=update");
+  if (notes) after(() => emailGmsNote(c.d.work_order_id, { body: notes, authorLabel: c.actor }));
   const saved = await saveAttachments(c.db, "work_order", c.d.work_order_id, null, files, {
     category: str(fd, "photo_kind") ?? "photo",
     dispatchId: c.d.id,
@@ -250,6 +254,7 @@ export async function completeWork(token: string, fd: FormData) {
   if (isCompliance) await log(c, "vendor", `Uploaded certificate${certNo ? ` #${certNo}` : ""} (${certIds.length} file${certIds.length === 1 ? "" : "s"})`);
   await setWoStatus(c, "pending_review", { resolution: notes });
   await log(c, "vendor", `Marked work complete: ${notes}`);
+  if (notes) after(() => emailGmsNote(c.d.work_order_id, { body: `Marked the work complete: ${notes}`, authorLabel: c.actor }));
 
   const inv = invoice ? await saveInvoice(c, invoice) : null;
   // One email to the team covering both.
