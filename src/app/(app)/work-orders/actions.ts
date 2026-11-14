@@ -6,11 +6,11 @@ import { after } from "next/server";
 import { emailApprovalNeeded, emailGmsNote, emailRequesterApproved, emailRequesterDeclined, emailTechAssigned, emailTechSentBack } from "@/lib/wo-notify";
 import { afterClosed, afterWorkDone } from "@/lib/signoff";
 import { sendAndRecord } from "@/lib/dispatch";
-import { ACTIVE_DISPATCH } from "@/lib/constants";
+import { ACTIVE_DISPATCH, HOLD_REASONS } from "@/lib/constants";
 import { getSession, isSuper } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { saveAttachments } from "@/lib/attachments";
-import { num, str, zonedTimeISO } from "@/lib/format";
+import { fmtDate, num, str, zonedTimeISO } from "@/lib/format";
 import type { WoStatus } from "@/lib/types";
 
 function fail(id: string | null, msg: string): never {
@@ -207,6 +207,7 @@ export async function setStatus(status: WoStatus, fd: FormData) {
   const note = str(fd, "note");
 
   if (!ALLOWED[profile.role]?.includes(status)) fail(id, "You can't set that status");
+  if (status === "on_hold" && profile.role === "tech") fail(id, "Fill in the progress report to put this job on hold");
 
   const { data: wo } = await supabase.from("work_orders").select("status,requested_by").eq("id", id).single();
   if (!wo) fail(id, "Work order not found");
@@ -332,4 +333,67 @@ export async function deleteWorkOrder(fd: FormData) {
   if (error) fail(id, error.message);
   revalidatePath("/work-orders");
   redirect("/work-orders");
+}
+
+/**
+ * Technician puts a job on hold. A progress report is required: work done so far, why it's on hold,
+ * what's left / the next step, plus optional parts needed, expected return date and photos.
+ * The tech's running timer on this job is paused, and the store's GMs get the report by email.
+ */
+export async function putOnHoldWithReport(fd: FormData) {
+  const { supabase, profile } = await getSession();
+  const id = str(fd, "id")!;
+  if (!(profile.role === "tech" || profile.role === "admin")) fail(id, "You can't put this job on hold");
+
+  const workDone = str(fd, "work_done");
+  const reason = str(fd, "hold_reason");
+  const nextSteps = str(fd, "next_steps");
+  const parts = str(fd, "parts_needed");
+  const returnOn = str(fd, "return_on");
+  if (!workDone || !reason || !HOLD_REASONS[reason] || !nextSteps) {
+    fail(id, "Progress report: work done, reason for hold and what's left are required");
+  }
+  if (reason === "parts" && !parts) fail(id, "Progress report: list the parts you're waiting on");
+
+  const { data: wo } = await supabase.from("work_orders").select("status").eq("id", id).single();
+  if (!wo) fail(id, "Work order not found");
+  if (["requested", "awaiting_signoff", "completed", "cancelled", "on_hold"].includes(wo.status)) fail(id, "This job can't be put on hold right now");
+
+  const { error } = await supabase.from("work_orders").update({ status: "on_hold" }).eq("id", id);
+  if (error) fail(id, error.message);
+
+  // Pause this tech's running timer on the job.
+  const { data: running } = await supabase
+    .from("time_entries")
+    .select("id")
+    .eq("work_order_id", id)
+    .eq("user_id", profile.id)
+    .eq("status", "running");
+  for (const t of running ?? []) await supabase.rpc("timer_change", { p_entry: t.id, p_action: "pause" });
+
+  const saved = await saveAttachments(supabase, "work_order", id, profile.id, fd.getAll("files"));
+  const body = [
+    `On hold: ${HOLD_REASONS[reason]}`,
+    `Work done: ${workDone}`,
+    `What's left / next step: ${nextSteps}`,
+    parts && `Parts needed: ${parts}`,
+    returnOn && `Expected back: ${fmtDate(returnOn)}`,
+  ]
+    .filter(Boolean)
+    .join("\n");
+  await supabase.from("work_order_events").insert({
+    work_order_id: id,
+    user_id: profile.id,
+    kind: "progress_report",
+    body,
+    meta: { hold_reason: reason, work_done: workDone, next_steps: nextSteps, parts_needed: parts, return_on: returnOn, files: saved.length },
+  });
+  after(() => emailGmsNote(id, { body: `Progress report — ${body}`, authorId: profile.id }));
+
+  revalidatePath(`/work-orders/${id}`);
+  revalidatePath("/work-orders");
+  revalidatePath("/my-day");
+  revalidatePath("/schedule");
+  revalidatePath("/");
+  redirect(`/work-orders/${id}?held=1`);
 }
