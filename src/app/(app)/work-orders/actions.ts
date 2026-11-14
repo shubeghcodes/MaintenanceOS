@@ -321,6 +321,13 @@ export async function deleteWorkOrder(fd: FormData) {
   const { supabase, profile } = await getSession();
   const id = str(fd, "id")!;
   if (!isSuper(profile)) fail(id, "Only a super admin can delete work orders");
+  // Keep the paper trail: invoices and receipts stay reviewable under Analytics → Invoices / Purchases.
+  const [{ count: inv }, { count: files }, { count: rec }] = await Promise.all([
+    supabase.from("vendor_invoices").select("id", { count: "exact", head: true }).eq("work_order_id", id),
+    supabase.from("attachments").select("id", { count: "exact", head: true }).eq("entity_type", "work_order").eq("entity_id", id).in("category", ["invoice", "vendor_receipt"]),
+    supabase.from("wo_purchases").select("id", { count: "exact", head: true }).eq("work_order_id", id),
+  ]);
+  if ((inv ?? 0) + (files ?? 0) + (rec ?? 0) > 0) fail(id, "This work order has invoices or receipts, so it can't be deleted. Cancel it instead; its records stay on file.");
   const { error } = await supabase.from("work_orders").delete().eq("id", id);
   if (error) fail(id, error.message);
   revalidatePath("/work-orders");
