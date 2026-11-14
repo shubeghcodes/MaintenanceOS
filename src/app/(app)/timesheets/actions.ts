@@ -28,3 +28,27 @@ export async function editShift(fd: FormData) {
   revalidatePath("/my-day");
   go("saved", "1");
 }
+
+/** Admin adds, fixes or removes a lunch on a shift, with a reason. */
+export async function saveLunch(fd: FormData) {
+  const { supabase } = await requireRole("admin");
+  const back = str(fd, "back") ?? "/timesheets";
+  const safe = back.startsWith("/") && !back.startsWith("//") ? back : "/timesheets";
+  const go = (k: string, v: string): never => redirect(`${safe}${safe.includes("?") ? "&" : "?"}${k}=${encodeURIComponent(v)}`);
+  const day = str(fd, "day");
+  const start = str(fd, "lunch_start");
+  const end = str(fd, "lunch_end");
+  const remove = fd.get("remove") === "on";
+  if (!remove && (!day || !start || !end)) go("error", "Enter the lunch start and end times");
+  const { error } = await supabase.rpc("lunch_save", {
+    p_shift: str(fd, "shift_id"),
+    p_break: str(fd, "break_id"),
+    p_start: remove ? null : zonedDateTimeISO(day!, start!),
+    p_end: remove ? null : zonedDateTimeISO(day!, end!),
+    p_reason: str(fd, "reason"),
+  });
+  if (error) go("error", error.message.replace(/^.*?ERROR:\s*/i, ""));
+  revalidatePath("/timesheets");
+  revalidatePath("/my-day");
+  go("saved", "1");
+}

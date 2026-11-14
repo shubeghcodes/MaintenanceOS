@@ -1,13 +1,23 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { LogIn, LogOut, MapPin } from "lucide-react";
+import { Coffee, LogIn, LogOut, MapPin, Play } from "lucide-react";
 import { TimerClock } from "@/components/TimerClock";
-import { clockIn, clockOut } from "./clock-actions";
+import { clockIn, clockOut, lunchEnd, lunchStart } from "./clock-actions";
 
 export type ClockJob = { id: string; number: number; title: string; site: string | null; open: boolean; today?: boolean };
 /** staleDate: the YYYY-MM-DD the shift started on, when that was before today (forgot to clock out). */
-export type OpenShift = { clock_in_at: string; firstLabel: string; staleDate: string | null; staleLabel: string | null; clockInTime: string };
+export type OpenShift = {
+  clock_in_at: string;
+  firstLabel: string;
+  staleDate: string | null;
+  staleLabel: string | null;
+  clockInTime: string;
+  /** Set while on lunch. */
+  lunch: { since: string; sinceTime: string } | null;
+  /** Lunch already taken this shift, in minutes. */
+  lunchMinutes: number;
+};
 
 const NO_JOB_REASONS = ["Shop", "Parts run", "Training", "Meeting", "Other"];
 
@@ -132,18 +142,47 @@ export function ClockCard({
     );
   }
 
+  if (shift.lunch && !shift.staleDate) {
+    return (
+      <div id="clock" className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-amber-50 p-4 ring-1 ring-amber-200">
+        <div>
+          <p className="flex items-center gap-1.5 text-sm font-semibold text-amber-950">
+            <Coffee className="h-4 w-4" aria-hidden /> On lunch since {shift.lunch.sinceTime}
+          </p>
+          <p className="text-xs text-amber-900">Your job timer is paused. It picks up again when you end lunch.</p>
+        </div>
+        <TimerClock worked={0} resumedAt={shift.lunch.since} className="font-mono text-xl font-semibold tabular-nums text-amber-950" />
+        <form action={lunchEnd}>
+          <button className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700">
+            <Play className="h-4 w-4" aria-hidden /> End lunch
+          </button>
+        </form>
+      </div>
+    );
+  }
+
   return (
     <div id="clock" className={`mb-4 rounded-xl p-4 ring-1 ${shift.staleDate ? "bg-red-50 ring-red-200" : "bg-emerald-50 ring-emerald-200"}`}>
       {!open ? (
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-sm font-semibold text-slate-900">Clocked in since {shift.clockInTime}</p>
-            <p className="text-xs text-slate-600">Started on {shift.firstLabel}</p>
+            <p className="text-xs text-slate-600">
+              Started on {shift.firstLabel}
+              {shift.lunchMinutes > 0 && ` · lunch ${shift.lunchMinutes} min`}
+            </p>
           </div>
           <TimerClock worked={0} resumedAt={shift.clock_in_at} className="font-mono text-xl font-semibold tabular-nums text-emerald-900" />
-          <button onClick={() => setOpen(true)} className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-slate-800">
-            <LogOut className="h-4 w-4" aria-hidden /> Clock out
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <form action={lunchStart}>
+              <button className="inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2.5 text-sm font-semibold text-amber-900 shadow-sm ring-1 ring-inset ring-amber-300 hover:bg-amber-50">
+                <Coffee className="h-4 w-4" aria-hidden /> Start lunch
+              </button>
+            </form>
+            <button onClick={() => setOpen(true)} className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-slate-800">
+              <LogOut className="h-4 w-4" aria-hidden /> Clock out
+            </button>
+          </div>
         </div>
       ) : (
         <form ref={formRef} action={clockOut} onSubmit={onSubmit} className="space-y-3">

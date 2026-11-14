@@ -124,6 +124,12 @@ export default async function MyDayPage({ searchParams }: { searchParams: Promis
         timed.push({ id: x.wo.id, number: x.wo.number, title: x.wo.title, site: x.wo.site?.code ?? x.wo.site?.name ?? null, open: WORKABLE_STATUSES.includes(x.wo.status) });
       }
       clockJobs = [...timed, ...clockJobs.filter((j) => !timed.some((t) => t.id === j.id))];
+      const { data: br } = await supabase.from("tech_shift_breaks").select("started_at,ended_at").eq("shift_id", sh.id);
+      const breaks = (br ?? []) as { started_at: string; ended_at: string | null }[];
+      const onLunch = breaks.find((b) => !b.ended_at);
+      const lunchMinutes = Math.round(
+        breaks.filter((b) => b.ended_at).reduce((t, b) => t + (new Date(b.ended_at!).getTime() - new Date(b.started_at).getTime()) / 60000, 0),
+      );
       const startDay = toDateInput(sh.clock_in_at);
       shift = {
         clock_in_at: sh.clock_in_at,
@@ -131,6 +137,8 @@ export default async function MyDayPage({ searchParams }: { searchParams: Promis
         firstLabel: sh.first ? `#${sh.first.number} ${sh.first.title}` : (sh.start_reason ?? "no work order"),
         staleDate: startDay < today ? startDay : null,
         staleLabel: startDay < today ? fmtDate(startDay) : null,
+        lunch: onLunch ? { since: onLunch.started_at, sinceTime: fmtClockTime(onLunch.started_at) } : null,
+        lunchMinutes,
       };
     }
   }
@@ -157,11 +165,13 @@ export default async function MyDayPage({ searchParams }: { searchParams: Promis
       {sp.error && <Alert>{sp.error}</Alert>}
       {sp.clock === "in" && <Alert tone="good">Clocked in. Your first job&apos;s timer is running.</Alert>}
       {sp.clock === "out" && <Alert tone="good">Clocked out. Have a good one.</Alert>}
+      {sp.clock === "lunch" && <Alert tone="good">Enjoy your lunch. Your job timer is paused.</Alert>}
+      {sp.clock === "back" && <Alert tone="good">Welcome back.{sp.resumed ? ` Your timer on #${sp.resumed} is running again.` : ""}</Alert>}
       {sp.clock === "out_done" && <Alert tone="good">Clocked out, and the job was sent to the store&apos;s GM to confirm it&apos;s fixed.</Alert>}
       {clocks && isMe && <ClockCard key={shift ? "on" : "off"} shift={shift} jobs={clockJobs} lastJobId={lastJobId} preselectJobId={sp.clockin || null} />}
       {clocks && !isMe && (
         <p className={`mb-4 rounded-lg px-4 py-2.5 text-sm ring-1 ring-inset ${shift ? "bg-emerald-50 text-emerald-900 ring-emerald-200" : "bg-slate-50 text-slate-600 ring-slate-200"}`}>
-          {shift ? `Clocked in since ${shift.clockInTime} · started on ${shift.firstLabel}` : "Clocked out"}
+          {shift ? `${shift.lunch ? `On lunch since ${shift.lunch.sinceTime} · ` : ""}Clocked in since ${shift.clockInTime} · started on ${shift.firstLabel}` : "Clocked out"}
         </p>
       )}
       {sp.timer?.includes("_paused_") && <Alert tone="good">Timer started. Your other timer (#{sp.timer.split("_paused_")[1]}) was paused, since only one can run at a time.</Alert>}

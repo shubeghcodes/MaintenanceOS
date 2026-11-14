@@ -7,7 +7,7 @@ import { addDaysISO, dayLabel, fmtDate, isISODate, personName, toDateInput, toda
 import { fmtClockTime, fmtHours, toTimeInput, zonedDateTimeISO } from "@/lib/labor";
 import { Alert, Badge, Card, CardHeader, EmptyState, Field, Input, PageHeader, Select, Stat, Table, Td, Th, btnClass } from "@/components/ui";
 import { SubmitButton } from "@/components/SubmitButton";
-import { editShift } from "./actions";
+import { editShift, saveLunch } from "./actions";
 
 export const metadata = { title: "Timesheets" };
 export const dynamic = "force-dynamic";
@@ -63,17 +63,25 @@ export default async function TimesheetsPage({ searchParams }: { searchParams: P
   const { data: entryData } = userIds.length
     ? await supabase.from("time_entries").select("user_id,started_at,worked_seconds,status,last_resumed_at").in("user_id", userIds).gte("started_at", earliest).neq("status", "void")
     : { data: [] };
+  const shiftIds = shifts.map((s) => s.id);
+  const { data: breakData } = shiftIds.length
+    ? await supabase.from("tech_shift_breaks").select("id,shift_id,started_at,ended_at,edited").in("shift_id", shiftIds).order("started_at")
+    : { data: [] };
+  const breaks = (breakData ?? []) as { id: string; shift_id: string; started_at: string; ended_at: string | null; edited: boolean }[];
   const entries = (entryData ?? []) as { user_id: string; started_at: string; worked_seconds: number; status: string; last_resumed_at: string | null }[];
   const now = Date.now();
   const rows = shifts.map((s) => {
     const end = s.clock_out_at ? new Date(s.clock_out_at).getTime() : now;
-    const hours = (end - new Date(s.clock_in_at).getTime()) / 3_600_000;
+    const lunches = breaks.filter((b) => b.shift_id === s.id);
+    const lunchMin = lunches.reduce((t, b) => t + ((b.ended_at ? new Date(b.ended_at).getTime() : now) - new Date(b.started_at).getTime()) / 60000, 0);
+    // Clocked hours exclude lunch.
+    const hours = (end - new Date(s.clock_in_at).getTime()) / 3_600_000 - lunchMin / 60;
     const job =
       entries
         .filter((e) => e.user_id === s.user_id && new Date(e.started_at).getTime() >= new Date(s.clock_in_at).getTime() && new Date(e.started_at).getTime() < end)
         .reduce((t, e) => t + e.worked_seconds + (e.status === "running" && e.last_resumed_at ? (now - new Date(e.last_resumed_at).getTime()) / 1000 : 0), 0) / 3600;
     const day = toDateInput(s.clock_in_at);
-    return { ...s, day, hours, job, missing: !s.clock_out_at && day < today, live: !s.clock_out_at && day === today };
+    return { ...s, day, hours, job, lunches, lunchMin, missing: !s.clock_out_at && day < today, live: !s.clock_out_at && day === today };
   });
 
   const byTech = techs
@@ -124,7 +132,7 @@ export default async function TimesheetsPage({ searchParams }: { searchParams: P
       </div>
 
       <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Stat label="Clocked hours" value={fmtHours(totHours)} sub={`${total.length} shift${total.length === 1 ? "" : "s"} this week`} />
+        <Stat label="Clocked hours" value={fmtHours(totHours)} sub={`${total.length} shift${total.length === 1 ? "" : "s"} this week, lunch excluded`} />
         <Stat label="Hours on jobs" value={fmtHours(totJob)} sub="From work order timers" />
         <Stat
           label="On jobs"
@@ -161,6 +169,7 @@ export default async function TimesheetsPage({ searchParams }: { searchParams: P
                         <Th>Day</Th>
                         <Th>Clock in</Th>
                         <Th>Clock out</Th>
+                        <Th>Lunch</Th>
                         <Th className="text-right">Hours</Th>
                         <Th className="text-right">On jobs</Th>
                         <Th />
@@ -198,6 +207,21 @@ export default async function TimesheetsPage({ searchParams }: { searchParams: P
                               <Badge tone="good">Clocked in now</Badge>
                             )}
                           </Td>
+                          <Td className="whitespace-nowrap text-xs">
+                            {r.lunches.length ? (
+                              r.lunches.map((b) => (
+                                <p key={b.id} className="tabular-nums">
+                                  {fmtClockTime(b.started_at)}–{b.ended_at ? fmtClockTime(b.ended_at) : "now"}
+                                  <span className="text-slate-500"> · {Math.round(((b.ended_at ? new Date(b.ended_at).getTime() : now) - new Date(b.started_at).getTime()) / 60000)} min</span>
+                                  {b.edited && <span className="text-slate-400"> · edited</span>}
+                                </p>
+                              ))
+                            ) : r.hours > 5 && !r.live ? (
+                              <span className="text-amber-700">No lunch</span>
+                            ) : (
+                              <span className="text-slate-400">—</span>
+                            )}
+                          </Td>
                           <Td className="text-right tabular-nums">{r.missing ? "—" : fmtHours(r.hours)}</Td>
                           <Td className="text-right tabular-nums">
                             {fmtHours(r.job)}
@@ -208,7 +232,8 @@ export default async function TimesheetsPage({ searchParams }: { searchParams: P
                               <summary className={`${btnClass(r.missing ? "primary" : "ghost", "sm")} cursor-pointer list-none`}>
                                 <Pencil className="h-3.5 w-3.5" aria-hidden /> {r.missing ? "Fix" : "Edit"}
                               </summary>
-                              <form action={editShift} className="absolute right-0 z-10 mt-1 w-72 space-y-2 rounded-lg bg-white p-3 shadow-lg ring-1 ring-slate-200">
+                              <div className="absolute right-0 z-10 mt-1 w-72 space-y-2">
+                              <form action={editShift} className="space-y-2 rounded-lg bg-white p-3 shadow-lg ring-1 ring-slate-200">
                                 <input type="hidden" name="shift_id" value={r.id} />
                                 <input type="hidden" name="back" value={back} />
                                 <div className="grid grid-cols-2 gap-2">
@@ -230,6 +255,33 @@ export default async function TimesheetsPage({ searchParams }: { searchParams: P
                                 </Field>
                                 <SubmitButton size="sm">Save</SubmitButton>
                               </form>
+                              <form action={saveLunch} className="space-y-2 rounded-lg bg-white p-3 shadow-lg ring-1 ring-slate-200">
+                                <input type="hidden" name="shift_id" value={r.id} />
+                                <input type="hidden" name="break_id" value={r.lunches[0]?.id ?? ""} />
+                                <input type="hidden" name="day" value={r.day} />
+                                <input type="hidden" name="back" value={back} />
+                                <p className="text-xs font-semibold text-slate-700">{r.lunches.length ? "Fix lunch" : "Add lunch"}</p>
+                                <div className="grid grid-cols-2 gap-2">
+                                  <Field label="Lunch start">
+                                    <Input type="time" name="lunch_start" defaultValue={r.lunches[0] ? toTimeInput(r.lunches[0].started_at) : ""} />
+                                  </Field>
+                                  <Field label="Lunch end">
+                                    <Input type="time" name="lunch_end" defaultValue={r.lunches[0]?.ended_at ? toTimeInput(r.lunches[0].ended_at) : ""} />
+                                  </Field>
+                                </div>
+                                {r.lunches.length > 0 && (
+                                  <label className="flex items-center gap-2 text-xs text-slate-600">
+                                    <input type="checkbox" name="remove" className="rounded border-slate-300" /> Remove this lunch
+                                  </label>
+                                )}
+                                <Field label="Reason">
+                                  <Input name="reason" placeholder="e.g. Forgot to log lunch" required />
+                                </Field>
+                                <SubmitButton size="sm" variant="secondary">
+                                  Save lunch
+                                </SubmitButton>
+                              </form>
+                              </div>
                             </details>
                           </Td>
                         </tr>
