@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type Site = { id: string; name: string; code: string | null; company_id: string | null; city?: string | null };
 type Company = { id: string; name: string };
@@ -9,9 +9,25 @@ type Company = { id: string; name: string };
  * Choose the locations a person can see. Grouped by company, with search and "select all" per company.
  * Submits one `site_ids` value per checked location.
  */
-export function LocationPicker({ sites, companies, selected = [], name = "site_ids" }: { sites: Site[]; companies: Company[]; selected?: string[]; name?: string }) {
+export function LocationPicker({
+  sites,
+  companies,
+  selected = [],
+  name = "site_ids",
+  onChange,
+}: {
+  sites: Site[];
+  companies: Company[];
+  selected?: string[];
+  name?: string;
+  /** Called with the checked location ids whenever the selection changes. */
+  onChange?: (ids: string[]) => void;
+}) {
   const [checked, setChecked] = useState<Set<string>>(() => new Set(selected));
   const [q, setQ] = useState("");
+  useEffect(() => {
+    onChange?.([...checked]);
+  }, [checked]);
 
   const groups = useMemo(() => {
     const term = q.trim().toLowerCase();
