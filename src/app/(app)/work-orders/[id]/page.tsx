@@ -10,9 +10,11 @@ import { Alert, ButtonLink, Card, CardHeader, DefList, Field, Input, PageHeader,
 import { OverdueBadge, PriorityBadge, StatusBadge, TypeBadge } from "@/components/badges";
 import { SubmitButton } from "@/components/SubmitButton";
 import { Attachments } from "@/components/Attachments";
+import { putOnHoldWithReport } from "../actions";
+import { PhotoInput } from "@/components/PhotoInput";
 import { addComment, approveWorkOrder, closeForGm, declineWorkOrder, deleteWorkOrder, sendBackNotFixed, setStatus, signOffWorkOrder, updateAssignment, updateCosts, uploadWoFiles } from "../actions";
 import { addDaysISO } from "@/lib/format";
-import { SIGNOFF_AUTO_CLOSE_DAYS } from "@/lib/constants";
+import { HOLD_REASONS, SIGNOFF_AUTO_CLOSE_DAYS } from "@/lib/constants";
 import { Send } from "lucide-react";
 import { VendorPanel } from "./VendorPanel";
 import { ReceiptsCard } from "./ReceiptsCard";
@@ -155,6 +157,9 @@ export default async function WorkOrderPage({
   const canAssign = (role === "admin" || role === "tech") && !awaiting;
   const canCost = role !== "manager";
   const statuses = nextStatuses(role, wo.status, wo.requested_by === profile.id);
+  // Techs must file a progress report to put a job on hold, so "on hold" gets its own form for them.
+  const techHold = role === "tech" && statuses.includes("on_hold");
+  const statusButtons = techHold ? statuses.filter((s) => s !== "on_hold") : statuses;
   const closed = wo.status === "completed" || wo.status === "cancelled";
 
   return (
@@ -191,6 +196,7 @@ export default async function WorkOrderPage({
       {sp.signoff === "sent_back" && <Alert tone="good">Sent back. It&apos;s open again as a return visit, and the tech or vendor has been emailed your note.</Alert>}
       {sp.vendor && VENDOR_NOTICE[sp.vendor] && <Alert tone="good">{VENDOR_NOTICE[sp.vendor]}</Alert>}
       {sp.receipt && RECEIPT_NOTICE[sp.receipt] && <Alert tone="good">{RECEIPT_NOTICE[sp.receipt]}</Alert>}
+      {sp.held && <Alert tone="good">Job put on hold. Your progress report is posted below and the store&apos;s GM was emailed.</Alert>}
       {sp.timer && timerNotice(sp.timer) && <Alert tone="good">{timerNotice(sp.timer)}</Alert>}
       <AutoRefresh seconds={30} />
 
@@ -274,6 +280,7 @@ export default async function WorkOrderPage({
                       {["system", "dispatch", "approval", "invoice", "vendor", "quote", "vendor_cost"].includes(e.kind) && <>{e.body}</>}
                       {e.kind === "comment" && (e.meta?.to_vendor ? "messaged the vendor" : "commented")}
                       {e.kind === "vendor_update" && "posted an update"}
+                      {e.kind === "progress_report" && "posted a progress report"}
                       {e.kind === "email_reply" && (e.meta?.unverified ? "sent an email (unrecognized sender)" : "replied by email")}
                       {e.meta?.via === "email" && e.kind === "comment" && <span className="ml-1 text-[10px] text-slate-400">· via email</span>}
                       {e.visibility === "shared" && ["comment", "vendor_update", "email_reply"].includes(e.kind) && role !== "vendor" && (
@@ -281,6 +288,14 @@ export default async function WorkOrderPage({
                       )}
                       <span className="ml-2 text-xs text-slate-400">{fmtDateTime(e.created_at)}</span>
                     </p>
+                    {e.kind === "progress_report" && (
+                      <div className="mt-1 whitespace-pre-wrap rounded-lg bg-amber-50 px-3 py-2 text-slate-800 ring-1 ring-amber-200">
+                        {e.body}
+                        {typeof e.meta?.files === "number" && e.meta.files > 0 && (
+                          <p className="mt-1 text-xs text-slate-500">📎 {e.meta.files} photo{e.meta.files > 1 ? "s" : ""} added to Photos &amp; files</p>
+                        )}
+                      </div>
+                    )}
                     {(e.kind === "comment" || e.kind === "vendor_update" || e.kind === "email_reply") && (
                       <div className={`mt-1 whitespace-pre-wrap rounded-lg px-3 py-2 text-slate-800 ${e.actor_type === "vendor" ? "bg-violet-50" : "bg-slate-50"}`}>
                         {e.body}
@@ -425,6 +440,7 @@ export default async function WorkOrderPage({
           {statuses.length > 0 && (
             <Card>
               <CardHeader title="Update status" />
+              {statusButtons.length > 0 && (
               <form className="space-y-3 p-5">
                 <input type="hidden" name="id" value={id} />
                 {statuses.includes("completed") && (
@@ -441,7 +457,7 @@ export default async function WorkOrderPage({
                   <Input name="note" placeholder="e.g. Waiting on part, ETA Friday" />
                 </Field>
                 <div className="flex flex-wrap gap-2">
-                  {statuses.map((s) => (
+                  {statusButtons.map((s) => (
                     <SubmitButton
                       key={s}
                       formAction={setStatus.bind(null, s)}
@@ -454,6 +470,47 @@ export default async function WorkOrderPage({
                   ))}
                 </div>
               </form>
+              )}
+              {techHold && (
+                <details className={`group ${statusButtons.length ? "border-t border-slate-100" : ""}`} open={!!sp.hold}>
+                  <summary className="cursor-pointer list-none px-5 py-3 text-sm font-medium text-slate-800 hover:bg-slate-50">
+                    <span className="mr-1 inline-block transition group-open:rotate-90">›</span> Put on hold
+                    <span className="ml-1 font-normal text-slate-500">· progress report required</span>
+                  </summary>
+                  <form action={putOnHoldWithReport} className="space-y-3 border-t border-slate-100 bg-amber-50/40 p-5">
+                    <input type="hidden" name="id" value={id} />
+                    <Field label="Work done so far *">
+                      <Textarea name="work_done" rows={3} required placeholder="e.g. Diagnosed walk-in cooler: failed condenser fan motor. Removed old motor." />
+                    </Field>
+                    <Field label="Why is it on hold? *">
+                      <Select name="hold_reason" required defaultValue="">
+                        <option value="" disabled>
+                          Choose a reason…
+                        </option>
+                        {Object.entries(HOLD_REASONS).map(([k, v]) => (
+                          <option key={k} value={k}>
+                            {v}
+                          </option>
+                        ))}
+                      </Select>
+                    </Field>
+                    <Field label="What's left / next step *">
+                      <Textarea name="next_steps" rows={2} required placeholder="e.g. Install new motor and test temps once part arrives" />
+                    </Field>
+                    <Field label="Parts needed" hint="Required when waiting on parts. Include part #, qty and supplier if known.">
+                      <Input name="parts_needed" placeholder="e.g. 1× condenser fan motor 1/3 HP 208-230V" />
+                    </Field>
+                    <Field label="Expected back on">
+                      <Input type="date" name="return_on" />
+                    </Field>
+                    <div>
+                      <span className="mb-1 block text-sm font-medium text-slate-700">Photos (optional)</span>
+                      <PhotoInput name="files" />
+                    </div>
+                    <SubmitButton size="sm">Submit report &amp; put on hold</SubmitButton>
+                  </form>
+                </details>
+              )}
             </Card>
           )}
 

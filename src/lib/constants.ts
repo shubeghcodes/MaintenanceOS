@@ -183,3 +183,13 @@ export const PURCHASE_STATUS_TONE: Record<PurchaseStatus, Tone> = { submitted: "
 
 /** The work / pay week runs Wednesday → Tuesday (0 = Sunday … 6 = Saturday). Used by the Schedule and Timesheets. */
 export const WORK_WEEK_START_DAY = 3;
+
+/** Why a technician put a job on hold (required progress report). */
+export const HOLD_REASONS: Record<string, string> = {
+  parts: "Waiting on parts",
+  vendor: "Needs an outside vendor",
+  approval: "Needs approval / quote",
+  access: "No access / store busy or closed",
+  return_visit: "Needs another visit (time ran out)",
+  other: "Other",
+};
