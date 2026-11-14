@@ -27,3 +27,22 @@ export async function getLookups(supabase: SupabaseClient, opts: { assets?: bool
 export function byId<T extends { id: string }>(rows: T[]) {
   return new Map(rows.map((r) => [r.id, r]));
 }
+
+/**
+ * Locations for multi-location pickers (PM schedules), grouped by company in the picker.
+ * Follows the selected company; "All companies" offers every location, selected company first.
+ */
+export async function getPickerLocations(supabase: SupabaseClient) {
+  const scope = await getCompanyScope();
+  const { data } = await inCompany(
+    supabase.from("sites").select("id,name,code,city,company_id").eq("active", true),
+    scope.companyId,
+  )
+    .order("code", { nullsFirst: false })
+    .order("name");
+  const companies = scope.companyId ? scope.companies.filter((c) => c.id === scope.companyId) : scope.companies;
+  return {
+    sites: (data ?? []) as { id: string; name: string; code: string | null; city: string | null; company_id: string | null }[],
+    companies: companies.map((c) => ({ id: c.id, name: c.name })),
+  };
+}

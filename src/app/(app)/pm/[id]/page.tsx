@@ -1,14 +1,15 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getSession } from "@/lib/auth";
-import { getLookups } from "@/lib/data";
+import { getLookups, getPickerLocations } from "@/lib/data";
 import { fmtDate, fmtFreq, isOverdue, personName, relativeDue } from "@/lib/format";
 import type { PmSchedule, WoStatus } from "@/lib/types";
-import { Alert, Card, CardHeader, DefList, EmptyState, PageHeader, Stat } from "@/components/ui";
+import { Alert, Card, CardHeader, DefList, EmptyState, Field, Input, PageHeader, Stat } from "@/components/ui";
 import { StatusBadge } from "@/components/badges";
 import { SubmitButton } from "@/components/SubmitButton";
 import { PmForm } from "../PmForm";
-import { deletePm } from "../actions";
+import { copyPm, deletePm } from "../actions";
+import { LocationPicker } from "@/components/LocationPicker";
 
 export default async function PmDetailPage({
   params,
@@ -35,7 +36,7 @@ export default async function PmDetailPage({
   };
   const isAdmin = profile.role === "admin";
 
-  const [{ data: woData }, lookups] = await Promise.all([
+  const [{ data: woData }, lookups, locations] = await Promise.all([
     supabase
       .from("work_orders")
       .select("id,number,status,due_at,completed_at")
@@ -43,7 +44,9 @@ export default async function PmDetailPage({
       .order("created_at", { ascending: false })
       .limit(50),
     isAdmin ? getLookups(supabase, { assets: true, allCompanies: true }) : Promise.resolve(null),
+    isAdmin ? getPickerLocations(supabase) : Promise.resolve(null),
   ]);
+  const copyTargets = locations ? locations.sites.filter((s) => s.id !== pm.site_id) : [];
   const wos = (woData ?? []) as { id: string; number: number; status: WoStatus; due_at: string | null; completed_at: string | null }[];
   const done = wos.filter((w) => w.status === "completed");
   const onTime = done.filter((w) => !w.due_at || (w.completed_at && w.completed_at <= w.due_at));
@@ -84,6 +87,23 @@ export default async function PmDetailPage({
                   ))}
                 </ul>
               )}
+            </Card>
+          )}
+          {isAdmin && locations && copyTargets.length > 0 && (
+            <Card className="mt-6">
+              <CardHeader title="Copy to other locations" />
+              <form action={copyPm} className="space-y-3 px-5 py-4">
+                <input type="hidden" name="id" value={id} />
+                <p className="text-xs text-slate-500">
+                  Creates the same schedule (checklist, frequency, assignment) at each location you pick. Each copy is its own schedule
+                  {pm.asset ? ", site-wide, since this one's asset only exists here" : ""}.
+                </p>
+                <LocationPicker sites={copyTargets} companies={locations.companies} />
+                <Field label="First due date at the new locations">
+                  <Input type="date" name="next_due_on" defaultValue={pm.next_due_on} />
+                </Field>
+                <SubmitButton size="sm">Copy schedule</SubmitButton>
+              </form>
             </Card>
           )}
         </div>

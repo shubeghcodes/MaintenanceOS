@@ -56,6 +56,11 @@ export default async function PmPage({ searchParams }: { searchParams: Promise<R
           Scheduler ran — {sp.generated} work order{sp.generated === "1" ? "" : "s"} created.
         </Alert>
       )}
+      {sp.created && (
+        <Alert tone="good">
+          {sp.created} PM schedule{sp.created === "1" ? "" : "s"} created, one per location.
+        </Alert>
+      )}
       {(sp.error || error) && <Alert>{sp.error ?? error?.message}</Alert>}
 
       <Card className="mb-4 p-3">

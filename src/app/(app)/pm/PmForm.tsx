@@ -3,6 +3,7 @@ import { personName, todayISO } from "@/lib/format";
 import type { PmSchedule } from "@/lib/types";
 import { Card, Field, Input, Select, Textarea } from "@/components/ui";
 import { SiteAssetPicker } from "@/components/SiteAssetPicker";
+import { PmLocationsPicker } from "@/components/PmLocationsPicker";
 import { SubmitButton } from "@/components/SubmitButton";
 import type { getLookups } from "@/lib/data";
 import { savePm } from "./actions";
@@ -11,10 +12,16 @@ export function PmForm({
   pm,
   lookups,
   defaults,
+  locations,
 }: {
   pm?: PmSchedule;
   lookups: Awaited<ReturnType<typeof getLookups>>;
   defaults?: { site?: string; asset?: string };
+  /** New schedules only: every active location with its company, for the multi-location picker. */
+  locations?: {
+    sites: { id: string; name: string; code: string | null; city: string | null; company_id: string | null }[];
+    companies: { id: string; name: string }[];
+  };
 }) {
   return (
     <form action={savePm}>
@@ -23,13 +30,23 @@ export function PmForm({
         <Field label="Title" className="sm:col-span-2">
           <Input name="title" required defaultValue={pm?.title} placeholder="e.g. RTU filter change & belt check" />
         </Field>
-        <SiteAssetPicker
-          sites={lookups.sites}
-          assets={lookups.assets}
-          defaultSiteId={pm?.site_id ?? defaults?.site}
-          defaultAssetId={pm?.asset_id ?? defaults?.asset}
-          assetLabel="Asset (optional — leave blank for site-wide tasks)"
-        />
+        {!pm && locations ? (
+          <PmLocationsPicker
+            sites={locations.sites}
+            companies={locations.companies}
+            assets={lookups.assets}
+            defaultSiteIds={defaults?.site ? [defaults.site] : []}
+            defaultAssetId={defaults?.asset}
+          />
+        ) : (
+          <SiteAssetPicker
+            sites={lookups.sites}
+            assets={lookups.assets}
+            defaultSiteId={pm?.site_id ?? defaults?.site}
+            defaultAssetId={pm?.asset_id ?? defaults?.asset}
+            assetLabel="Asset (optional — leave blank for site-wide tasks)"
+          />
+        )}
         <Field label="Category">
           <Select name="category" defaultValue={pm?.category ?? "Other"}>
             {CATEGORIES.map((c) => (
@@ -102,7 +119,7 @@ export function PmForm({
           Active (generates work orders)
         </label>
         <div className="sm:col-span-2">
-          <SubmitButton>{pm ? "Save schedule" : "Create schedule"}</SubmitButton>
+          <SubmitButton>{pm ? "Save schedule" : "Create schedule(s)"}</SubmitButton>
         </div>
       </Card>
     </form>
