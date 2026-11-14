@@ -123,11 +123,11 @@ export function fmtTime(t: string | null | undefined) {
   return `${h12}:${String(m).padStart(2, "0")} ${ampm}`;
 }
 
-/** Monday of the week containing a YYYY-MM-DD date. */
-export function weekStartISO(iso: string) {
+/** First day of the week containing a YYYY-MM-DD date. `startDay`: 0 = Sunday … 6 = Saturday (default Monday). */
+export function weekStartISO(iso: string, startDay = 1) {
   const d = new Date(iso + "T12:00:00Z");
-  const dow = (d.getUTCDay() + 6) % 7; // Mon = 0
-  return addDaysISO(iso, -dow);
+  const back = (d.getUTCDay() - startDay + 7) % 7;
+  return addDaysISO(iso, -back);
 }
 
 /** "Mon 11/16" style labels for calendar headers. */
