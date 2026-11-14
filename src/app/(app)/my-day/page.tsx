@@ -10,6 +10,8 @@ import { SubmitButton } from "@/components/SubmitButton";
 import { TimerClock } from "@/components/TimerClock";
 import { ENTRY_COLS, fmtClockTime, type TimeEntry } from "@/lib/labor";
 import { changeTimer, startTimer } from "../work-orders/time-actions";
+import { ClockCard, type ClockJob, type OpenShift } from "./ClockCard";
+import { toDateInput, fmtDate } from "@/lib/format";
 import { redirect } from "next/navigation";
 
 export const metadata = { title: "My day" };
@@ -70,6 +72,69 @@ export default async function MyDayPage({ searchParams }: { searchParams: Promis
   const back = nav(date);
   const techLabel = isMe ? "My day" : `${personName(techs.find((t) => t.id === techId))}’s day`;
 
+  // Clock in / out (technicians only).
+  const { data: techRow } = await supabase.from("profiles").select("role").eq("id", techId).maybeSingle();
+  const clocks = (techRow as { role: string } | null)?.role === "tech";
+  let shift: OpenShift | null = null;
+  let clockJobs: ClockJob[] = [];
+  let lastJobId: string | null = null;
+  if (clocks) {
+    const [{ data: s }, { data: openJobs }] = await Promise.all([
+      supabase
+        .from("tech_shifts")
+        .select("id,clock_in_at,start_reason,first:work_orders!tech_shifts_first_work_order_id_fkey(number,title)")
+        .eq("user_id", techId)
+        .is("clock_out_at", null)
+        .maybeSingle(),
+      supabase
+        .from("work_orders")
+        .select("id,number,title,scheduled_date,site:sites(name,code)")
+        .eq("assigned_tech_id", techId)
+        .in("status", WORKABLE_STATUSES)
+        .order("scheduled_date", { ascending: true, nullsFirst: false })
+        .limit(60),
+    ]);
+    const today = todayISO();
+    type J = { id: string; number: number; title: string; scheduled_date: string | null; site: { name: string; code: string | null } | null };
+    const open = ((openJobs ?? []) as unknown as J[]).map((j) => ({
+      id: j.id,
+      number: j.number,
+      title: j.title,
+      site: j.site?.code ?? j.site?.name ?? null,
+      open: true,
+      today: j.scheduled_date === today,
+    }));
+    clockJobs = [...open.filter((j) => j.today), ...open.filter((j) => !j.today)];
+    const sh = s as unknown as { id: string; clock_in_at: string; start_reason: string | null; first: { number: number; title: string } | null } | null;
+    if (sh) {
+      // Jobs timed during this shift come first on Clock out, even if they're no longer open.
+      const { data: worked } = await supabase
+        .from("time_entries")
+        .select("work_order_id,status,started_at,wo:work_orders(id,number,title,status,site:sites(name,code))")
+        .eq("user_id", techId)
+        .gte("started_at", sh.clock_in_at)
+        .neq("status", "void")
+        .order("started_at", { ascending: false });
+      type W = { work_order_id: string; status: string; wo: { id: string; number: number; title: string; status: WoStatus; site: { name: string; code: string | null } | null } | null };
+      const w = (worked ?? []) as unknown as W[];
+      lastJobId = (w.find((x) => x.status === "running" || x.status === "paused") ?? w[0])?.work_order_id ?? null;
+      const timed: ClockJob[] = [];
+      for (const x of w) {
+        if (!x.wo || timed.some((t) => t.id === x.wo!.id)) continue;
+        timed.push({ id: x.wo.id, number: x.wo.number, title: x.wo.title, site: x.wo.site?.code ?? x.wo.site?.name ?? null, open: WORKABLE_STATUSES.includes(x.wo.status) });
+      }
+      clockJobs = [...timed, ...clockJobs.filter((j) => !timed.some((t) => t.id === j.id))];
+      const startDay = toDateInput(sh.clock_in_at);
+      shift = {
+        clock_in_at: sh.clock_in_at,
+        clockInTime: `${startDay === today ? "" : `${fmtDate(startDay)} `}${fmtClockTime(sh.clock_in_at)}`,
+        firstLabel: sh.first ? `#${sh.first.number} ${sh.first.title}` : (sh.start_reason ?? "no work order"),
+        staleDate: startDay < today ? startDay : null,
+        staleLabel: startDay < today ? fmtDate(startDay) : null,
+      };
+    }
+  }
+
   return (
     <>
       <PageHeader
@@ -90,6 +155,15 @@ export default async function MyDayPage({ searchParams }: { searchParams: Promis
         }
       />
       {sp.error && <Alert>{sp.error}</Alert>}
+      {sp.clock === "in" && <Alert tone="good">Clocked in. Your first job&apos;s timer is running.</Alert>}
+      {sp.clock === "out" && <Alert tone="good">Clocked out. Have a good one.</Alert>}
+      {sp.clock === "out_done" && <Alert tone="good">Clocked out, and the job was sent to the store&apos;s GM to confirm it&apos;s fixed.</Alert>}
+      {clocks && isMe && <ClockCard key={shift ? "on" : "off"} shift={shift} jobs={clockJobs} lastJobId={lastJobId} preselectJobId={sp.clockin || null} />}
+      {clocks && !isMe && (
+        <p className={`mb-4 rounded-lg px-4 py-2.5 text-sm ring-1 ring-inset ${shift ? "bg-emerald-50 text-emerald-900 ring-emerald-200" : "bg-slate-50 text-slate-600 ring-slate-200"}`}>
+          {shift ? `Clocked in since ${shift.clockInTime} · started on ${shift.firstLabel}` : "Clocked out"}
+        </p>
+      )}
       {sp.timer?.includes("_paused_") && <Alert tone="good">Timer started. Your other timer (#{sp.timer.split("_paused_")[1]}) was paused, since only one can run at a time.</Alert>}
 
       {timers.length > 0 && (
