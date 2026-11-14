@@ -16,10 +16,14 @@ export async function getLookups(supabase: SupabaseClient, opts: { assets?: bool
       ? inCompany(supabase.from("assets").select("id,name,tag,site_id,category").neq("status", "retired"), cid).order("name")
       : Promise.resolve({ data: [] }),
   ]);
+  const staff = (techs.data ?? []) as Pick<Profile, "id" | "full_name" | "email" | "role">[];
   return {
     sites: (sites.data ?? []) as Pick<Site, "id" | "name" | "code" | "type">[],
     vendors: (vendors.data ?? []) as Pick<Vendor, "id" | "name" | "trades" | "phone">[],
-    techs: (techs.data ?? []) as Pick<Profile, "id" | "full_name" | "email" | "role">[],
+    /** People a job can be assigned to: technicians only. */
+    techs: staff.filter((p) => p.role === "tech"),
+    /** Technicians and admins (for logging time, and to keep showing an admin who's already assigned). */
+    staff,
     assets: (assets.data ?? []) as Pick<Asset, "id" | "name" | "tag" | "site_id" | "category">[],
   };
 }
