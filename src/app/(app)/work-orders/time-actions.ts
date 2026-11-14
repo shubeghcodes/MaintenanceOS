@@ -31,6 +31,8 @@ export async function startTimer(fd: FormData) {
   const woId = str(fd, "work_order_id")!;
   const back = backTo(fd, `/work-orders/${woId}#time`);
   const { data, error } = await supabase.rpc("timer_start", { p_wo: woId });
+  // Techs who aren't clocked in go to Clock in with this job picked as their first.
+  if (error && /clock in first/i.test(error.message)) redirect(`/my-day?clockin=${woId}#clock`);
   if (error) redirect(withParam(back, "error", friendly(error.message)));
   refresh(woId);
   const pausedWo = (data as { paused_wo: number | null } | null)?.paused_wo;
@@ -43,6 +45,7 @@ export async function changeTimer(action: "pause" | "resume" | "stop", fd: FormD
   const woId = str(fd, "work_order_id");
   const back = backTo(fd, woId ? `/work-orders/${woId}#time` : "/my-day");
   const { data, error } = await supabase.rpc("timer_change", { p_entry: entryId, p_action: action });
+  if (error && /clock in first/i.test(error.message)) redirect(`/my-day?clockin=${woId ?? ""}#clock`);
   if (error) redirect(withParam(back, "error", friendly(error.message)));
   refresh(woId);
   const pausedWo = (data as { paused_wo: number | null } | null)?.paused_wo;

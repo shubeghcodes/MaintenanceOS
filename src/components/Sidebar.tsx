@@ -48,7 +48,7 @@ const NAV: { href: string; label: string; icon: typeof Wrench; roles: UserRole[]
 type CompanyPicker = { companies: { id: string; name: string; active: boolean }[]; value: string | null } | null;
 
 // Pages that live under the Analytics item.
-const ANALYTICS_PATHS = ["/analytics", "/rm", "/labor", "/purchases"];
+const ANALYTICS_PATHS = ["/analytics", "/rm", "/labor", "/purchases", "/timesheets"];
 
 export function Sidebar({
   role,

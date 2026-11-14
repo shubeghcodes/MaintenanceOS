@@ -84,8 +84,8 @@ function stepsFor(role: UserRole, firstName: string | null): Step[] {
       ? {
           id: "time",
           targets: ["nav-/my-day"],
-          title: "My day and time tracking",
-          body: "Your jobs for today in route order. Tap Start work to start the timer, pause for breaks or parts runs, and stop when you're done. Your hours are recorded on the work order automatically.",
+          title: "My day, clock in and time tracking",
+          body: "Start your day here: Clock in and pick your first job, and its timer starts. Pause for breaks or parts runs, switch jobs as you go, and at the end of the day Clock out on your last job and say if it's finished.",
         }
       : {
           id: "time",

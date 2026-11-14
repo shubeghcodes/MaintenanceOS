@@ -5,6 +5,7 @@ const TABS = [
   { key: "rm", href: "/rm", label: "R&M spending" },
   { key: "labor", href: "/labor", label: "Technician labor" },
   { key: "purchases", href: "/purchases", label: "Purchases" },
+  { key: "timesheets", href: "/timesheets", label: "Timesheets" },
 ] as const;
 
 /** Tabs shared by the Analytics pages (admins only). */
