@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Plus } from "lucide-react";
+import { Plus, Receipt } from "lucide-react";
 import { getSession } from "@/lib/auth";
 import { getCompanyScope, getReceiptsToReview, inCompany, WO_COMPANY_COL, WO_COMPANY_JOIN } from "@/lib/company";
 import { CompanySelect } from "@/components/CompanySelect";
@@ -169,6 +169,11 @@ export default async function Dashboard() {
             <div className="w-64" data-tour="company-dash">
               <CompanySelect companies={scope.companies} value={cid} canManage={!!profile.is_super && profile.role === "admin"} label="Select Company" />
             </div>
+          )}
+          {profile.role === "manager" && (
+            <ButtonLink href="/purchases/new" variant="secondary">
+              <Receipt className="h-4 w-4" aria-hidden /> Log a purchase
+            </ButtonLink>
           )}
           <ButtonLink href="/work-orders/new">
             <Plus className="h-4 w-4" aria-hidden /> {profile.role === "manager" ? "Submit request" : "New work order"}

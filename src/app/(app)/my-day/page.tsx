@@ -149,6 +149,14 @@ export default async function MyDayPage({ searchParams }: { searchParams: Promis
         title={techLabel}
         subtitle={`${dayLabel(date, "long")} · ${jobs.length} job${jobs.length === 1 ? "" : "s"}${hours ? ` · ~${hours}h` : ""}${jobs.length ? ` · ${done} done` : ""}`}
         actions={
+          <div className="flex items-center gap-2">
+          <Link
+            href="/purchases/new"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-white px-3 py-2 text-sm font-medium text-slate-700 ring-1 ring-slate-300 hover:bg-slate-50"
+            title="Restaurant supplies not tied to a job"
+          >
+            <Receipt className="h-4 w-4" aria-hidden /> Log a purchase
+          </Link>
           <div className="flex items-center rounded-lg bg-white ring-1 ring-slate-300">
             <Link href={nav(addDaysISO(date, -1))} className="px-2 py-2 text-slate-600 hover:bg-slate-50" aria-label="Previous day">
               <ChevronLeft className="h-4 w-4" />
@@ -159,6 +167,7 @@ export default async function MyDayPage({ searchParams }: { searchParams: Promis
             <Link href={nav(addDaysISO(date, 1))} className="px-2 py-2 text-slate-600 hover:bg-slate-50" aria-label="Next day">
               <ChevronRight className="h-4 w-4" />
             </Link>
+          </div>
           </div>
         }
       />

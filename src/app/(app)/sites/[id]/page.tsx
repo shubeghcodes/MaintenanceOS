@@ -2,7 +2,7 @@ import { loadRmLines } from "@/lib/labor";
 import { getCompanyScope } from "@/lib/company";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Plus } from "lucide-react";
+import { Plus, Receipt } from "lucide-react";
 import { getSession, isSuper } from "@/lib/auth";
 import { addMonthsISO, loadBudgets, monthLabel, monthStartISO } from "@/lib/budgets";
 import { BudgetBar } from "@/components/BudgetBar";
@@ -74,9 +74,14 @@ export default async function SitePage({
         back={{ href: "/sites", label: "Sites" }}
         actions={
           profile.role !== "vendor" && (
-            <ButtonLink href={`/work-orders/new?site=${id}`}>
-              <Plus className="h-4 w-4" aria-hidden /> New request
-            </ButtonLink>
+            <>
+              <ButtonLink href={`/purchases/new?site=${id}`} variant="secondary">
+                <Receipt className="h-4 w-4" aria-hidden /> Log a purchase
+              </ButtonLink>
+              <ButtonLink href={`/work-orders/new?site=${id}`}>
+                <Plus className="h-4 w-4" aria-hidden /> New request
+              </ButtonLink>
+            </>
           )
         }
       />

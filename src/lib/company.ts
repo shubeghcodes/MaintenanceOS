@@ -52,7 +52,8 @@ export const getReceiptsToReview = cache(async () => {
   const { supabase, profile } = await getSession();
   if (profile.role !== "admin") return 0;
   const { companyId } = await getCompanyScope();
-  const q = supabase.from("wo_purchases").select(companyId ? `id, ${WO_COMPANY_JOIN}` : "id", { count: "exact", head: true }).eq("status", "submitted");
-  const { count } = await inCompany(q, companyId, WO_COMPANY_COL);
+  // Work-order receipts and store supplies (both carry company_id).
+  const q = supabase.from("wo_purchases").select("id", { count: "exact", head: true }).eq("status", "submitted");
+  const { count } = await inCompany(q, companyId);
   return count ?? 0;
 });

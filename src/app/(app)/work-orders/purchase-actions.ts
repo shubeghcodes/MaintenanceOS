@@ -8,14 +8,15 @@ import { num, str, todayISO } from "@/lib/format";
 import { PAYMENT_LABEL, PURCHASE_CATEGORIES } from "@/lib/constants";
 import type { PaymentMethod } from "@/lib/types";
 
-const backTo = (fd: FormData, woId: string) => {
+/** Where to go after an action: the "back" field, else the work order, else the Purchases page. */
+const backTo = (fd: FormData, woId: string | null) => {
   const b = str(fd, "back");
-  return b && b.startsWith("/") ? b : `/work-orders/${woId}`;
+  return b && b.startsWith("/") && !b.startsWith("//") ? b : woId ? `/work-orders/${woId}` : "/purchases";
 };
 const go = (url: string, key: string, msg: string): never => redirect(`${url}${url.includes("?") ? "&" : "?"}${key}=${encodeURIComponent(msg)}#receipts`);
 
-function refresh(woId: string) {
-  revalidatePath(`/work-orders/${woId}`);
+function refresh(woId: string | null) {
+  if (woId) revalidatePath(`/work-orders/${woId}`);
   revalidatePath("/purchases");
   revalidatePath("/");
 }
@@ -61,6 +62,7 @@ export async function addPurchase(fd: FormData) {
   }
 
   const { error } = await supabase.from("wo_purchases").insert({
+    kind: "part",
     work_order_id: woId,
     store,
     purchase_date: str(fd, "purchase_date") ?? todayISO(),
@@ -86,7 +88,7 @@ export async function reviewPurchase(decision: "approved" | "rejected", fd: Form
   const { supabase, profile } = await requireRole("admin");
   const id = str(fd, "purchase_id")!;
   const note = str(fd, "note");
-  const { data: p } = await supabase.from("wo_purchases").select("work_order_id,status").eq("id", id).single();
+  const { data: p } = await supabase.from("wo_purchases").select("work_order_id,status").eq("id", id).maybeSingle();
   if (!p) redirect("/purchases");
   const back = backTo(fd, p.work_order_id);
   if (decision === "rejected" && !note) go(back, "error", "Add a reason when rejecting a receipt.");
@@ -96,6 +98,7 @@ export async function reviewPurchase(decision: "approved" | "rejected", fd: Form
     .eq("id", id);
   if (error) go(back, "error", error.message);
   refresh(p.work_order_id);
+  revalidatePath(`/purchases/${id}`);
   go(back, "receipt", decision);
 }
 
@@ -112,6 +115,7 @@ export async function markReimbursed(fd: FormData) {
     .maybeSingle();
   if (!p) redirect("/purchases?error=Already+reimbursed");
   refresh(p.work_order_id);
+  revalidatePath(`/purchases/${id}`);
   go(backTo(fd, p.work_order_id), "receipt", "reimbursed");
 }
 
@@ -122,5 +126,6 @@ export async function deletePurchase(fd: FormData) {
   if (!p) redirect("/purchases?error=Couldn%E2%80%99t+delete+that+receipt");
   if (p.receipt_attachment_id) await supabase.from("attachments").delete().eq("id", p.receipt_attachment_id);
   refresh(p.work_order_id);
-  go(backTo(fd, p.work_order_id), "receipt", "deleted");
+  const back = backTo(fd, p.work_order_id);
+  go(back.startsWith(`/purchases/${id}`) ? "/purchases" : back, "receipt", "deleted");
 }

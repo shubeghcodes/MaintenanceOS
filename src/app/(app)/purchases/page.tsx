@@ -1,11 +1,11 @@
 import { getCompanyScope, getReceiptsToReview } from "@/lib/company";
 import { AnalyticsTabs } from "@/components/AnalyticsTabs";
 import Link from "next/link";
-import { Download, Receipt } from "lucide-react";
+import { Download, Plus, Receipt } from "lucide-react";
 import { requireRole } from "@/lib/auth";
 import { getLookups } from "@/lib/data";
-import { loadPurchases } from "@/lib/purchases";
-import { PAYMENT_LABEL, PURCHASE_CATEGORIES, PURCHASE_STATUS_LABEL, PURCHASE_STATUS_TONE } from "@/lib/constants";
+import { loadPurchases, placeName } from "@/lib/purchases";
+import { PAYMENT_LABEL, PURCHASE_CATEGORIES, PURCHASE_KIND_LABEL, PURCHASE_STATUS_LABEL, PURCHASE_STATUS_TONE, SHOP_LABEL, SUPPLY_CATEGORIES } from "@/lib/constants";
 import { fmtDate, fmtMoney, personName, todayISO } from "@/lib/format";
 import { Alert, Badge, Button, ButtonLink, Card, CardHeader, EmptyState, Input, PageHeader, Select, Stat, Table, Td, Th } from "@/components/ui";
 
@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 
 export default async function PurchasesPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const sp = await searchParams;
-  const { supabase, profile } = await requireRole("admin", "tech");
+  const { supabase, profile } = await requireRole("admin", "tech", "manager");
   const today = todayISO();
   // Default: this month, unless a status queue is selected (then all dates).
   const f = { ...sp, from: sp.from ?? (sp.status || sp.all ? undefined : today.slice(0, 8) + "01"), to: sp.to };
@@ -34,11 +34,20 @@ export default async function PurchasesPage({ searchParams }: { searchParams: Pr
     counted.forEach((r) => m.set(key(r), (m.get(key(r)) ?? 0) + Number(r.total)));
     return [...m.entries()].sort((a, b) => b[1] - a[1]);
   };
-  const bySite = group((r) => r.wo?.site?.code ?? r.wo?.site?.name ?? "—");
+  const parts = counted.filter((r) => r.kind === "part");
+  const supplies = counted.filter((r) => r.kind === "supply");
+  const sum = (list: typeof rows) => list.reduce((s, r) => s + Number(r.total), 0);
+  const bySite = group((r) => placeName(r, SHOP_LABEL));
   const byStore = group((r) => r.store).slice(0, 6);
   const byCategory = group((r) => r.category);
   const max = (list: [string, number][]) => Math.max(1, ...list.map(([, v]) => v));
   const qs = new URLSearchParams(Object.entries(f).filter(([, v]) => v) as [string, string][]).toString();
+  const categories = [...new Set([...PURCHASE_CATEGORIES, ...SUPPLY_CATEGORIES])];
+  const kindHref = (k?: string) => {
+    const q = new URLSearchParams(Object.entries({ ...f, kind: k }).filter(([, v]) => v) as [string, string][]).toString();
+    return `/purchases${q ? `?${q}` : ""}`;
+  };
+  const DONE: Record<string, string> = { deleted: "Purchase deleted.", added: "Purchase saved." };
   const range = f.from || f.to ? `${f.from ? fmtDate(f.from) : "Start"} – ${f.to ? fmtDate(f.to) : "today"}` : "All dates";
 
   const Breakdown = ({ title, list }: { title: string; list: [string, number][] }) => (
@@ -65,18 +74,48 @@ export default async function PurchasesPage({ searchParams }: { searchParams: Pr
     <>
       <PageHeader
         title="Purchases"
-        subtitle={`Receipts tied to work orders · ${range}`}
+        subtitle={`Work-order receipts and store supplies · ${range}`}
         actions={
-          <ButtonLink href={`/purchases/export${qs ? `?${qs}` : ""}`} variant="secondary">
-            <Download className="h-4 w-4" aria-hidden /> Export CSV
-          </ButtonLink>
+          <>
+            <ButtonLink href={`/purchases/export${qs ? `?${qs}` : ""}`} variant="secondary">
+              <Download className="h-4 w-4" aria-hidden /> Export CSV
+            </ButtonLink>
+            <ButtonLink href="/purchases/new">
+              <Plus className="h-4 w-4" aria-hidden /> Log a purchase
+            </ButtonLink>
+          </>
         }
       />
       {profile.role === "admin" && <AnalyticsTabs active="purchases" reviewCount={await getReceiptsToReview()} />}
       {sp.error && <Alert>{sp.error}</Alert>}
+      {sp.receipt && DONE[sp.receipt] && <Alert tone="good">{DONE[sp.receipt]}</Alert>}
 
-      <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Stat label="Spent" value={fmtMoney(total)} sub={`${counted.length} receipts`} />
+      <div className="mb-4 flex flex-wrap gap-1.5" role="tablist" aria-label="Purchase type">
+        {[
+          { k: undefined, label: "All purchases" },
+          { k: "part", label: "Work-order parts" },
+          { k: "supply", label: "Store supplies" },
+        ].map(({ k, label }) => (
+          <Link
+            key={label}
+            href={kindHref(k)}
+            role="tab"
+            aria-selected={(sp.kind ?? undefined) === k}
+            className={`rounded-full px-3 py-1 text-sm font-medium ring-1 ring-inset ${(sp.kind ?? undefined) === k ? "bg-slate-900 text-white ring-slate-900" : "bg-white text-slate-600 ring-slate-300 hover:bg-slate-50"}`}
+          >
+            {label}
+          </Link>
+        ))}
+      </div>
+
+      <div className={`mb-6 grid grid-cols-2 gap-3 ${sp.kind ? "md:grid-cols-4" : "md:grid-cols-3 lg:grid-cols-6"}`}>
+        <Stat label="Spent" value={fmtMoney(total)} sub={`${counted.length} receipts${sp.kind === "part" ? " · counts as R&M" : sp.kind === "supply" ? " · not R&M" : ""}`} />
+        {!sp.kind && (
+          <>
+            <Stat label="Work-order parts" value={fmtMoney(sum(parts))} sub={`${parts.length} · counts as R&M`} href={kindHref("part")} />
+            <Stat label="Store supplies" value={fmtMoney(sum(supplies))} sub={`${supplies.length} · not R&M`} href={kindHref("supply")} />
+          </>
+        )}
         <Stat label="Needs review" value={review.length} sub={fmtMoney(review.reduce((s, r) => s + Number(r.total), 0), 2)} tone={review.length ? "warning" : "good"} href="/purchases?status=review" />
         <Stat label="Owed to employees" value={fmtMoney(owed.reduce((s, r) => s + Number(r.total), 0), 2)} sub={`${owed.length} personal-card receipts`} tone={owed.length ? "serious" : "good"} href="/purchases?status=reimburse" />
         <Stat label="Missing receipt photo" value={noReceipt.length} tone={noReceipt.length ? "warning" : "good"} href="/purchases?status=no_receipt" />
@@ -84,7 +123,8 @@ export default async function PurchasesPage({ searchParams }: { searchParams: Pr
 
       <Card className="mb-4 p-3">
         <form className="flex flex-wrap items-center gap-2">
-          <Input name="q" placeholder="Store, item, WO #" defaultValue={sp.q} className="w-44" />
+          {sp.kind && <input type="hidden" name="kind" value={sp.kind} />}
+          <Input name="q" placeholder="Vendor, item, WO #" defaultValue={sp.q} className="w-44" />
           <Select name="status" defaultValue={sp.status ?? ""} className="w-auto">
             <option value="">Any status</option>
             <option value="review">Needs review</option>
@@ -100,10 +140,11 @@ export default async function PurchasesPage({ searchParams }: { searchParams: Pr
                 {s.code ?? s.name}
               </option>
             ))}
+            {profile.role !== "manager" && <option value="shop">{SHOP_LABEL}</option>}
           </Select>
           <Select name="category" defaultValue={sp.category ?? ""} className="w-auto">
             <option value="">All categories</option>
-            {PURCHASE_CATEGORIES.map((c) => (
+            {(sp.kind === "part" ? [...PURCHASE_CATEGORIES] : sp.kind === "supply" ? [...SUPPLY_CATEGORIES] : categories).map((c) => (
               <option key={c}>{c}</option>
             ))}
           </Select>
@@ -137,14 +178,20 @@ export default async function PurchasesPage({ searchParams }: { searchParams: Pr
       <div className="space-y-6">
         <Card>
           {rows.length === 0 ? (
-            <EmptyState title="No receipts match.">Add receipts from any work order (Receipts &amp; purchases), or from “My day” on a phone.</EmptyState>
+            <EmptyState title="No purchases match.">
+              Add parts receipts from the work order (Receipts &amp; purchases). For restaurant supplies, use{" "}
+              <Link href="/purchases/new" className="font-medium text-brand-700 hover:underline">
+                Log a purchase
+              </Link>
+              .
+            </EmptyState>
           ) : (
             <Table>
               <thead className="bg-slate-50">
                 <tr>
                   <Th>Date</Th>
-                  <Th>Store · item</Th>
-                  <Th>Work order</Th>
+                  <Th>Vendor · item</Th>
+                  <Th>For</Th>
                   <Th>Paid with · by</Th>
                   <Th className="text-right">Total</Th>
                   <Th>Status</Th>
@@ -156,18 +203,28 @@ export default async function PurchasesPage({ searchParams }: { searchParams: Pr
                   <tr key={r.id} className={r.status === "rejected" ? "opacity-60" : r.status === "submitted" ? "bg-amber-50/40 hover:bg-amber-50" : "hover:bg-slate-50"}>
                     <Td className="whitespace-nowrap text-xs">{fmtDate(r.purchase_date)}</Td>
                     <Td className="min-w-[180px]">
-                      <div className="font-medium text-slate-900">{r.store}</div>
+                      <Link href={`/purchases/${r.id}`} className="font-medium text-slate-900 hover:text-brand-700 hover:underline">
+                        {r.store}
+                      </Link>
                       <div className="text-xs text-slate-500">
                         {r.category}
                         {r.description && ` · ${r.description}`}
                       </div>
                     </Td>
                     <Td className="min-w-[180px] text-xs">
-                      <Link href={`/work-orders/${r.wo?.id}#receipts`} className="font-medium text-brand-700 hover:underline">
-                        #{r.wo?.number}
-                      </Link>{" "}
-                      {r.wo?.title}
-                      <div className="text-slate-500">{r.wo?.site?.code ?? r.wo?.site?.name}</div>
+                      {r.wo ? (
+                        <>
+                          <Link href={`/work-orders/${r.wo.id}#receipts`} className="font-medium text-brand-700 hover:underline">
+                            #{r.wo.number}
+                          </Link>{" "}
+                          {r.wo.title}
+                        </>
+                      ) : (
+                        <Badge tone="info" dot={false}>
+                          {PURCHASE_KIND_LABEL.supply}
+                        </Badge>
+                      )}
+                      <div className="text-slate-500">{placeName(r, SHOP_LABEL)}</div>
                     </Td>
                     <Td className="text-xs">
                       {PAYMENT_LABEL[r.payment_method]}
