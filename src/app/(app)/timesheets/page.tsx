@@ -4,6 +4,7 @@ import { requireRole } from "@/lib/auth";
 import { getReceiptsToReview } from "@/lib/company";
 import { AnalyticsTabs } from "@/components/AnalyticsTabs";
 import { addDaysISO, dayLabel, fmtDate, isISODate, personName, toDateInput, todayISO, weekStartISO } from "@/lib/format";
+import { WORK_WEEK_START_DAY } from "@/lib/constants";
 import { fmtClockTime, fmtHours, toTimeInput, zonedDateTimeISO } from "@/lib/labor";
 import { Alert, Badge, Card, CardHeader, EmptyState, Field, Input, PageHeader, Select, Stat, Table, Td, Th, btnClass } from "@/components/ui";
 import { SubmitButton } from "@/components/SubmitButton";
@@ -38,7 +39,7 @@ export default async function TimesheetsPage({ searchParams }: { searchParams: P
   const sp = await searchParams;
   const { supabase } = await requireRole("admin");
   const today = todayISO();
-  const week = weekStartISO(isISODate(sp.week) ? sp.week : today);
+  const week = weekStartISO(isISODate(sp.week) ? sp.week : today, WORK_WEEK_START_DAY);
   const weekEnd = addDaysISO(week, 6);
   const fromTs = zonedDateTimeISO(week, "00:00");
   const toTs = zonedDateTimeISO(addDaysISO(week, 7), "00:00");
@@ -112,7 +113,7 @@ export default async function TimesheetsPage({ searchParams }: { searchParams: P
         <Link href={q(addDaysISO(week, 7))} className={btnClass("secondary", "sm")} aria-label="Next week">
           <ChevronRight className="h-4 w-4" aria-hidden />
         </Link>
-        {week !== weekStartISO(today) && (
+        {week !== weekStartISO(today, WORK_WEEK_START_DAY) && (
           <Link href={q(today)} className="text-xs font-medium text-brand-700">
             This week
           </Link>

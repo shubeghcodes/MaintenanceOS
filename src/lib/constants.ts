@@ -181,5 +181,5 @@ export const PAYMENT_LABEL: Record<PaymentMethod, string> = {
 export const PURCHASE_STATUS_LABEL: Record<PurchaseStatus, string> = { submitted: "Needs review", approved: "Approved", rejected: "Rejected" };
 export const PURCHASE_STATUS_TONE: Record<PurchaseStatus, Tone> = { submitted: "warning", approved: "good", rejected: "critical" };
 
-/** The Schedule's week view runs Wednesday → Tuesday (0 = Sunday … 6 = Saturday). */
-export const SCHEDULE_WEEK_START_DAY = 3;
+/** The work / pay week runs Wednesday → Tuesday (0 = Sunday … 6 = Saturday). Used by the Schedule and Timesheets. */
+export const WORK_WEEK_START_DAY = 3;
