@@ -4,21 +4,38 @@ import type { Purchase } from "./types";
 
 export type PurchaseRow = Purchase & {
   buyer: { id: string; full_name: string | null; email: string | null } | null;
-  wo: { id: string; number: number; title: string; site_id: string; site: { name: string; code: string | null } | null } | null;
+  wo: { id: string; number: number; title: string } | null;
+  place: { name: string; code: string | null } | null;
   receipt_url: string | null;
 };
 
-export type PurchaseFilters = { company?: string | null; site?: string; from?: string; to?: string; status?: string; method?: string; person?: string; q?: string; category?: string };
+/** `site` may be a location id or "shop" (shop / warehouse supplies). `kind`: part | supply. */
+export type PurchaseFilters = {
+  company?: string | null;
+  site?: string;
+  from?: string;
+  to?: string;
+  status?: string;
+  method?: string;
+  person?: string;
+  q?: string;
+  category?: string;
+  kind?: string;
+};
+
+export const placeName = (r: Pick<PurchaseRow, "place">, shop = "Shop / warehouse") => r.place?.code ?? r.place?.name ?? shop;
 
 export async function loadPurchases(db: SupabaseClient, f: PurchaseFilters): Promise<PurchaseRow[]> {
   let q = db
     .from("wo_purchases")
-    .select("*, buyer:profiles!wo_purchases_purchased_by_fkey(id,full_name,email), wo:work_orders!inner(id,number,title,site_id,site:sites(name,code))")
+    .select("*, buyer:profiles!wo_purchases_purchased_by_fkey(id,full_name,email), wo:work_orders(id,number,title), place:sites!wo_purchases_site_id_fkey(name,code)")
     .order("purchase_date", { ascending: false })
     .order("created_at", { ascending: false })
     .limit(3000);
-  if (f.company) q = q.eq("wo.company_id", f.company);
-  if (f.site) q = q.eq("wo.site_id", f.site);
+  if (f.company) q = q.eq("company_id", f.company);
+  if (f.site === "shop") q = q.is("site_id", null);
+  else if (f.site) q = q.eq("site_id", f.site);
+  if (f.kind === "part" || f.kind === "supply") q = q.eq("kind", f.kind);
   if (f.from) q = q.gte("purchase_date", f.from);
   if (f.to) q = q.lte("purchase_date", f.to);
   if (f.method) q = q.eq("payment_method", f.method);
@@ -32,7 +49,7 @@ export async function loadPurchases(db: SupabaseClient, f: PurchaseFilters): Pro
   let rows = (data ?? []) as unknown as Omit<PurchaseRow, "receipt_url">[];
   if (f.q) {
     const t = f.q.toLowerCase();
-    rows = rows.filter((r) => [r.store, r.description, r.wo?.title, String(r.wo?.number)].some((x) => x?.toLowerCase().includes(t)));
+    rows = rows.filter((r) => [r.store, r.description, r.category, r.wo?.title, r.wo ? String(r.wo.number) : null].some((x) => x?.toLowerCase().includes(t)));
   }
   const ids = rows.map((r) => r.receipt_attachment_id).filter(Boolean) as string[];
   const urls = new Map<string, string>();

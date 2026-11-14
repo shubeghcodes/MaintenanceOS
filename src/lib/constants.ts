@@ -1,4 +1,4 @@
-import type { CostCategory, QuoteStatus, PaymentMethod, PurchaseStatus, ApprovalStatus, AssetStatus, DispatchStatus, FreqUnit, InvoiceStatus, SiteType, UserRole, WoPriority, WoStatus, WoType } from "./types";
+import type { CostCategory, QuoteStatus, PaymentMethod, PurchaseKind, PurchaseStatus, ApprovalStatus, AssetStatus, DispatchStatus, FreqUnit, InvoiceStatus, SiteType, UserRole, WoPriority, WoStatus, WoType } from "./types";
 
 export const CATEGORIES = [
   "HVAC",
@@ -166,6 +166,11 @@ export const COST_CATEGORY_LABEL: Record<CostCategory, string> = {
 export const VENDOR_LINK_DAYS = 90;
 
 export const PURCHASE_CATEGORIES = ["Parts", "Materials", "Tools", "Equipment rental", "Supplies", "Other"] as const;
+/** Restaurant supplies bought for a location (not tied to a work order, not R&M). */
+export const SUPPLY_CATEGORIES = ["Smallwares", "Cleaning & chemicals", "Paper & disposables", "Uniforms", "Small equipment", "Other"] as const;
+export const PURCHASE_KIND_LABEL: Record<PurchaseKind, string> = { part: "Work order", supply: "Store supplies" };
+/** Where shop / warehouse supplies show when there's no location. */
+export const SHOP_LABEL = "Shop / warehouse";
 export const PAYMENT_LABEL: Record<PaymentMethod, string> = {
   company_card: "Company card",
   store_account: "Store / supplier account",

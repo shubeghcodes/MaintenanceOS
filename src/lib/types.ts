@@ -189,7 +189,7 @@ export interface ComplianceRecord {
 
 export interface Attachment {
   id: string;
-  entity_type: "work_order" | "asset" | "compliance";
+  entity_type: "work_order" | "asset" | "compliance" | "purchase";
   entity_id: string;
   storage_path: string;
   file_name: string;
@@ -303,12 +303,18 @@ export interface VendorInvoice {
   created_at: string;
 }
 
+export type PurchaseKind = "part" | "supply";
 export type PurchaseStatus = "submitted" | "approved" | "rejected";
 export type PaymentMethod = "company_card" | "store_account" | "petty_cash" | "personal" | "other";
 
 export interface Purchase {
   id: string;
-  work_order_id: string;
+  kind: PurchaseKind;
+  /** Set for work-order receipts; null for store supplies. */
+  work_order_id: string | null;
+  /** Location (copied from the work order for parts); null = shop / warehouse supplies. */
+  site_id: string | null;
+  company_id: string | null;
   store: string;
   purchase_date: string;
   category: string;
