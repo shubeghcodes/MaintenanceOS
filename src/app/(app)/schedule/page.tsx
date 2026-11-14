@@ -2,7 +2,7 @@ import { getCompanyScope, inCompany } from "@/lib/company";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { requireRole } from "@/lib/auth";
-import { SCHEDULE_WEEK_START_DAY, WORKABLE_STATUSES } from "@/lib/constants";
+import { WORK_WEEK_START_DAY, WORKABLE_STATUSES } from "@/lib/constants";
 import { addDaysISO, dayLabel, isISODate, personName, todayISO, weekStartISO } from "@/lib/format";
 import type { WoPriority, WoStatus, WoType } from "@/lib/types";
 import { Alert, Button, PageHeader, Select, btnClass } from "@/components/ui";
@@ -38,7 +38,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
   const today = todayISO();
   const view: "week" | "day" = sp.view === "day" ? "day" : "week";
   const anchor = isISODate(sp.date) ? sp.date : today;
-  const start = view === "week" ? weekStartISO(anchor, SCHEDULE_WEEK_START_DAY) : anchor;
+  const start = view === "week" ? weekStartISO(anchor, WORK_WEEK_START_DAY) : anchor;
   const days = view === "week" ? Array.from({ length: 7 }, (_, i) => addDaysISO(start, i)) : [anchor];
   const end = days[days.length - 1];
   const step = view === "week" ? 7 : 1;
