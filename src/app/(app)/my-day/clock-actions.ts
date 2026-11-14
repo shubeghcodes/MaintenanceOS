@@ -78,3 +78,20 @@ export async function clockOut(fd: FormData) {
   if (woId) revalidatePath(`/work-orders/${woId}`);
   go(`clock=${finished ? "out_done" : "out"}`);
 }
+
+export async function lunchStart() {
+  const { supabase } = await getSession();
+  const { error } = await supabase.rpc("lunch_start");
+  if (error) go(`error=${encodeURIComponent(friendly(error.message))}`);
+  refresh();
+  go("clock=lunch");
+}
+
+export async function lunchEnd() {
+  const { supabase } = await getSession();
+  const { data, error } = await supabase.rpc("lunch_end");
+  if (error) go(`error=${encodeURIComponent(friendly(error.message))}`);
+  refresh();
+  const wo = (data as { resumed_wo: number | null } | null)?.resumed_wo;
+  go(`clock=back${wo ? `&resumed=${wo}` : ""}`);
+}
