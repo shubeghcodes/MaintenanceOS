@@ -7,6 +7,7 @@ import { PmLocationsPicker } from "@/components/PmLocationsPicker";
 import { SubmitButton } from "@/components/SubmitButton";
 import type { getLookups } from "@/lib/data";
 import { savePm } from "./actions";
+import { TechOptions } from "@/components/TechOptions";
 
 export function PmForm({
   pm,
@@ -88,11 +89,7 @@ export function PmForm({
         <Field label="Assign technician">
           <Select name="assigned_tech_id" defaultValue={pm?.assigned_tech_id ?? ""}>
             <option value="">— Unassigned —</option>
-            {lookups.techs.map((t) => (
-              <option key={t.id} value={t.id}>
-                {personName(t)}
-              </option>
-            ))}
+            <TechOptions techs={lookups.techs} staff={lookups.staff} current={pm?.assigned_tech_id} />
           </Select>
         </Field>
         <Field label="Or vendor">

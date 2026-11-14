@@ -17,6 +17,7 @@ import { Send } from "lucide-react";
 import { VendorPanel } from "./VendorPanel";
 import { ReceiptsCard } from "./ReceiptsCard";
 import { TimeCard } from "./TimeCard";
+import { TechOptions } from "@/components/TechOptions";
 import { fmtHours } from "@/lib/labor";
 
 const TIMER_NOTICE: Record<string, string> = {
@@ -243,7 +244,7 @@ export default async function WorkOrderPage({
           </Card>
 
           {role !== "vendor" && role !== "manager" && !awaiting && (
-            <TimeCard supabase={supabase} woId={id} woStatus={wo.status} visit={wo.visit ?? 1} profile={profile} techs={lookups?.techs ?? []} />
+            <TimeCard supabase={supabase} woId={id} woStatus={wo.status} visit={wo.visit ?? 1} profile={profile} techs={lookups?.staff ?? []} />
           )}
 
           {role !== "vendor" && <ReceiptsCard supabase={supabase} woId={id} profile={profile} open={!!sp.add_receipt} />}
@@ -358,12 +359,7 @@ export default async function WorkOrderPage({
                     <option value="" disabled>
                       Choose a technician…
                     </option>
-                    {lookups.techs.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {personName(t)}
-                        {t.role === "admin" ? " (admin)" : ""}
-                      </option>
-                    ))}
+                    <TechOptions techs={lookups.techs} />
                   </Select>
                 </Field>
                 <div className="grid grid-cols-2 gap-3">
@@ -469,11 +465,7 @@ export default async function WorkOrderPage({
                 <Field label="Technician" hint={role === "admin" ? undefined : "Only admins assign technicians and vendors"}>
                   <Select name="assigned_tech_id" defaultValue={wo.assigned_tech_id ?? ""} disabled={role !== "admin"}>
                     <option value="">— Unassigned —</option>
-                    {lookups.techs.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {personName(t)}
-                      </option>
-                    ))}
+                    <TechOptions techs={lookups.techs} staff={lookups.staff} current={wo.assigned_tech_id} />
                   </Select>
                 </Field>
                 <Field label="Vendor">

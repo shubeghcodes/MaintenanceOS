@@ -34,8 +34,8 @@ export async function createWorkOrder(fd: FormData) {
     requested_by: profile.id,
     ...(isStaff && {
       type: str(fd, "type") ?? "reactive",
-      assigned_tech_id: str(fd, "assigned_tech_id"),
-      vendor_id: str(fd, "vendor_id"),
+      // Only admins assign a technician or vendor (also enforced in the database).
+      ...(profile.role === "admin" && { assigned_tech_id: str(fd, "assigned_tech_id"), vendor_id: str(fd, "vendor_id") }),
       nte_amount: num(fd, "nte_amount"),
       due_at: dueDate ? zonedTimeISO(dueDate) : null,
       scheduled_date: str(fd, "scheduled_date"),

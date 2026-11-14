@@ -1,4 +1,5 @@
 import { getSession } from "@/lib/auth";
+import { TechOptions } from "@/components/TechOptions";
 import { getLookups } from "@/lib/data";
 import { CATEGORIES, PRIORITY_LABEL, PRIORITY_SLA, TYPE_LABEL } from "@/lib/constants";
 import { personName } from "@/lib/format";
@@ -99,11 +100,7 @@ export default async function NewWorkOrderPage({
               <Field label="Assign technician">
                 <Select name="assigned_tech_id" defaultValue="">
                   <option value="">— Unassigned —</option>
-                  {techs.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {personName(t)}
-                    </option>
-                  ))}
+                  <TechOptions techs={techs} />
                 </Select>
               </Field>
               <Field label="Dispatch vendor">
