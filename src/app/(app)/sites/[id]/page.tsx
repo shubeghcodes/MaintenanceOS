@@ -2,18 +2,15 @@ import { loadRmLines } from "@/lib/labor";
 import { getCompanyScope } from "@/lib/company";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Plus, Receipt } from "lucide-react";
+import { MapPin, Pencil, Phone, Plus, Receipt } from "lucide-react";
 import { getSession, isSuper } from "@/lib/auth";
 import { addMonthsISO, loadBudgets, monthLabel, monthStartISO } from "@/lib/budgets";
 import { BudgetBar } from "@/components/BudgetBar";
-import { SubmitButton } from "@/components/SubmitButton";
-import { deleteBudgetMonth, saveBudgetMonth, saveSiteBudget } from "../budgets/actions";
 import { OPEN_STATUSES, ROLE_LABEL, SITE_TYPE_LABEL } from "@/lib/constants";
 import { fmtDate, fmtMoney, personName, relativeDue, todayISO } from "@/lib/format";
 import type { AssetStatus, Site, UserRole, WoPriority, WoStatus } from "@/lib/types";
-import { Alert, ButtonLink, Card, CardHeader, DefList, EmptyState, Field, Input, PageHeader, Stat } from "@/components/ui";
+import { Alert, Badge, ButtonLink, Card, CardHeader, DefList, EmptyState, PageHeader, Stat } from "@/components/ui";
 import { AssetStatusBadge, DueBadge, OverdueBadge, PriorityBadge, StatusBadge } from "@/components/badges";
-import { SiteForm } from "../SiteForm";
 
 export default async function SitePage({
   params,
@@ -69,12 +66,23 @@ export default async function SitePage({
   return (
     <>
       <PageHeader
-        title={site.name}
-        subtitle={`${companyName ? `${companyName} · ` : ""}${SITE_TYPE_LABEL[site.type]}${site.brand ? ` · ${site.brand}` : ""} · ${[site.address, site.city, site.state].filter(Boolean).join(", ")}`}
+        title={
+          <span className="flex flex-wrap items-center gap-2">
+            {site.code && <span className="font-mono text-xl text-slate-400">#{site.code}</span>}
+            {site.name}
+            {!site.active && <Badge tone="muted">Inactive</Badge>}
+          </span>
+        }
+        subtitle={[companyName, SITE_TYPE_LABEL[site.type], site.brand].filter(Boolean).join(" · ")}
         back={{ href: "/sites", label: "Sites" }}
         actions={
           profile.role !== "vendor" && (
             <>
+              {profile.role === "admin" && (
+                <ButtonLink href={`/sites/${id}/edit`} variant="secondary">
+                  <Pencil className="h-4 w-4" aria-hidden /> Edit site
+                </ButtonLink>
+              )}
               <ButtonLink href={`/purchases/new?site=${id}`} variant="secondary">
                 <Receipt className="h-4 w-4" aria-hidden /> Log a purchase
               </ButtonLink>
@@ -160,13 +168,41 @@ export default async function SitePage({
         </Card>
 
         <div className="space-y-6">
+          <Card>
+            <CardHeader title="Details" />
+            <div className="space-y-2 px-5 py-4 text-sm">
+              {[site.address, site.city, site.state].some(Boolean) ? (
+                <a
+                  href={`https://maps.google.com/?q=${encodeURIComponent([site.address, site.city, site.state, site.zip].filter(Boolean).join(", "))}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-start gap-2 text-slate-700 hover:text-brand-700"
+                >
+                  <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" aria-hidden />
+                  <span>
+                    {site.address && <span className="block">{site.address}</span>}
+                    {[[site.city, site.state].filter(Boolean).join(", "), site.zip].filter(Boolean).join(" ")}
+                  </span>
+                </a>
+              ) : (
+                <p className="text-slate-400">No address yet.</p>
+              )}
+              {site.phone && (
+                <a href={`tel:${site.phone}`} className="flex items-center gap-2 text-slate-700 hover:text-brand-700">
+                  <Phone className="h-4 w-4 text-slate-400" aria-hidden /> {site.phone}
+                </a>
+              )}
+              {site.sq_ft != null && <p className="text-xs text-slate-500">{site.sq_ft.toLocaleString()} sq ft</p>}
+            </div>
+            {site.notes && <p className="whitespace-pre-wrap border-t border-slate-100 px-5 py-4 text-sm text-slate-700">{site.notes}</p>}
+          </Card>
           {(hasBudget || superMe) && (
             <Card>
               <CardHeader
                 title="Monthly budget"
                 subtitle="R&M spend vs. budget, labor included"
                 action={
-                  <Link href={superMe ? "#budget" : "/sites/budgets"} className="text-xs font-medium text-brand-700">
+                  <Link href={superMe ? `/sites/${id}/edit#budget` : "/sites/budgets"} className="text-xs font-medium text-brand-700">
                     {superMe ? "Edit" : "All locations"}
                   </Link>
                 }
@@ -218,7 +254,7 @@ export default async function SitePage({
                   <li key={m.id} className="px-5 py-2.5">
                     <p className="text-sm font-medium">{personName(m)}</p>
                     <p className="text-xs text-slate-500">
-                      {ROLE_LABEL[m.role]}
+                      {m.role === "manager" ? "GM" : ROLE_LABEL[m.role]}
                       {m.phone && ` · ${m.phone}`}
                     </p>
                   </li>
@@ -226,82 +262,9 @@ export default async function SitePage({
               </ul>
             )}
           </Card>
-          {site.notes && profile.role !== "admin" && (
-            <Card>
-              <CardHeader title="Site notes" />
-              <p className="whitespace-pre-wrap px-5 py-4 text-sm">{site.notes}</p>
-            </Card>
-          )}
-          {profile.role !== "admin" && (
-            <Card>
-              <CardHeader title="Details" />
-              <DefList items={[["Phone", site.phone ?? "—"], ["Sq ft", site.sq_ft?.toLocaleString() ?? "—"]]} />
-            </Card>
-          )}
         </div>
       </div>
 
-      {superMe && (
-        <div id="budget" className="mt-8 scroll-mt-6">
-          <h2 className="mb-3 text-sm font-semibold text-slate-900">Budget</h2>
-          {sp.saved === "budget" && <Alert tone="good">Budget saved.</Alert>}
-          <Card className="divide-y divide-slate-100">
-            <form action={saveSiteBudget} className="flex flex-wrap items-end gap-3 p-5">
-              <input type="hidden" name="site_id" value={id} />
-              <input type="hidden" name="back" value={`/sites/${id}#budget`} />
-              <Field label="Monthly budget" hint="Normal R&M budget per month, labor included. Leave blank for no budget." className="w-64">
-                <Input name="monthly_amount" inputMode="decimal" defaultValue={defaultBudget != null ? String(defaultBudget) : ""} placeholder="e.g. 2500" />
-              </Field>
-              <SubmitButton variant="secondary">Save</SubmitButton>
-            </form>
-            <div className="p-5">
-              <p className="text-sm font-medium text-slate-700">Different amount for a month</p>
-              <p className="mb-3 text-xs text-slate-500">For months that differ from the normal budget, like a bigger summer HVAC month.</p>
-              {overrides.length > 0 && (
-                <ul className="mb-4 divide-y divide-slate-100 rounded-lg ring-1 ring-slate-200">
-                  {overrides.map((o) => (
-                    <li key={o.month} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
-                      <span>
-                        <b className="font-medium">{monthLabel(o.month)}</b> · {fmtMoney(o.amount)}
-                        {o.note && <span className="text-slate-500"> · {o.note}</span>}
-                      </span>
-                      <form action={deleteBudgetMonth}>
-                        <input type="hidden" name="site_id" value={id} />
-                        <input type="hidden" name="month" value={o.month} />
-                        <input type="hidden" name="back" value={`/sites/${id}#budget`} />
-                        <SubmitButton variant="ghost" size="sm">
-                          Use normal budget
-                        </SubmitButton>
-                      </form>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              <form action={saveBudgetMonth} className="flex flex-wrap items-end gap-3">
-                <input type="hidden" name="site_id" value={id} />
-                <input type="hidden" name="back" value={`/sites/${id}#budget`} />
-                <Field label="Month" className="w-44">
-                  <Input type="month" name="month" defaultValue={addMonthsISO(thisMonth, 1).slice(0, 7)} required />
-                </Field>
-                <Field label="Budget" className="w-36">
-                  <Input name="amount" inputMode="decimal" placeholder="e.g. 4000" required />
-                </Field>
-                <Field label="Note (optional)" className="min-w-48 flex-1">
-                  <Input name="note" placeholder="e.g. AC tune-ups" />
-                </Field>
-                <SubmitButton variant="secondary">Set for month</SubmitButton>
-              </form>
-            </div>
-          </Card>
-        </div>
-      )}
-
-      {profile.role === "admin" && (
-        <div className="mt-8">
-          <h2 className="mb-3 text-sm font-semibold text-slate-900">Edit site</h2>
-          <SiteForm site={site} companies={scope.companies} />
-        </div>
-      )}
     </>
   );
 }
