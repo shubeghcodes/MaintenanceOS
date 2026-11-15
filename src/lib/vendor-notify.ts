@@ -1,4 +1,5 @@
 import "server-only";
+import { pushToEmails } from "./push";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { PRIORITY_LABEL } from "./constants";
 import { appUrl, esc, sendEmail, type EmailAttachment, type EmailResult } from "./email";
@@ -232,6 +233,12 @@ export async function notifyManagement(
     .join("<br>");
   const action =
     kind === "approval_requested" ? "Review the request" : kind === "quote" ? "Review the quote" : kind === "completed" ? "Review completed work" : kind === "invoice" ? "Review invoice" : kind === "declined" ? "Reassign" : "Open work order";
+  await pushToEmails(recipients, {
+    title: `${c.vendor.name} ${verb[kind]} #${n}`,
+    body: `${c.wo.title}${c.site?.name ? ` · ${c.site.name}` : ""}`,
+    url: `/work-orders/${c.wo.id}`,
+    tag: `wo-${c.wo.id}`,
+  });
   return sendEmail({
     to: recipients,
     replyTo: replyAddress(c.dispatch.id, c.wo.number, "internal") ?? undefined,

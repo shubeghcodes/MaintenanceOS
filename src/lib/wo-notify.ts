@@ -1,4 +1,5 @@
 import "server-only";
+import { pushToEmails } from "./push";
 import { createAdminClient } from "./supabase/admin";
 import { appUrl, esc, sendEmail } from "./email";
 import { PRIORITY_LABEL } from "./constants";
@@ -74,6 +75,8 @@ async function send(to: string | string[], subject: string, eyebrow: string, tit
   const woId = wo.id;
   // Replies come back as a note on the work order (from this location's GMs, techs and admins).
   const replyTo = teamReplyAddress(wo.id, wo.number);
+  // Same message as a push notification on any phone where they turned notifications on (independent of email).
+  await pushToEmails(to, { title: eyebrow, body: title, url: `/work-orders/${woId}`, tag: `wo-${woId}` });
   try {
     return await sendEmail({
       to,

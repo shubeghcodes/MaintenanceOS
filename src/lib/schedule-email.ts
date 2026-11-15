@@ -1,4 +1,5 @@
 import "server-only";
+import { pushToUsers } from "./push";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { WORKABLE_STATUSES, PRIORITY_LABEL } from "./constants";
 import { appUrl, esc, sendEmail } from "./email";
@@ -86,6 +87,12 @@ export async function sendDaySchedules(
     }
 
     const { subject, html, text } = renderScheduleEmail(name, opts.date, mine);
+    await pushToUsers([t.id], {
+      title: `Your schedule: ${mine.length} job${mine.length > 1 ? "s" : ""}`,
+      body: subject,
+      url: "/my-day",
+      tag: `day-${opts.date}`,
+    }).catch(() => undefined);
     const res = await sendEmail({ to: t.email, subject, html, text });
     const status = res.ok ? "sent" : res.skipped ? "skipped" : "failed";
     results.push({ ...base, status, error: res.ok ? undefined : res.error });
