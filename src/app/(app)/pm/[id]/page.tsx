@@ -46,6 +46,13 @@ export default async function PmDetailPage({
     isAdmin ? getLookups(supabase, { assets: true, allCompanies: true }) : Promise.resolve(null),
     isAdmin ? getPickerLocations(supabase) : Promise.resolve(null),
   ]);
+  const tplInfo = pm.template_id
+    ? ((await supabase.from("pm_templates").select("id,name,items:pm_template_items(active)").eq("id", pm.template_id).maybeSingle()).data as {
+        id: string;
+        name: string;
+        items: { active: boolean }[];
+      } | null)
+    : null;
   const copyTargets = locations ? locations.sites.filter((s) => s.id !== pm.site_id) : [];
   const wos = (woData ?? []) as { id: string; number: number; status: WoStatus; due_at: string | null; completed_at: string | null }[];
   const done = wos.filter((w) => w.status === "completed");
@@ -64,6 +71,19 @@ export default async function PmDetailPage({
         <Stat label="Last completed" value={pm.last_completed_on ? fmtDate(pm.last_completed_on) : "—"} />
       </div>
 
+      {tplInfo && (
+        <div className="mb-4 rounded-lg bg-brand-50 px-4 py-3 text-sm text-brand-900 ring-1 ring-brand-100">
+          Checklist from template{" "}
+          {isAdmin ? (
+            <Link href={`/pm/templates/${tplInfo.id}`} className="font-medium underline">
+              {tplInfo.name}
+            </Link>
+          ) : (
+            <span className="font-medium">{tplInfo.name}</span>
+          )}
+          : {tplInfo.items.filter((i) => i.active).length} activities with required photos on every work order.
+        </div>
+      )}
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">
           {isAdmin && lookups ? (

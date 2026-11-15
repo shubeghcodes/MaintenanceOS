@@ -105,9 +105,13 @@ export function PmForm({
         <Field label="Instructions" className="sm:col-span-2">
           <Textarea name="instructions" rows={3} defaultValue={pm?.instructions ?? ""} />
         </Field>
-        <Field label="Checklist" hint="One step per line — copied into each work order." className="sm:col-span-2">
-          <Textarea name="checklist" rows={4} defaultValue={pm?.checklist.join("\n") ?? ""} />
-        </Field>
+        {pm?.template_id ? (
+          <input type="hidden" name="checklist" value={pm.checklist.join("\n")} />
+        ) : (
+          <Field label="Checklist" hint="One step per line — copied into each work order." className="sm:col-span-2">
+            <Textarea name="checklist" rows={4} defaultValue={pm?.checklist.join("\n") ?? ""} />
+          </Field>
+        )}
         <Field label="Estimated hours">
           <Input name="estimated_hours" inputMode="decimal" defaultValue={pm?.estimated_hours ?? ""} />
         </Field>

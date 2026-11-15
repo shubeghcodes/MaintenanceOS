@@ -8,6 +8,7 @@ import type { PmSchedule } from "@/lib/types";
 import { Alert, Badge, Button, ButtonLink, Card, EmptyState, PageHeader, Select, Table, Td, Th } from "@/components/ui";
 import { PriorityBadge } from "@/components/badges";
 import { RunSchedulerButton } from "./RunSchedulerButton";
+import { PmTabs } from "./PmTabs";
 
 export const metadata = { title: "Preventive maintenance" };
 
@@ -51,6 +52,7 @@ export default async function PmPage({ searchParams }: { searchParams: Promise<R
           )
         }
       />
+      {isAdmin && <PmTabs active="schedules" />}
       {sp.generated && (
         <Alert tone="good">
           Scheduler ran — {sp.generated} work order{sp.generated === "1" ? "" : "s"} created.
@@ -58,7 +60,8 @@ export default async function PmPage({ searchParams }: { searchParams: Promise<R
       )}
       {sp.created && (
         <Alert tone="good">
-          {sp.created} PM schedule{sp.created === "1" ? "" : "s"} created, one per location.
+          {sp.created} PM schedule{sp.created === "1" ? "" : "s"} created.
+          {sp.skipped && ` ${sp.skipped} skipped because the store already had that template.`}
         </Alert>
       )}
       {(sp.error || error) && <Alert>{sp.error ?? error?.message}</Alert>}
