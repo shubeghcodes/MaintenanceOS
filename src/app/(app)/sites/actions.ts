@@ -8,7 +8,7 @@ import { num, str } from "@/lib/format";
 export async function saveSite(fd: FormData) {
   const { supabase } = await requireRole("admin");
   const id = str(fd, "id");
-  const back = id ? `/sites/${id}` : "/sites/new";
+  const back = id ? `/sites/${id}/edit` : "/sites/new";
   const row = {
     code: str(fd, "code"),
     name: str(fd, "name"),
