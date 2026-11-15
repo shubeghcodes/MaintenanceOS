@@ -139,6 +139,7 @@ export interface PmSchedule {
   title: string;
   site_id: string;
   asset_id: string | null;
+  template_id?: string | null;
   category: string;
   instructions: string | null;
   checklist: string[];

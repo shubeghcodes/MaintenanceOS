@@ -19,6 +19,7 @@ import { Send } from "lucide-react";
 import { VendorPanel } from "./VendorPanel";
 import { ReceiptsCard } from "./ReceiptsCard";
 import { TimeCard } from "./TimeCard";
+import { ChecklistCard, type ChecklistItem } from "./ChecklistCard";
 import { TechOptions } from "@/components/TechOptions";
 import { fmtHours } from "@/lib/labor";
 
@@ -122,7 +123,7 @@ export default async function WorkOrderPage({
   if (!data) notFound();
   const wo = data as unknown as Detail;
 
-  const [{ data: evData }, files, lookups] = await Promise.all([
+  const [{ data: evData }, files, lookups, { data: ckData }] = await Promise.all([
     supabase
       .from("work_order_events")
       .select("*, user:profiles(full_name,email)")
@@ -130,7 +131,37 @@ export default async function WorkOrderPage({
       .order("created_at", { ascending: true }),
     listAttachments(supabase, "work_order", id),
     profile.role === "admin" || profile.role === "tech" ? getLookups(supabase, { allCompanies: true }) : Promise.resolve(null),
+    supabase
+      .from("wo_checklist_items")
+      .select(
+        "id,activity,description,photo_rule,result,note,before_attachment_id,after_attachment_id,completed_at," +
+          "followup:work_orders!wo_checklist_items_followup_wo_id_fkey(id,number)," +
+          "done_by:profiles!wo_checklist_items_completed_by_fkey(full_name,email)",
+      )
+      .eq("work_order_id", id)
+      .order("position"),
   ]);
+  // PM checklist: photos come from this work order's attachments (category "checklist").
+  const fileUrl = new Map(files.map((f) => [f.id, f.url]));
+  type CkRow = {
+    id: string; activity: string; description: string | null; photo_rule: ChecklistItem["photo_rule"]; result: ChecklistItem["result"];
+    note: string | null; before_attachment_id: string | null; after_attachment_id: string | null; completed_at: string | null;
+    followup: { id: string; number: number } | null; done_by: { full_name: string | null; email: string | null } | null;
+  };
+  const checklist: ChecklistItem[] = ((ckData ?? []) as unknown as CkRow[]).map((r) => {
+    const before = r.before_attachment_id ? fileUrl.get(r.before_attachment_id) ?? null : null;
+    const after = r.after_attachment_id ? fileUrl.get(r.after_attachment_id) ?? null : null;
+    const noteOk = !(r.result === "na" || r.result === "needs_repair") || !!r.note?.trim();
+    const photosOk =
+      r.result === "na" || r.photo_rule === "none" || (r.photo_rule === "single" ? !!(r.after_attachment_id || r.before_attachment_id) : !!(r.before_attachment_id && r.after_attachment_id));
+    return {
+      id: r.id, activity: r.activity, description: r.description, photo_rule: r.photo_rule, result: r.result, note: r.note,
+      before_url: before, after_url: after, followup: r.followup, completed_at: r.completed_at,
+      completed_by_name: r.done_by ? personName(r.done_by) : null,
+      done: !!r.result && noteOk && photosOk,
+    };
+  });
+  const checklistOpen = checklist.filter((c) => !c.done).length;
   // GMs never see vendor money: drop quote/invoice/cost entries and blank amounts in automatic entries.
   const MONEY_KINDS = ["quote", "invoice", "vendor_cost", "approval"];
   const events = ((evData ?? []) as (WorkOrderEvent & { user: { full_name: string | null; email: string | null } | null })[])
@@ -202,6 +233,12 @@ export default async function WorkOrderPage({
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
+          {checklist.length > 0 && (
+            <ChecklistCard
+              items={checklist}
+              editable={(role === "admin" || role === "tech") && !["requested", "awaiting_signoff", "completed", "cancelled"].includes(wo.status)}
+            />
+          )}
           <Card>
             <CardHeader title="Details" />
             {wo.description && <p className="whitespace-pre-wrap border-b border-slate-100 px-5 py-4 text-sm text-slate-700">{wo.description}</p>}
@@ -255,7 +292,7 @@ export default async function WorkOrderPage({
 
           {role !== "vendor" && <ReceiptsCard supabase={supabase} woId={id} profile={profile} open={!!sp.add_receipt} />}
 
-          <Attachments items={files.filter((f) => f.category !== "receipt" && !(role === "manager" && ["invoice", "quote", "vendor_receipt"].includes(f.category ?? "")))} action={uploadWoFiles} hidden={{ id }} allowInternal={role === "admin" || role === "tech"} categories={role === "admin" || role === "tech"} />
+          <Attachments items={files.filter((f) => f.category !== "receipt" && f.category !== "checklist" && !(role === "manager" && ["invoice", "quote", "vendor_receipt"].includes(f.category ?? "")))} action={uploadWoFiles} hidden={{ id }} allowInternal={role === "admin" || role === "tech"} categories={role === "admin" || role === "tech"} />
 
           <Card>
             <CardHeader title="Activity" />
@@ -456,11 +493,17 @@ export default async function WorkOrderPage({
                 <Field label="Note (optional)">
                   <Input name="note" placeholder="e.g. Waiting on part, ETA Friday" />
                 </Field>
+                {checklistOpen > 0 && statusButtons.includes("completed") && (
+                  <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 ring-1 ring-amber-200">
+                    {checklistOpen} checklist item{checklistOpen > 1 ? "s" : ""} still need{checklistOpen > 1 ? "" : "s"} photos and a result before this PM can be completed.
+                  </p>
+                )}
                 <div className="flex flex-wrap gap-2">
                   {statusButtons.map((s) => (
                     <SubmitButton
                       key={s}
                       formAction={setStatus.bind(null, s)}
+                      disabled={checklistOpen > 0 && s === "completed"}
                       size="sm"
                       variant={s === "completed" ? "primary" : s === "cancelled" ? "danger" : "secondary"}
                       confirm={s === "cancelled" ? "Cancel this work order?" : undefined}

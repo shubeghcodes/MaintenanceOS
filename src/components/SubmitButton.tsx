@@ -13,6 +13,7 @@ export function SubmitButton({
   value,
   confirm,
   formAction,
+  disabled,
 }: {
   children: ReactNode;
   variant?: "primary" | "secondary" | "danger" | "ghost";
@@ -23,6 +24,7 @@ export function SubmitButton({
   confirm?: string;
   /** Per-button server action (e.g. a bound action) — use instead of name/value for multi-button forms. */
   formAction?: (fd: FormData) => void | Promise<void>;
+  disabled?: boolean;
 }) {
   const { pending, data, action } = useFormStatus();
   // In forms with several submit buttons, only the one that was clicked shows the pending label.
@@ -33,7 +35,7 @@ export function SubmitButton({
       name={name}
       value={value}
       formAction={formAction}
-      disabled={pending}
+      disabled={pending || disabled}
       aria-busy={isMine}
       className={btnClass(variant, size)}
       onClick={(e) => {

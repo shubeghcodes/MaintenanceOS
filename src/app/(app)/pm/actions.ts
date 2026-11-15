@@ -66,6 +66,7 @@ export async function copyPm(fd: FormData) {
 
   const rows = siteIds.map((site_id) => ({
     title: src.title,
+    template_id: src.template_id,
     site_id,
     asset_id: null,
     category: src.category,
