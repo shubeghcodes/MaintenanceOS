@@ -1,14 +1,17 @@
 import { getSession } from "@/lib/auth";
 import { ROLE_LABEL } from "@/lib/constants";
-import { Alert, Card, Field, Input, PageHeader } from "@/components/ui";
+import { Alert, Card, CardHeader, Field, Input, PageHeader } from "@/components/ui";
 import { SubmitButton } from "@/components/SubmitButton";
 import { updateAccount } from "./actions";
+import { getVapidPublicKey } from "@/lib/push";
+import { PushToggle } from "@/components/pwa/PushToggle";
 
 export const metadata = { title: "My account" };
 
 export default async function AccountPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const sp = await searchParams;
   const { profile } = await getSession();
+  const vapidKey = await getVapidPublicKey();
   return (
     <>
       <PageHeader title="My account" subtitle={`${profile.email} · ${ROLE_LABEL[profile.role]}`} />
@@ -28,6 +31,14 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
           <SubmitButton>Save</SubmitButton>
         </Card>
       </form>
+      {profile.role !== "vendor" && (
+        <Card className="mt-6 max-w-lg">
+          <CardHeader title="Notifications on this device" subtitle="Work order alerts as phone notifications, in addition to email." />
+          <div className="p-5">
+            <PushToggle vapidKey={vapidKey} />
+          </div>
+        </Card>
+      )}
     </>
   );
 }
