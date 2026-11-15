@@ -129,21 +129,22 @@ export async function updateUser(fd: FormData) {
   const { supabase, profile: me } = await requireRole("admin");
   const superMe = isSuper(me);
   const id = str(fd, "id")!;
+  const back = backTo(fd);
   const { role, isSuper: makeSuper } = readRole(fd);
   const active = fd.get("active") === "on";
-  if (!ROLES.includes(role)) redirect("/admin/users?error=Pick+a+role");
+  if (!ROLES.includes(role)) redirect(withParam(back, "error", "Pick a role"));
   if (id === me.id && (role !== "admin" || !active || (me.is_super && !makeSuper))) {
-    redirect("/admin/users?error=You+can’t+remove+your+own+admin+access");
+    redirect(withParam(back, "error", "You can’t remove your own admin access"));
   }
   const { data: target } = await supabase.from("profiles").select("id,role,is_super").eq("id", id).maybeSingle();
-  if (!target) redirect("/admin/users?error=User+not+found");
-  if (!superMe && (target.role === "admin" || role === "admin")) redirect("/admin/users?error=Only+a+super+admin+can+add+or+change+admins");
+  if (!target) redirect(withParam(back, "error", "User not found"));
+  if (!superMe && (target.role === "admin" || role === "admin")) redirect(withParam(back, "error", "Only a super admin can add or change admins"));
 
   const vendorId = role === "vendor" ? str(fd, "vendor_id") : null;
   const patch: Record<string, unknown> = { role, vendor_id: vendorId, active, full_name: str(fd, "full_name"), phone: str(fd, "phone") };
   if (superMe) patch.is_super = role === "admin" && makeSuper;
   const { error } = await supabase.from("profiles").update(patch).eq("id", id);
-  if (error) redirect(`/admin/users?error=${encodeURIComponent(error.message)}`);
+  if (error) redirect(withParam(back, "error", error.message));
   if (superMe) {
     if (role === "admin" && !makeSuper) await saveAdminCompanies(id, fd);
     else await createAdminClient().from("admin_companies").delete().eq("user_id", id);
@@ -154,25 +155,26 @@ export async function updateUser(fd: FormData) {
   await supabase.from("site_members").delete().eq("user_id", id);
   if (siteIds.length) {
     const { error: mErr } = await supabase.from("site_members").insert(siteIds.map((site_id) => ({ site_id, user_id: id })));
-    if (mErr) redirect(`/admin/users?error=${encodeURIComponent(mErr.message)}`);
+    if (mErr) redirect(withParam(back, "error", mErr.message));
   }
   revalidatePath("/admin/users");
-  redirect("/admin/users?saved=1");
+  redirect(withParam(back, "saved", "1"));
 }
 
 /** Set a technician's hourly labor rate from a date (keeps history; recosts their time from that date). */
 export async function setLaborRate(fd: FormData) {
   const { supabase, profile } = await requireSuper();
   const userId = str(fd, "user_id");
+  const back = backTo(fd);
   const rate = Number(String(fd.get("hourly_rate") ?? "").replace(/[$,\s]/g, ""));
   const from = str(fd, "effective_from");
-  if (!userId || !from || !Number.isFinite(rate) || rate < 0) redirect("/admin/users?error=" + encodeURIComponent("Enter a valid hourly rate and date"));
+  if (!userId || !from || !Number.isFinite(rate) || rate < 0) redirect(withParam(back, "error", "Enter a valid hourly rate and date"));
   const { error } = await supabase
     .from("tech_rates")
     .upsert({ user_id: userId, hourly_rate: rate, effective_from: from, note: str(fd, "note"), created_by: profile.id }, { onConflict: "user_id,effective_from" });
-  if (error) redirect("/admin/users?error=" + encodeURIComponent(error.message));
+  if (error) redirect(withParam(back, "error", error.message));
   revalidatePath("/admin/users");
   revalidatePath("/labor");
   revalidatePath("/rm");
-  redirect("/admin/users?rate=1");
+  redirect(withParam(back, "rate", "1"));
 }

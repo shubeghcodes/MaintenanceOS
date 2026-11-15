@@ -1,89 +1,100 @@
-import { isSuper, requireRole } from "@/lib/auth";
-import { getLookups } from "@/lib/data";
-import { ROLE_LABEL } from "@/lib/constants";
-import { personName } from "@/lib/format";
-import type { Profile, UserRole } from "@/lib/types";
 import Link from "next/link";
 import clsx from "clsx";
-import { Alert, Badge, ButtonLink, Card, CardHeader, Field, Input, PageHeader, Select } from "@/components/ui";
-import { FileSpreadsheet } from "lucide-react";
+import { ChevronRight, FileSpreadsheet, Search, UserPlus } from "lucide-react";
+import { isSuper, requireRole } from "@/lib/auth";
+import { fmtMoney, personName } from "@/lib/format";
+import { ROLE_LABEL } from "@/lib/constants";
+import type { Profile } from "@/lib/types";
+import { Alert, Badge, ButtonLink, Card, CardHeader, EmptyState, Field, Input, PageHeader, Select } from "@/components/ui";
 import { SubmitButton } from "@/components/SubmitButton";
-import { LocationPicker } from "@/components/LocationPicker";
-import { getCompanyScope } from "@/lib/company";
-import { addSiteMember, inviteUser, removeSiteMember, setLaborRate, updateUser } from "./actions";
-import { fmtDate, fmtMoney, todayISO } from "@/lib/format";
+import { addSiteMember, inviteUser, removeSiteMember } from "./actions";
+import { loadUsersData, RoleBadge, roleKey } from "./shared";
 
 export const metadata = { title: "Users" };
 
-const ROLE_HELP: Record<UserRole | "super_admin", string> = {
-  super_admin: "Everything, plus companies, admins, labor rates, deletes and paying invoices.",
-  admin: "Runs operations for their companies: setup, dispatch, approvals, managers and techs.",
-  manager: "Submits and tracks requests for their sites.",
-  tech: "Works tickets, logs costs, edits assets at their sites.",
-  vendor: "Sees and updates only jobs dispatched to their company.",
-};
+type Filter = "all" | "admin" | "manager" | "tech" | "vendor" | "inactive";
+const FILTERS: [Filter, string][] = [
+  ["all", "All"],
+  ["admin", "Admins"],
+  ["manager", "GMs"],
+  ["tech", "Techs"],
+  ["vendor", "Vendors"],
+  ["inactive", "Inactive"],
+];
+const ROLE_ORDER = { super_admin: 0, admin: 1, tech: 2, manager: 3, vendor: 4 } as const;
 
 export default async function UsersPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const sp = await searchParams;
   const { supabase, profile: me } = await requireRole("admin");
-  const [{ data: pData }, { data: mData }, lookups] = await Promise.all([
-    supabase.from("profiles").select("*").order("active", { ascending: false }).order("role").order("full_name"),
-    supabase.from("site_members").select("site_id,user_id"),
-    getLookups(supabase, { allCompanies: true }),
-  ]);
-  const users = (pData ?? []) as Profile[];
-  // Every active location with its company, for the location picker.
-  const [{ data: locData }, scope] = await Promise.all([
-    supabase.from("sites").select("id,name,code,city,company_id").eq("active", true).order("code", { nullsFirst: false }).order("name"),
-    getCompanyScope(),
-  ]);
-  const locations = (locData ?? []) as { id: string; name: string; code: string | null; city: string | null; company_id: string | null }[];
-  // Selected company first in the picker.
-  const pickerCompanies = [...scope.companies].sort((a, b) => (a.id === scope.companyId ? -1 : b.id === scope.companyId ? 1 : 0));
-  const members = (mData ?? []) as { site_id: string; user_id: string }[];
-  // Hourly rates (admin only by row security). Newest first per person.
-  const { data: rData } = await supabase.from("tech_rates").select("id,user_id,hourly_rate,effective_from,note,created_at").order("effective_from", { ascending: false });
-  const rates = (rData ?? []) as { id: string; user_id: string; hourly_rate: number; effective_from: string; note: string | null; created_at: string }[];
-  const today = todayISO();
-  const currentRate = (uid: string) => rates.find((r) => r.user_id === uid && r.effective_from <= today);
-  const hasServiceKey = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const d = await loadUsersData(supabase);
   const superMe = isSuper(me);
-  // Role choices: only super admins can make admins or super admins.
-  const roleOptions: [string, string][] = [
-    ...(superMe ? ([["super_admin", "Super admin"], ["admin", "Admin"]] as [string, string][]) : []),
-    ["manager", ROLE_LABEL.manager],
-    ["tech", ROLE_LABEL.tech],
-    ["vendor", ROLE_LABEL.vendor],
-  ];
-  const { data: acData } = await supabase.from("admin_companies").select("user_id,company_id");
-  const adminCompanies = (acData ?? []) as { user_id: string; company_id: string }[];
-  const companyName = new Map(scope.companies.map((c) => [c.id, c.name]));
-  const scopeOf = (uid: string) => adminCompanies.filter((a) => a.user_id === uid).map((a) => a.company_id);
-  const CompanyChecks = ({ selected }: { selected: string[] }) => (
-    <fieldset className="md:col-span-4">
-      <legend className="mb-1 text-sm font-medium text-slate-700">Companies this admin manages</legend>
-      <p className="mb-2 text-xs text-slate-500">Admins only. Leave all unticked for every company. Super admins always see everything.</p>
-      <div className="flex flex-wrap gap-2">
-        {scope.companies.map((c) => (
-          <label key={c.id} className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm ring-1 ring-slate-200 has-[:checked]:bg-brand-50 has-[:checked]:ring-brand-500">
-            <input type="checkbox" name="admin_company_ids" value={c.id} defaultChecked={selected.includes(c.id)} className="rounded border-slate-300" />
-            {c.name}
-          </label>
-        ))}
-      </div>
-    </fieldset>
-  );
   const view = sp.view === "sites" || sp.site ? "sites" : "users";
+  const siteById = new Map(d.locations.map((l) => [l.id, l]));
+
+  const filter: Filter = FILTERS.some(([k]) => k === sp.role) ? (sp.role as Filter) : "all";
+  const q = (sp.q ?? "").trim().toLowerCase();
+  const company = sp.company ?? "";
+
+  const codesOf = (u: Profile) => d.sitesOf(u.id).map((id) => siteById.get(id)?.code ?? siteById.get(id)?.name ?? "").filter(Boolean);
+  const inCompany = (u: Profile) => {
+    if (!company) return true;
+    if (u.role === "admin") return isSuper(u) || !d.scopeOf(u.id).length || d.scopeOf(u.id).includes(company);
+    return d.sitesOf(u.id).some((id) => siteById.get(id)?.company_id === company);
+  };
+  const matches = (u: Profile) =>
+    !q ||
+    [u.full_name, u.email, u.phone, ...codesOf(u)].some((v) => (v ?? "").toLowerCase().includes(q));
+
+  const base = d.users.filter(inCompany);
+  const count = (f: Filter) => base.filter((u) => (f === "all" ? u.active : f === "inactive" ? !u.active : u.active && u.role === f)).length;
+  const rows = base
+    .filter((u) => (filter === "inactive" ? !u.active : u.active && (filter === "all" || u.role === filter)))
+    .filter(matches)
+    .sort(
+      (a, b) =>
+        Number(b.active) - Number(a.active) || ROLE_ORDER[roleKey(a)] - ROLE_ORDER[roleKey(b)] || personName(a).localeCompare(personName(b)),
+    );
+
+  const qs = (patch: Record<string, string | undefined>) => {
+    const p = new URLSearchParams();
+    const next = { role: filter === "all" ? undefined : filter, q: sp.q, company: company || undefined, ...patch };
+    Object.entries(next).forEach(([k, v]) => v && p.set(k, v));
+    const s = p.toString();
+    return `/admin/users${s ? `?${s}` : ""}`;
+  };
+
+  const locationsLabel = (u: Profile) => {
+    if (u.role === "vendor") return d.lookups.vendors.find((v) => v.id === u.vendor_id)?.name ?? <span className="text-orange-700">No vendor linked</span>;
+    if (u.role === "admin") {
+      const sc = d.scopeOf(u.id);
+      return isSuper(u) || !sc.length ? <span className="text-slate-500">All companies</span> : sc.map((id) => d.companyName.get(id) ?? "—").join(", ");
+    }
+    const codes = codesOf(u);
+    if (!codes.length) return <span className="text-orange-700">No locations</span>;
+    return (
+      <>
+        {codes.slice(0, 3).map((c) => `#${c}`).join(", ")}
+        {codes.length > 3 && <span className="text-slate-400"> +{codes.length - 3}</span>}
+      </>
+    );
+  };
+
+  const activeCount = d.users.filter((u) => u.active).length;
 
   return (
     <>
       <PageHeader
         title="Users"
-        subtitle="Invite people, set their role, and choose which locations they can see."
+        subtitle={`${activeCount} active ${activeCount === 1 ? "person" : "people"} across ${d.locations.length} locations`}
         actions={
-          <ButtonLink href="/admin/users/import" variant="secondary">
-            <FileSpreadsheet className="h-4 w-4" aria-hidden /> Import from Excel
-          </ButtonLink>
+          <>
+            <ButtonLink href="/admin/users/import" variant="secondary">
+              <FileSpreadsheet className="h-4 w-4" aria-hidden /> Import
+            </ButtonLink>
+            <ButtonLink href="/admin/users/invite">
+              <UserPlus className="h-4 w-4" aria-hidden /> Invite person
+            </ButtonLink>
+          </>
         }
       />
       {sp.error && <Alert>{sp.error}</Alert>}
@@ -91,22 +102,18 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
       {sp.added && <Alert tone="good">{sp.added} now has access.</Alert>}
       {sp.removed && <Alert tone="good">Removed from the location.</Alert>}
       {sp.saved && <Alert tone="good">User updated.</Alert>}
-      {sp.rate && <Alert tone="good">Labor rate saved. Time already logged from that date was recalculated.</Alert>}
 
-      <div className="mb-5 inline-flex rounded-lg bg-slate-100 p-1 text-sm">
+      <div className="mb-4 inline-flex rounded-lg bg-slate-100 p-1 text-sm">
         {(
           [
-            ["users", "By user", "/admin/users"],
+            ["users", "By person", "/admin/users"],
             ["sites", "By location", "/admin/users?view=sites"],
           ] as const
         ).map(([key, label, href]) => (
           <Link
             key={key}
             href={href}
-            className={clsx(
-              "rounded-md px-3 py-1.5 font-medium",
-              view === key ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900",
-            )}
+            className={clsx("rounded-md px-3 py-1.5 font-medium", view === key ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900")}
           >
             {label}
           </Link>
@@ -114,374 +121,288 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
       </div>
 
       {view === "sites" ? (
-        <SitesView
-          sites={lookups.sites}
-          users={users}
-          members={members}
-          focusSite={sp.site}
-          hasServiceKey={hasServiceKey}
-          meId={me.id}
-        />
+        <SitesView d={d} focusSite={sp.site} meId={me.id} />
       ) : (
         <>
-
-      <Card className="mb-6">
-        <CardHeader title="Invite someone" subtitle="They’ll get an email link to sign in and set a password." />
-        {!hasServiceKey ? (
-          <p className="p-5 text-sm text-slate-600">
-            Set <code className="rounded bg-slate-100 px-1">SUPABASE_SERVICE_ROLE_KEY</code> to send invites from here, or invite users from the Supabase dashboard
-            (Authentication → Users) and set their role below.
-          </p>
-        ) : (
-          <form action={inviteUser} className="grid gap-4 p-5 md:grid-cols-4">
-            <Field label="Email">
-              <Input type="email" name="email" required />
-            </Field>
-            <Field label="Name">
-              <Input name="full_name" />
-            </Field>
-            <Field label="Role">
-              <Select name="role" defaultValue="manager">
-                {roleOptions.map(([v, l]) => (
-                  <option key={v} value={v}>
-                    {l}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <Field label="Vendor company" hint="Vendor logins only">
-              <Select name="vendor_id" defaultValue="">
-                <option value="">—</option>
-                {lookups.vendors.map((v) => (
-                  <option key={v.id} value={v.id}>
-                    {v.name}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <fieldset className="md:col-span-4">
-              <legend className="mb-1 text-sm font-medium text-slate-700">Locations</legend>
-              <p className="mb-2 text-xs text-slate-500">Managers and techs only see the locations you pick. Admins see every location; vendor logins see only their jobs.</p>
-              <LocationPicker sites={locations} companies={pickerCompanies} />
-            </fieldset>
-            {superMe && <CompanyChecks selected={[]} />}
-            <div className="md:col-span-4">
-              <SubmitButton pendingText="Sending…">Send invite</SubmitButton>
-            </div>
-          </form>
-        )}
-      </Card>
-
-      <div className="mb-3 grid gap-2 text-xs text-slate-500 sm:grid-cols-2 lg:grid-cols-4">
-        {(Object.keys(ROLE_HELP) as (UserRole | "super_admin")[]).map((r) => (
-          <p key={r}>
-            <b className="text-slate-700">{r === "super_admin" ? "Super admin" : ROLE_LABEL[r]}:</b> {ROLE_HELP[r]}
-          </p>
-        ))}
-      </div>
-
-      <div className="space-y-3">
-        {users.map((u) => {
-          const userSites = members.filter((m) => m.user_id === u.id).map((m) => m.site_id);
-          const uSuper = isSuper(u);
-          const canEdit = superMe || u.role !== "admin";
-          const uScope = scopeOf(u.id);
-          return (
-            <Card key={u.id} className={u.active ? "" : "opacity-60"}>
-              <details>
-                <summary className="flex cursor-pointer list-none flex-wrap items-center gap-3 px-5 py-3">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium">
-                      {personName(u)} {u.id === me.id && <span className="text-xs text-slate-400">(you)</span>}
-                    </p>
-                    <p className="text-xs text-slate-500">{u.email}</p>
-                  </div>
-                  <Badge tone={u.role === "admin" ? "info" : "neutral"} dot={false}>
-                    {uSuper ? "Super admin" : ROLE_LABEL[u.role]}
-                  </Badge>
-                  <span className="text-xs text-slate-500">
-                    {u.role === "vendor"
-                      ? lookups.vendors.find((v) => v.id === u.vendor_id)?.name ?? "No vendor linked"
-                      : u.role === "admin"
-                        ? uSuper || !uScope.length
-                          ? "All companies"
-                          : uScope.map((id) => companyName.get(id) ?? "—").join(", ")
-                        : `${userSites.length} site${userSites.length === 1 ? "" : "s"}`}
-                  </span>
-                  {superMe && (u.role === "tech" || u.role === "admin") && (
-                    <span className={`text-xs tabular-nums ${currentRate(u.id) ? "text-slate-600" : u.role === "tech" ? "font-medium text-orange-700" : "text-slate-400"}`}>
-                      {currentRate(u.id) ? `${fmtMoney(currentRate(u.id)!.hourly_rate, 2)}/hr` : "No rate"}
-                    </span>
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap gap-1.5">
+              {FILTERS.map(([k, label]) => (
+                <Link
+                  key={k}
+                  href={qs({ role: k === "all" ? undefined : k })}
+                  className={clsx(
+                    "rounded-full px-3 py-1 text-sm ring-1 ring-inset",
+                    filter === k ? "bg-brand-50 font-medium text-brand-700 ring-brand-300" : "text-slate-600 ring-slate-200 hover:bg-slate-50",
                   )}
-                  {!u.active && <Badge tone="muted">Inactive</Badge>}
-                  <span className="text-xs font-medium text-brand-700">{canEdit ? "Edit" : "View"}</span>
-                </summary>
-                {!canEdit && (
-                  <p className="border-t border-slate-100 px-5 py-4 text-sm text-slate-600">Only a super admin can change admins and super admins.</p>
-                )}
-                {canEdit && (
-                <form action={updateUser} className="grid gap-4 border-t border-slate-100 p-5 md:grid-cols-4">
-                  <input type="hidden" name="id" value={u.id} />
-                  <Field label="Name">
-                    <Input name="full_name" defaultValue={u.full_name ?? ""} />
-                  </Field>
-                  <Field label="Phone">
-                    <Input name="phone" defaultValue={u.phone ?? ""} />
-                  </Field>
-                  <Field label="Role">
-                    <Select name="role" defaultValue={uSuper ? "super_admin" : u.role}>
-                      {roleOptions.map(([v, l]) => (
-                        <option key={v} value={v}>
-                          {l}
-                        </option>
-                      ))}
-                    </Select>
-                  </Field>
-                  <Field label="Vendor company" hint="Vendor logins only">
-                    <Select name="vendor_id" defaultValue={u.vendor_id ?? ""}>
-                      <option value="">—</option>
-                      {lookups.vendors.map((v) => (
-                        <option key={v.id} value={v.id}>
-                          {v.name}
-                        </option>
-                      ))}
-                    </Select>
-                  </Field>
-                  <fieldset className="md:col-span-4">
-                    <legend className="mb-1 text-sm font-medium text-slate-700">Locations</legend>
-                    <LocationPicker sites={locations} companies={pickerCompanies} selected={userSites} />
-                  </fieldset>
-                  <label className="flex items-center gap-2 text-sm">
-                    <input type="checkbox" name="active" defaultChecked={u.active} className="rounded border-slate-300" />
-                    Active (can sign in)
-                  </label>
-                  {superMe && u.role === "admin" && !uSuper && <CompanyChecks selected={uScope} />}
-                  <div className="md:col-span-3 md:text-right">
-                    <SubmitButton size="sm">Save user</SubmitButton>
-                  </div>
-                </form>
-                )}
-                {superMe && (u.role === "tech" || u.role === "admin") && (
-                  <div className="border-t border-slate-100 bg-slate-50/60 p-5">
-                    <p className="text-sm font-medium text-slate-800">Labor rate</p>
-                    <p className="mb-3 text-xs text-slate-500">
-                      Used to cost this person&apos;s timed work. Each visit uses the rate in effect on the day it started. Only admins can see rates.
-                    </p>
-                    <form action={setLaborRate} className="flex flex-wrap items-end gap-2">
-                      <input type="hidden" name="user_id" value={u.id} />
-                      <Field label="Hourly rate ($)">
-                        <Input name="hourly_rate" inputMode="decimal" required placeholder="25.00" className="w-28" />
-                      </Field>
-                      <Field label="Effective from">
-                        <Input type="date" name="effective_from" required defaultValue={today} />
-                      </Field>
-                      <Field label="Note (optional)">
-                        <Input name="note" placeholder="e.g. Annual raise" />
-                      </Field>
-                      <SubmitButton size="md" variant="secondary" pendingText="Saving…">
-                        Save rate
-                      </SubmitButton>
-                    </form>
-                    {rates.some((r) => r.user_id === u.id) && (
-                      <ul className="mt-3 space-y-1 text-xs text-slate-600">
-                        {rates
-                          .filter((r) => r.user_id === u.id)
-                          .map((r) => (
-                            <li key={r.id} className="flex gap-2">
-                              <span className="w-24 tabular-nums font-medium">{fmtMoney(r.hourly_rate, 2)}/hr</span>
-                              <span>from {fmtDate(r.effective_from)}</span>
-                              {r.effective_from > today && <Badge tone="info" dot={false}>Upcoming</Badge>}
-                              {currentRate(u.id)?.id === r.id && <Badge tone="good" dot={false}>Current</Badge>}
-                              {r.note && <span className="text-slate-500">· {r.note}</span>}
-                            </li>
-                          ))}
-                      </ul>
-                    )}
-                  </div>
-                )}
-              </details>
-            </Card>
-          );
-        })}
-      </div>
+                >
+                  {label} <span className="tabular-nums text-slate-400">{count(k)}</span>
+                </Link>
+              ))}
+            </div>
+            <form action="/admin/users" className="ml-auto flex w-full flex-wrap gap-2 sm:w-auto">
+              {filter !== "all" && <input type="hidden" name="role" value={filter} />}
+              <div className="relative min-w-0 flex-1 sm:w-64 sm:flex-none">
+                <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" aria-hidden />
+                <Input name="q" defaultValue={sp.q ?? ""} placeholder="Search name, email or store #" className="pl-8" />
+              </div>
+              {d.scope.companies.length > 1 && (
+                <Select name="company" defaultValue={company} className="w-auto">
+                  <option value="">All companies</option>
+                  {d.scope.companies.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </Select>
+              )}
+              <button className="rounded-lg px-3 py-2 text-sm font-medium text-slate-700 ring-1 ring-inset ring-slate-300 hover:bg-slate-50">Go</button>
+            </form>
+          </div>
+
+          <Card className="overflow-hidden">
+            {rows.length === 0 ? (
+              <EmptyState title="No one matches.">
+                <Link href="/admin/users" className="font-medium text-brand-700">
+                  Clear filters
+                </Link>
+              </EmptyState>
+            ) : (
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50 text-left text-xs font-medium text-slate-500">
+                  <tr>
+                    <th className="px-5 py-2.5">Name</th>
+                    <th className="px-3 py-2.5">Role</th>
+                    <th className="hidden px-3 py-2.5 md:table-cell">Locations</th>
+                    <th className="hidden px-3 py-2.5 lg:table-cell">Phone</th>
+                    {superMe && <th className="hidden px-3 py-2.5 sm:table-cell">Rate</th>}
+                    <th className="px-5 py-2.5" />
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {rows.map((u) => {
+                    const rate = d.currentRate(u.id);
+                    const href = `/admin/users/${u.id}`;
+                    return (
+                      <tr key={u.id} className={clsx("group hover:bg-slate-50", !u.active && "text-slate-400")}>
+                        <td className="px-5 py-3">
+                          <Link href={href} className="block">
+                            <span className={clsx("font-medium", u.active ? "text-slate-900" : "text-slate-500")}>
+                              {personName(u)}
+                              {u.id === me.id && <span className="ml-1 text-xs font-normal text-slate-400">(you)</span>}
+                            </span>
+                            <span className="block truncate text-xs text-slate-500">{u.email}</span>
+                          </Link>
+                        </td>
+                        <td className="px-3 py-3">
+                          <div className="flex flex-wrap items-center gap-1">
+                            <RoleBadge u={u} />
+                            {!u.active && <Badge tone="muted">Inactive</Badge>}
+                          </div>
+                        </td>
+                        <td className="hidden px-3 py-3 text-slate-700 md:table-cell">{locationsLabel(u)}</td>
+                        <td className="hidden whitespace-nowrap px-3 py-3 text-slate-600 lg:table-cell">{u.phone ?? <span className="text-slate-300">—</span>}</td>
+                        {superMe && (
+                          <td className="hidden whitespace-nowrap px-3 py-3 tabular-nums sm:table-cell">
+                            {u.role === "tech" || u.role === "admin" ? (
+                              rate ? (
+                                `${fmtMoney(rate.hourly_rate, 2)}/hr`
+                              ) : (
+                                <span className={u.role === "tech" ? "font-medium text-orange-700" : "text-slate-400"}>No rate</span>
+                              )
+                            ) : (
+                              <span className="text-slate-300">—</span>
+                            )}
+                          </td>
+                        )}
+                        <td className="px-5 py-3 text-right">
+                          <Link href={href} className="inline-flex items-center gap-0.5 text-sm font-medium text-brand-700 group-hover:underline">
+                            {superMe || u.role !== "admin" ? "Edit" : "View"} <ChevronRight className="h-4 w-4" aria-hidden />
+                          </Link>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </Card>
         </>
       )}
     </>
   );
 }
 
-type SiteLite = { id: string; name: string; code: string | null };
+type Data = Awaited<ReturnType<typeof loadUsersData>>;
 
-function SitesView({
-  sites,
-  users,
-  members,
-  focusSite,
-  hasServiceKey,
-  meId,
-}: {
-  sites: SiteLite[];
-  users: Profile[];
-  members: { site_id: string; user_id: string }[];
-  focusSite?: string;
-  hasServiceKey: boolean;
-  meId: string;
-}) {
-  if (!sites.length) {
+/** By location: one compact row per store (GMs and techs), or the full manage card for one store. */
+function SitesView({ d, focusSite, meId }: { d: Data; focusSite?: string; meId: string }) {
+  if (!d.locations.length) {
     return (
       <Card className="p-5 text-sm text-slate-600">
-        No locations yet. <Link href="/sites/new" className="font-medium text-brand-700">Add a site</Link> first.
+        No locations yet.{" "}
+        <Link href="/sites/new" className="font-medium text-brand-700">
+          Add a site
+        </Link>{" "}
+        first.
       </Card>
     );
   }
-  const byId = new Map(users.map((u) => [u.id, u]));
-  const admins = users.filter((u) => u.role === "admin" && u.active);
-  // People who can be given a location: active managers and techs.
-  const assignable = users.filter((u) => u.active && (u.role === "manager" || u.role === "tech"));
-  const shown = focusSite ? sites.filter((s) => s.id === focusSite) : sites;
+  const byId = new Map(d.users.map((u) => [u.id, u]));
+  const teamOf = (siteId: string) =>
+    d.members
+      .filter((m) => m.site_id === siteId)
+      .map((m) => byId.get(m.user_id))
+      .filter((u): u is Profile => !!u && (u.role === "manager" || u.role === "tech"))
+      .sort((a, b) => a.role.localeCompare(b.role) || personName(a).localeCompare(personName(b)));
+  const names = (list: Profile[]) =>
+    list.length ? list.map((u) => <span key={u.id} className={clsx(!u.active && "text-slate-400 line-through")}>{personName(u)}</span>).reduce<React.ReactNode[]>((acc, el, i) => (i ? [...acc, ", ", el] : [el]), []) : <span className="text-orange-700">None</span>;
+
+  const site = focusSite ? d.locations.find((s) => s.id === focusSite) : null;
+  if (site) return <ManageSite d={d} site={site} team={teamOf(site.id)} meId={meId} />;
 
   return (
-    <>
-      <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-        <form className="flex items-end gap-2" action="/admin/users">
-          <input type="hidden" name="view" value="sites" />
-          <Field label="Location">
-            <Select name="site" defaultValue={focusSite ?? ""}>
-              <option value="">All locations</option>
-              {sites.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.code ? `${s.code} · ${s.name}` : s.name}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <button className="rounded-lg px-3 py-2 text-sm font-medium text-brand-700 ring-1 ring-slate-300 hover:bg-slate-50">Show</button>
-        </form>
-        {admins.length > 0 && (
-          <p className="text-xs text-slate-500">
-            Admins see every location: {admins.map((a) => personName(a)).join(", ")}
-          </p>
-        )}
-      </div>
-
-      <div className="space-y-4">
-        {shown.map((site) => {
-          const back = `/admin/users?view=sites${focusSite ? `&site=${site.id}` : ""}#site-${site.id}`;
-          const team = members
-            .filter((m) => m.site_id === site.id)
-            .map((m) => byId.get(m.user_id))
-            .filter((u): u is Profile => !!u && u.role !== "admin" && u.role !== "vendor")
-            .sort((a, b) => a.role.localeCompare(b.role) || personName(a).localeCompare(personName(b)));
-          const teamIds = new Set(team.map((u) => u.id));
-          const candidates = assignable.filter((u) => !teamIds.has(u.id));
-
-          return (
-            <Card key={site.id} id={`site-${site.id}`} className="scroll-mt-6">
-              <CardHeader
-                title={site.code ? `${site.code} · ${site.name}` : site.name}
-                subtitle={`${team.length} ${team.length === 1 ? "person" : "people"}`}
-                action={
-                  <Link href={`/sites/${site.id}`} className="text-xs font-medium text-brand-700">
-                    Site page →
+    <Card className="overflow-hidden">
+      <table className="w-full text-sm">
+        <thead className="bg-slate-50 text-left text-xs font-medium text-slate-500">
+          <tr>
+            <th className="px-5 py-2.5">Location</th>
+            <th className="px-3 py-2.5">GM</th>
+            <th className="hidden px-3 py-2.5 md:table-cell">Techs</th>
+            <th className="px-5 py-2.5" />
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {d.locations.map((s) => {
+            const team = teamOf(s.id);
+            return (
+              <tr key={s.id} className="hover:bg-slate-50">
+                <td className="px-5 py-3">
+                  <span className="font-medium text-slate-900">{s.code ? `#${s.code}` : s.name}</span>
+                  {s.code && <span className="block text-xs text-slate-500">{s.name}</span>}
+                </td>
+                <td className="px-3 py-3 text-slate-700">{names(team.filter((u) => u.role === "manager"))}</td>
+                <td className="hidden px-3 py-3 text-slate-700 md:table-cell">{names(team.filter((u) => u.role === "tech"))}</td>
+                <td className="px-5 py-3 text-right">
+                  <Link href={`/admin/users?view=sites&site=${s.id}`} className="inline-flex items-center gap-0.5 font-medium text-brand-700 hover:underline">
+                    Manage <ChevronRight className="h-4 w-4" aria-hidden />
                   </Link>
-                }
-              />
-
-              {team.length === 0 ? (
-                <p className="px-5 py-3 text-sm text-slate-500">No managers or techs assigned yet.</p>
-              ) : (
-                <ul className="divide-y divide-slate-100">
-                  {team.map((u) => (
-                    <li key={u.id} className={clsx("flex flex-wrap items-center gap-3 px-5 py-2.5", !u.active && "opacity-60")}>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium">
-                          {personName(u)} {u.id === meId && <span className="text-xs text-slate-400">(you)</span>}
-                        </p>
-                        <p className="text-xs text-slate-500">
-                          {u.email}
-                          {u.phone && ` · ${u.phone}`}
-                        </p>
-                      </div>
-                      <Badge tone="neutral" dot={false}>
-                        {ROLE_LABEL[u.role]}
-                      </Badge>
-                      {!u.active && <Badge tone="muted">Inactive</Badge>}
-                      <form action={removeSiteMember}>
-                        <input type="hidden" name="site_id" value={site.id} />
-                        <input type="hidden" name="user_id" value={u.id} />
-                        <input type="hidden" name="back" value={back} />
-                        <SubmitButton
-                          size="sm"
-                          variant="ghost"
-                          pendingText="Removing…"
-                          confirm={`Remove ${personName(u)} from ${site.code ?? site.name}? Their other locations stay as they are.`}
-                        >
-                          Remove
-                        </SubmitButton>
-                      </form>
-                    </li>
-                  ))}
-                </ul>
-              )}
-
-              <div className="grid gap-4 border-t border-slate-100 bg-slate-50/60 p-5 lg:grid-cols-2">
-                <form action={addSiteMember} className="flex flex-wrap items-end gap-2">
-                  <input type="hidden" name="site_id" value={site.id} />
-                  <input type="hidden" name="back" value={back} />
-                  <div className="min-w-[14rem] flex-1">
-                    <Field label="Add an existing user">
-                      <Select name="user_id" defaultValue="" required disabled={!candidates.length}>
-                        <option value="">{candidates.length ? "Choose a manager or tech…" : "Everyone is already here"}</option>
-                        {candidates.map((u) => (
-                          <option key={u.id} value={u.id}>
-                            {personName(u)} · {ROLE_LABEL[u.role]}
-                          </option>
-                        ))}
-                      </Select>
-                    </Field>
-                  </div>
-                  <SubmitButton size="md" variant="secondary" pendingText="Adding…">
-                    Add
-                  </SubmitButton>
-                </form>
-
-                <details className="rounded-lg bg-white ring-1 ring-slate-200">
-                  <summary className="cursor-pointer list-none px-3 py-2 text-sm font-medium text-brand-700">+ Invite someone new to this location</summary>
-                  {!hasServiceKey ? (
-                    <p className="px-3 pb-3 text-xs text-slate-600">
-                      Set <code className="rounded bg-slate-100 px-1">SUPABASE_SERVICE_ROLE_KEY</code> to send invites from here.
-                    </p>
-                  ) : (
-                    <form action={inviteUser} className="grid gap-3 px-3 pb-3 sm:grid-cols-2">
-                      <input type="hidden" name="site_ids" value={site.id} />
-                      <input type="hidden" name="back" value={back} />
-                      <Field label="Email">
-                        <Input type="email" name="email" required />
-                      </Field>
-                      <Field label="Name">
-                        <Input name="full_name" />
-                      </Field>
-                      <Field label="Role">
-                        <Select name="role" defaultValue="manager">
-                          <option value="manager">{ROLE_LABEL.manager}</option>
-                          <option value="tech">{ROLE_LABEL.tech}</option>
-                        </Select>
-                      </Field>
-                      <div className="flex items-end">
-                        <SubmitButton pendingText="Sending…">Send invite</SubmitButton>
-                      </div>
-                      <p className="text-xs text-slate-500 sm:col-span-2">
-                        If they already have a login, they’re just added to this location.
-                      </p>
-                    </form>
-                  )}
-                </details>
-              </div>
-            </Card>
-          );
-        })}
-      </div>
-    </>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </Card>
   );
 }
 
+function ManageSite({ d, site, team, meId }: { d: Data; site: Data["locations"][number]; team: Profile[]; meId: string }) {
+  const back = `/admin/users?view=sites&site=${site.id}`;
+  const teamIds = new Set(team.map((u) => u.id));
+  const candidates = d.users.filter((u) => u.active && (u.role === "manager" || u.role === "tech") && !teamIds.has(u.id));
+  const admins = d.users.filter((u) => u.role === "admin" && u.active);
+  const hasServiceKey = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
+  return (
+    <div className="space-y-4">
+      <Link href="/admin/users?view=sites" className="text-sm text-slate-500 hover:text-slate-800">
+        ← All locations
+      </Link>
+      <Card>
+        <CardHeader
+          title={site.code ? `#${site.code} · ${site.name}` : site.name}
+          subtitle={`${team.length} ${team.length === 1 ? "person" : "people"} · admins see every location`}
+          action={
+            <Link href={`/sites/${site.id}`} className="text-xs font-medium text-brand-700">
+              Site page →
+            </Link>
+          }
+        />
+        {team.length === 0 ? (
+          <p className="px-5 py-4 text-sm text-slate-500">No GMs or techs assigned yet.</p>
+        ) : (
+          <ul className="divide-y divide-slate-100">
+            {team.map((u) => (
+              <li key={u.id} className={clsx("flex flex-wrap items-center gap-3 px-5 py-3", !u.active && "opacity-60")}>
+                <Link href={`/admin/users/${u.id}`} className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-slate-900">
+                    {personName(u)} {u.id === meId && <span className="text-xs font-normal text-slate-400">(you)</span>}
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    {u.email}
+                    {u.phone && ` · ${u.phone}`}
+                  </p>
+                </Link>
+                <RoleBadge u={u} />
+                {!u.active && <Badge tone="muted">Inactive</Badge>}
+                <form action={removeSiteMember}>
+                  <input type="hidden" name="site_id" value={site.id} />
+                  <input type="hidden" name="user_id" value={u.id} />
+                  <input type="hidden" name="back" value={back} />
+                  <SubmitButton
+                    size="sm"
+                    variant="ghost"
+                    pendingText="Removing…"
+                    confirm={`Remove ${personName(u)} from ${site.code ?? site.name}? Their other locations stay as they are.`}
+                  >
+                    Remove
+                  </SubmitButton>
+                </form>
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="grid gap-4 border-t border-slate-100 bg-slate-50/60 p-5 lg:grid-cols-2">
+          <form action={addSiteMember} className="flex flex-wrap items-end gap-2">
+            <input type="hidden" name="site_id" value={site.id} />
+            <input type="hidden" name="back" value={back} />
+            <div className="min-w-[14rem] flex-1">
+              <Field label="Add an existing person">
+                <Select name="user_id" defaultValue="" required disabled={!candidates.length}>
+                  <option value="">{candidates.length ? "Choose a GM or tech…" : "Everyone is already here"}</option>
+                  {candidates.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {personName(u)} · {ROLE_LABEL[u.role]}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            </div>
+            <SubmitButton size="md" variant="secondary" pendingText="Adding…">
+              Add
+            </SubmitButton>
+          </form>
+          <details className="rounded-lg bg-white ring-1 ring-slate-200">
+            <summary className="cursor-pointer list-none px-3 py-2 text-sm font-medium text-brand-700">+ Invite someone new to this location</summary>
+            {!hasServiceKey ? (
+              <p className="px-3 pb-3 text-xs text-slate-600">
+                Set <code className="rounded bg-slate-100 px-1">SUPABASE_SERVICE_ROLE_KEY</code> to send invites from here.
+              </p>
+            ) : (
+              <form action={inviteUser} className="grid gap-3 px-3 pb-3 sm:grid-cols-2">
+                <input type="hidden" name="site_ids" value={site.id} />
+                <input type="hidden" name="back" value={back} />
+                <Field label="Email">
+                  <Input type="email" name="email" required />
+                </Field>
+                <Field label="Name">
+                  <Input name="full_name" />
+                </Field>
+                <Field label="Role">
+                  <Select name="role" defaultValue="manager">
+                    <option value="manager">{ROLE_LABEL.manager}</option>
+                    <option value="tech">{ROLE_LABEL.tech}</option>
+                  </Select>
+                </Field>
+                <div className="flex items-end">
+                  <SubmitButton pendingText="Sending…">Send invite</SubmitButton>
+                </div>
+                <p className="text-xs text-slate-500 sm:col-span-2">If they already have a login, they’re just added to this location.</p>
+              </form>
+            )}
+          </details>
+        </div>
+      </Card>
+      {admins.length > 0 && <p className="text-xs text-slate-500">Admins see every location: {admins.map((a) => personName(a)).join(", ")}</p>}
+    </div>
+  );
+}
