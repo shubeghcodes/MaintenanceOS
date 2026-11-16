@@ -7,6 +7,7 @@ import type { Vendor, WoStatus } from "@/lib/types";
 import { Alert, Badge, Card, CardHeader, DefList, EmptyState, PageHeader, Stat } from "@/components/ui";
 import { DueBadge, StatusBadge } from "@/components/badges";
 import { VendorForm } from "../VendorForm";
+import { VendorDocuments } from "./VendorDocuments";
 
 export default async function VendorPage({
   params,
@@ -56,6 +57,8 @@ export default async function VendorPage({
       />
       {sp.error && <Alert>{sp.error}</Alert>}
       {sp.saved && <Alert tone="good">Vendor saved.</Alert>}
+      {sp.doc === "added" && <Alert tone="good">Document saved.</Alert>}
+      {sp.doc === "removed" && <Alert tone="good">Document deleted.</Alert>}
 
       <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
         <Stat label="Spend YTD" value={fmtMoney(ytd)} sub={`${done.length} jobs completed`} />
@@ -65,7 +68,7 @@ export default async function VendorPage({
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2">
+        <div className="space-y-6 lg:col-span-2">
           {profile.role === "admin" ? (
             <VendorForm vendor={v} />
           ) : (
@@ -83,6 +86,7 @@ export default async function VendorPage({
               />
             </Card>
           )}
+          <VendorDocuments supabase={supabase} vendorId={v.id} isAdmin={profile.role === "admin"} coiExpires={v.coi_expires_on} />
         </div>
         <Card>
           <CardHeader title="Jobs" subtitle={`${wos.length} total`} />

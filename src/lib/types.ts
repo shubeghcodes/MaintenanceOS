@@ -199,7 +199,7 @@ export interface ComplianceRecord {
 
 export interface Attachment {
   id: string;
-  entity_type: "work_order" | "asset" | "compliance" | "purchase";
+  entity_type: "work_order" | "asset" | "compliance" | "purchase" | "vendor";
   entity_id: string;
   storage_path: string;
   file_name: string;
