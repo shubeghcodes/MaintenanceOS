@@ -12,7 +12,7 @@ import { SubmitButton } from "@/components/SubmitButton";
 import { Attachments } from "@/components/Attachments";
 import { putOnHoldWithReport } from "../actions";
 import { PhotoInput } from "@/components/PhotoInput";
-import { addComment, approveWorkOrder, closeForGm, declineWorkOrder, deleteWorkOrder, sendBackNotFixed, setStatus, signOffWorkOrder, updateAssignment, updateCosts, uploadWoFiles } from "../actions";
+import { addComment, approveWorkOrder, closeForGm, declineWorkOrder, deleteWorkOrder, sendBackNotFixed, setStatus, signOffWorkOrder, updateAssignment, saveCosts, uploadWoFiles } from "../actions";
 import { addDaysISO } from "@/lib/format";
 import { HOLD_REASONS, SIGNOFF_AUTO_CLOSE_DAYS } from "@/lib/constants";
 import { Send } from "lucide-react";
@@ -23,6 +23,7 @@ import { TimeCard } from "./TimeCard";
 import { ChecklistCard, type ChecklistItem } from "./ChecklistCard";
 import { TechOptions } from "@/components/TechOptions";
 import { AssigneePicker } from "@/components/AssigneePicker";
+import { AutoSaveForm } from "@/components/AutoSaveForm";
 import { fmtHours } from "@/lib/labor";
 import { getT } from "@/lib/i18n/server";
 import type { T } from "@/lib/i18n";
@@ -58,6 +59,7 @@ const RECEIPT_NOTICE: Record<string, string> = {
   rejected: "Receipt rejected. It no longer counts toward the cost.",
   reimbursed: "Marked reimbursed.",
   deleted: "Receipt deleted.",
+  attached: "Receipt attached.",
 };
 import { AutoRefresh } from "@/components/AutoRefresh";
 
@@ -678,24 +680,8 @@ export default async function WorkOrderPage({
           {canCost && (
             <Card>
               <CardHeader title={t("Costs")} subtitle={wo.nte_amount ? `${t("NTE")} ${fmtMoney(wo.nte_amount)}` : undefined} />
-              <form action={updateCosts} className="space-y-3 p-5">
-                <input type="hidden" name="id" value={id} />
-                {role !== "vendor" && (
-                  <Field label={t("Other parts $")} hint={t("Parts not entered as receipts (e.g. from stock)")}>
-                    <Input name="parts_cost" inputMode="decimal" defaultValue={wo.parts_cost || ""} />
-                  </Field>
-                )}
-                <div className="grid grid-cols-2 gap-3">
-                  <Field label={t("Vendor invoice $")}>
-                    <Input name="vendor_invoice_amount" inputMode="decimal" defaultValue={wo.vendor_invoice_amount || ""} />
-                  </Field>
-                  <Field label={t("Invoice #")}>
-                    <Input name="invoice_number" defaultValue={wo.invoice_number ?? ""} />
-                  </Field>
-                </div>
-                <Field label={t("Resolution notes")}>
-                  <Textarea name="resolution_notes" rows={2} defaultValue={wo.resolution_notes ?? ""} />
-                </Field>
+              <div className="space-y-3 p-5">
+                <p className="text-xs text-slate-500">{t("Updates automatically from time, receipts, parts and vendor invoices.")}</p>
                 <table className="w-full overflow-hidden rounded-lg bg-slate-50 text-xs">
                   <thead>
                     <tr className="text-left text-slate-500">
@@ -734,10 +720,27 @@ export default async function WorkOrderPage({
                 {wo.nte_amount != null && (role === "admin" ? rmTotal : wo.total_cost) > wo.nte_amount && (
                   <Alert tone="serious">{t("Total exceeds the not-to-exceed amount — get approval.")}</Alert>
                 )}
-                <div className="flex items-center justify-end">
-                  <SubmitButton size="sm" variant="secondary">{t("Save costs")}</SubmitButton>
+              </div>
+              <AutoSaveForm action={saveCosts} className="space-y-3 border-t border-slate-100 p-5">
+                <input type="hidden" name="id" value={id} />
+                <p className="text-xs font-medium text-slate-600">{t("Other costs and notes (saved as you type)")}</p>
+                {role !== "vendor" && (
+                  <Field label={t("Other parts $")} hint={t("Parts not entered as receipts (e.g. from stock)")}>
+                    <Input name="parts_cost" inputMode="decimal" defaultValue={wo.parts_cost || ""} />
+                  </Field>
+                )}
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label={t("Vendor invoice $")}>
+                    <Input name="vendor_invoice_amount" inputMode="decimal" defaultValue={wo.vendor_invoice_amount || ""} />
+                  </Field>
+                  <Field label={t("Invoice #")}>
+                    <Input name="invoice_number" defaultValue={wo.invoice_number ?? ""} />
+                  </Field>
                 </div>
-              </form>
+                <Field label={t("Resolution notes")}>
+                  <Textarea name="resolution_notes" rows={2} defaultValue={wo.resolution_notes ?? ""} />
+                </Field>
+              </AutoSaveForm>
             </Card>
           )}
 
