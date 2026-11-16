@@ -41,6 +41,9 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
   const sp = await searchParams;
   const { supabase, profile } = await requireRole("admin", "tech");
   const { companyId: cid } = await getCompanyScope();
+  // Techs only ever see their own schedule; admins can pick any tech (or everyone).
+  const isTech = profile.role === "tech";
+  const techFilter = isTech ? profile.id : sp.tech;
   const today = todayISO();
   const view: "month" | "week" | "day" = sp.view === "day" ? "day" : sp.view === "month" ? "month" : "week";
   const anchor = isISODate(sp.date) ? sp.date : today;
@@ -107,14 +110,14 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
       estimated_hours: p.estimated_hours,
     })),
   );
-  if (sp.tech) forecast = forecast.filter((f) => f.tech_id === sp.tech);
+  if (techFilter) forecast = forecast.filter((f) => f.tech_id === techFilter);
 
   const scheduled = (schedData ?? []) as unknown as Row[];
   const people = (techData ?? []) as { id: string; full_name: string | null; email: string | null; role: string }[];
   // Rows: every tech, plus admins only if they have work on the calendar this period.
   const busy = new Set([...scheduled.map((r) => r.assigned_tech_id), ...forecast.map((f) => f.tech_id)]);
   let techs = people.filter((p) => p.role === "tech" || busy.has(p.id)).map((p) => ({ id: p.id, name: personName(p) }));
-  if (sp.tech) techs = techs.filter((t) => t.id === sp.tech);
+  if (techFilter) techs = techs.filter((t) => t.id === techFilter);
 
   const toJob = (r: Row): BoardJob => ({
     id: r.id,
@@ -134,7 +137,8 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
     due_at: r.due_at,
   });
   let jobs = [...scheduled, ...((backlogData ?? []) as unknown as Row[])].map(toJob);
-  if (sp.tech) jobs = jobs.filter((j) => j.assigned_tech_id === sp.tech || !j.scheduled_date);
+  if (isTech) jobs = jobs.filter((j) => j.assigned_tech_id === profile.id);
+  else if (sp.tech) jobs = jobs.filter((j) => j.assigned_tech_id === sp.tech || !j.scheduled_date);
 
   const off: Record<string, string> = {};
   const offByDay: Record<string, string[]> = {};
@@ -143,7 +147,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
     if (why) {
       off[`${t.id}|${d}`] = why;
       // Month view lists who's off, but not everyone's regular weekend (that would fill every Saturday/Sunday).
-      if (view === "month" && (sp.tech || !/regular/i.test(why))) (offByDay[d] ??= []).push(sp.tech ? why : t.name);
+      if (view === "month" && (techFilter || !/regular/i.test(why))) (offByDay[d] ??= []).push(techFilter ? why : t.name);
     }
   }
 
@@ -172,7 +176,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
 
   return (
     <>
-      <PageHeader title="Schedule" subtitle={title} />
+      <PageHeader title={isTech ? "My schedule" : "Schedule"} subtitle={title} />
       {sp.error && <Alert>{sp.error}</Alert>}
       {sp.notice && <Alert tone="good">{sp.notice}</Alert>}
 
@@ -199,6 +203,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
             </Link>
           ))}
         </div>
+        {!isTech && (
         <form className="flex items-center gap-2">
           <input type="hidden" name="view" value={view} />
           <input type="hidden" name="date" value={anchor} />
@@ -217,13 +222,14 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
             Show
           </Button>
         </form>
+        )}
         {profile.role === "admin" && (
           <Link href="/schedule/time-off" className={btnClass("secondary", "sm")}>
             <CalendarOff className="h-4 w-4" aria-hidden /> Days off
           </Link>
         )}
         {view === "day" && (
-          <Link href={`/my-day?date=${anchor}${sp.tech ? `&tech=${sp.tech}` : ""}`} className={btnClass("ghost", "sm")}>
+          <Link href={`/my-day?date=${anchor}${!isTech && sp.tech ? `&tech=${sp.tech}` : ""}`} className={btnClass("ghost", "sm")}>
             Route view →
           </Link>
         )}
@@ -241,7 +247,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
           off={offByDay}
           canEdit={profile.role === "admin"}
           dayHref={`/schedule?view=day${sp.tech ? `&tech=${sp.tech}` : ""}&date=`}
-          showTech={!sp.tech}
+          showTech={!techFilter}
         />
       ) : (
       <ScheduleBoard
@@ -255,6 +261,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
         isAdmin={profile.role === "admin"}
         view={view}
         today={today}
+        hideNoTech={isTech}
         sent={sent}
         backUrl={qs({})}
         sites={((siteData ?? []) as { id: string; code: string | null; name: string }[]).map((s) => ({ id: s.id, code: s.code ?? s.name }))}
