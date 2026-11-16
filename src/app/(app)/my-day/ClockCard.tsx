@@ -32,24 +32,21 @@ export function ClockCard({
   jobs,
   lastJobId,
   preselectJobId,
-  breakUntil,
 }: {
   shift: OpenShift | null;
   jobs: ClockJob[];
   lastJobId: string | null;
   preselectJobId: string | null;
-  /** Clocked out less than 30 minutes ago: when they can clock back in. */
-  breakUntil?: { at: string; time: string } | null;
 }) {
   const t = useT();
-  // Breaks are at least 30 minutes: keep the button locked until then (the database enforces it too).
+  // Lunch is at least 30 minutes: keep End lunch locked until then (the database enforces it too).
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 15_000);
     return () => clearInterval(id);
   }, []);
   const lunchLocked = !!shift?.lunch && now < new Date(shift.lunch.backAt).getTime();
-  const clockInLocked = !shift && !!breakUntil && now < new Date(breakUntil.at).getTime();
+
   const [open, setOpen] = useState(!!preselectJobId || !!shift?.staleDate);
   const [pick, setPick] = useState<string>(shift ? (lastJobId ?? jobs[0]?.id ?? "none") : (preselectJobId ?? jobs.find((j) => j.open)?.id ?? "none"));
   const [finished, setFinished] = useState<"yes" | "no">("no");
@@ -128,12 +125,11 @@ export function ClockCard({
             <div>
               <p className="text-sm font-semibold text-slate-900">{t("You're clocked out")}</p>
               <p className="text-xs text-slate-500">
-                {clockInLocked ? t("Breaks are at least 30 minutes. You can clock back in at {time}.", { time: breakUntil!.time }) : t("Clock in on your first job to start your day.")}
+                {t("Clock in on your first job to start your day.")}
               </p>
             </div>
             <button
               onClick={() => setOpen(true)}
-              disabled={clockInLocked}
               className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <LogIn className="h-4 w-4" aria-hidden /> {t("Clock in")}
