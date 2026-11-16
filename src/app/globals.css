@@ -4,3 +4,38 @@
 
 html { -webkit-font-smoothing: antialiased; }
 body { @apply bg-slate-50 text-slate-900; }
+
+/* Printing / "Save as PDF" (Analytics ⋮ menu): just the report, landscape, no app chrome. */
+@media print {
+  @page {
+    size: landscape;
+    margin: 12mm;
+  }
+  html,
+  body {
+    background: #fff !important;
+  }
+  [data-report-hide-print],
+  main form:not([data-report-keep-print]) {
+    display: none !important;
+  }
+  main .shadow-sm,
+  main .shadow {
+    box-shadow: none !important;
+  }
+  main .overflow-x-auto,
+  main .overflow-hidden {
+    overflow: visible !important;
+  }
+  main table {
+    font-size: 10px;
+  }
+  main tr,
+  main [data-report-stat] {
+    break-inside: avoid;
+  }
+  main a {
+    color: inherit !important;
+    text-decoration: none !important;
+  }
+}

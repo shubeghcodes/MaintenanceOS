@@ -44,7 +44,7 @@ export function InstallBanner({ vapidKey }: { vapidKey: string | null }) {
   };
 
   return (
-    <div className="fixed inset-x-3 bottom-3 z-50 mx-auto max-w-md rounded-xl bg-white p-4 shadow-lg ring-1 ring-slate-200 lg:left-auto lg:right-6 lg:mx-0" style={{ marginBottom: "env(safe-area-inset-bottom)" }}>
+    <div className="fixed inset-x-3 bottom-3 z-50 mx-auto max-w-md rounded-xl bg-white p-4 shadow-lg ring-1 ring-slate-200 print:hidden lg:left-auto lg:right-6 lg:mx-0" style={{ marginBottom: "env(safe-area-inset-bottom)" }}>
       <button type="button" onClick={close} aria-label="Dismiss" className="absolute right-2 top-2 rounded p-1 text-slate-400 hover:text-slate-600">
         <X className="h-4 w-4" />
       </button>
