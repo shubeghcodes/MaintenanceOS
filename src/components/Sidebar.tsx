@@ -180,7 +180,7 @@ export function Sidebar({
   return (
     <>
       {/* Mobile top bar */}
-      <div className="sticky top-0 z-30 flex items-center justify-between bg-slate-900 px-4 py-3 lg:hidden">
+      <div className="sticky top-0 z-30 flex items-center justify-between bg-slate-900 px-4 py-3 print:hidden lg:hidden">
         <div className="flex items-center gap-2">
           <Wrench className="h-4 w-4 text-brand-100" aria-hidden />
           <span className="font-semibold text-white">MaintenanceOS</span>
@@ -205,7 +205,7 @@ export function Sidebar({
         </div>
       )}
 
-      <aside className="fixed inset-y-0 left-0 hidden w-60 flex-col bg-slate-900 lg:flex">
+      <aside className="fixed inset-y-0 left-0 hidden w-60 flex-col bg-slate-900 print:!hidden lg:flex">
         {brand}
         {picker}
         <div className="flex flex-1 flex-col overflow-y-auto">{nav}</div>

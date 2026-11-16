@@ -25,8 +25,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <OnboardingTour role={profile.role} firstName={(profile.full_name ?? "").split(" ")[0] || null} autoStart={!profile.tour_completed_at} />
       )}
       {profile.role !== "vendor" && <InstallBanner vapidKey={vapidKey} />}
-      <main className="lg:pl-60">
-        <div className="mx-auto max-w-screen-2xl px-4 py-6 sm:px-6 lg:px-8 lg:py-8">{children}</div>
+      <main className="lg:pl-60 print:!pl-0">
+        <div className="mx-auto max-w-screen-2xl px-4 py-6 sm:px-6 lg:px-8 lg:py-8 print:max-w-none print:p-0">{children}</div>
       </main>
     </div>
   );

@@ -191,9 +191,13 @@ export function Stat({
   href?: string;
 }) {
   const inner = (
-    <Card className={clsx("h-full p-4", href && "transition hover:border-slate-300 hover:shadow")}>
-      <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</p>
-      <p className="mt-2 text-3xl font-semibold tabular-nums text-slate-900">{value}</p>
+    <Card className={clsx("h-full p-4", href && "transition hover:border-slate-300 hover:shadow")} data-report-stat="">
+      <p className="text-xs font-medium uppercase tracking-wide text-slate-500" data-report-stat-label="">
+        {label}
+      </p>
+      <p className="mt-2 text-3xl font-semibold tabular-nums text-slate-900" data-report-stat-value="">
+        {value}
+      </p>
       {sub && (
         <div className="mt-1.5 flex items-center gap-1.5 text-xs text-slate-500">
           {tone && <span className={clsx("h-1.5 w-1.5 rounded-full", DOT_CLASS[tone])} aria-hidden />}
