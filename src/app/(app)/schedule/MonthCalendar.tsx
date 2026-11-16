@@ -231,8 +231,10 @@ export function MonthCalendar({
         </div>
       </div>
       <p className="mt-2 text-xs text-slate-500">
-        Drag a job to another day to move it (it stays with the same tech), or drop it on Unscheduled to take it off the calendar. Dashed items are planned PMs
-        that become work orders automatically. Click a date to open that day.
+        {canEdit
+          ? "Drag a job to another day to move it (it stays with the same tech), or drop it on Unscheduled to take it off the calendar. "
+          : ""}
+        Dashed items are planned PMs that become work orders automatically. Click a date to open that day.
       </p>
 
       {/* Unscheduled: drag onto a day to schedule it; drop a job here to take it off the calendar. */}
@@ -253,7 +255,7 @@ export function MonthCalendar({
           <div className="mr-auto">
             <p className="text-sm font-semibold">Unscheduled</p>
             <p className="text-xs text-slate-500">
-              {backlog.length} open job{backlog.length === 1 ? "" : "s"} without a date · drag one onto a day to schedule it
+              {backlog.length} open job{backlog.length === 1 ? "" : "s"} without a date · {canEdit ? "drag one onto a day to schedule it" : "an admin will schedule them"}
             </p>
           </div>
           <div className="flex items-center gap-2 rounded-lg px-2 ring-1 ring-slate-200">

@@ -239,7 +239,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
           forecast={forecast}
           techNames={Object.fromEntries(people.map((p) => [p.id, personName(p)]))}
           off={offByDay}
-          canEdit
+          canEdit={profile.role === "admin"}
           dayHref={`/schedule?view=day${sp.tech ? `&tech=${sp.tech}` : ""}&date=`}
           showTech={!sp.tech}
         />
@@ -251,7 +251,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
         jobs={jobs}
         forecast={forecast}
         off={off}
-        canEdit
+        canEdit={profile.role === "admin"}
         isAdmin={profile.role === "admin"}
         view={view}
         today={today}
