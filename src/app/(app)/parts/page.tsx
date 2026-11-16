@@ -51,7 +51,7 @@ export default async function PartsPage({ searchParams }: { searchParams: Promis
     .select(
       "id,name,part_number,quantity,status,est_cost,cost,supplier,eta,ready_location,requested_at," +
         "requester:profiles!wo_parts_requested_by_fkey(id,full_name,email)," +
-        "wo:work_orders!inner(id,number,title,status,company_id,assigned_tech_id,site:sites(id,name,code))",
+        "wo:work_orders!inner(id,number,title,status,company_id,site_id,assigned_tech_id,site:sites(id,name,code))",
     )
     .in("status", QUEUES[queue].statuses)
     .order("requested_at", { ascending: queue === "open" || queue === "to_order" })
