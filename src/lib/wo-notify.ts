@@ -286,3 +286,121 @@ export async function emailGmsNote(woId: string, note: { body: string; authorId?
     "Open work order",
   );
 }
+
+// ---------------------------------------------------------------- Parts
+type PartRow = {
+  id: string;
+  name: string;
+  part_number: string | null;
+  quantity: number;
+  status: string;
+  est_cost: number | null;
+  cost: number | null;
+  supplier: string | null;
+  eta: string | null;
+  ready_location: string | null;
+  location_note: string | null;
+  notes: string | null;
+  requested_by: string | null;
+};
+const READY_WHERE: Record<string, string> = { shop: "At the shop", store: "Delivered to the store", supplier: "Ready for pickup at the supplier", other: "Other" };
+const money = (n: number | null | undefined) => (n == null ? null : `$${Number(n).toFixed(2)}`);
+const partName = (p: PartRow) => `${p.name}${Number(p.quantity) !== 1 ? ` ×${Number(p.quantity)}` : ""}`;
+
+async function loadPart(partId: string) {
+  const db = createAdminClient();
+  const { data } = await db
+    .from("wo_parts")
+    .select("id,work_order_id,name,part_number,quantity,status,est_cost,cost,supplier,eta,ready_location,location_note,notes,requested_by")
+    .eq("id", partId)
+    .maybeSingle();
+  return data as (PartRow & { work_order_id: string }) | null;
+}
+
+/** A tech asked for a part: tell the admins who cover that company (and say if it needs their approval). */
+export async function emailPartRequested(partId: string, actorId: string) {
+  const part = await loadPart(partId);
+  if (!part) return;
+  const { db, wo } = await load(part.work_order_id);
+  if (!wo) return;
+  const { data: c } = wo.company_id ? await db.from("companies").select("parts_approval_limit").eq("id", wo.company_id).maybeSingle() : { data: null };
+  const limit = Number((c as { parts_approval_limit: number } | null)?.parts_approval_limit ?? 250);
+  const overLimit = part.est_cost == null || Number(part.est_cost) > limit;
+  const covers = await adminCoverage(db, wo.company_id);
+  const { data } = await db.from("profiles").select("id,email,active,full_name").eq("role", "admin").eq("active", true);
+  const admins = (data ?? []) as { id: string; email: string | null; full_name: string | null }[];
+  const to = admins.filter((a) => a.email && a.id !== actorId && covers(a.id)).map((a) => a.email!);
+  if (!to.length) return;
+  const { data: who } = await db.from("profiles").select("full_name,email").eq("id", actorId).maybeSingle();
+  const by = (who as { full_name: string | null; email: string | null } | null)?.full_name ?? "A technician";
+  await send(
+    to,
+    `${overLimit ? "Part needs approval" : "Part requested"}: ${partName(part)} — WO #${wo.number} (${wo.site?.name ?? ""})`,
+    `${overLimit ? "Part needs approval" : "Part requested"} · WO #${wo.number}`,
+    partName(part),
+    `${esc(by)} needs a part for <b>${esc(wo.title)}</b> at ${esc(loc(wo))}.${
+      overLimit
+        ? part.est_cost == null
+          ? " No price yet. Approve it or order it from the work order."
+          : ` It's over the ${money(limit)} limit, so it needs your approval before it's ordered.`
+        : ` It's under the ${money(limit)} limit, so the tech can order it.`
+    }`,
+    detailTable([
+      ["Part #", esc(part.part_number)],
+      ["Quantity", String(Number(part.quantity))],
+      ["Estimated cost", esc(money(part.est_cost))],
+      ["Where to get it", esc(part.supplier)],
+      ["Notes", part.notes ? esc(part.notes).replace(/\n/g, "<br>") : null],
+    ]),
+    { id: wo.id, number: wo.number },
+    overLimit ? "Review the part" : "Open work order",
+  );
+}
+
+/** A part was ordered (GMs: when to expect the fix) or is ready (GMs and the assigned tech). */
+export async function emailPartUpdate(partId: string, actorId: string) {
+  const part = await loadPart(partId);
+  if (!part || (part.status !== "ordered" && part.status !== "ready")) return;
+  const { db, wo } = await load(part.work_order_id);
+  if (!wo) return;
+  const { data: siteRow } = await db.from("work_orders").select("site_id").eq("id", wo.id).single();
+  const gms = (await siteGms(db, (siteRow as { site_id: string }).site_id)).filter((g) => g.id !== actorId);
+  const ready = part.status === "ready";
+
+  if (gms.length) {
+    await send(
+      gms.map((g) => g.email!),
+      ready
+        ? `Part is in for WO #${wo.number} — ${wo.title}`
+        : `Part ordered for WO #${wo.number} — ${wo.title}${part.eta ? ` (arriving ${fmtDate(part.eta)})` : ""}`,
+      `${ready ? "Part ready" : "Part ordered"} · WO #${wo.number}`,
+      partName(part),
+      ready
+        ? `The part for <b>${esc(wo.title)}</b> at ${esc(loc(wo))} is in. The technician will schedule the repair.`
+        : `The part for <b>${esc(wo.title)}</b> at ${esc(loc(wo))} has been ordered.${part.eta ? ` It's expected ${esc(fmtDate(part.eta))}.` : ""}`,
+      "",
+      { id: wo.id, number: wo.number },
+    );
+  }
+
+  // The tech hears about it when it's ready (in their language).
+  if (ready && reachable(wo.tech, actorId)) {
+    const lang = asLocale(wo.tech.language);
+    const t = makeT(lang);
+    const where = part.ready_location ? t(READY_WHERE[part.ready_location] ?? part.ready_location) : null;
+    await send(
+      wo.tech.email!,
+      t("Part ready: {part} — WO #{n} ({site})", { part: partName(part), n: wo.number, site: wo.site?.name ?? "" }),
+      t("Part ready · WO #{n}", { n: wo.number }),
+      partName(part),
+      `${hello(wo.tech, t)}<br>${t("The part for <b>{title}</b> at {site} is ready. Schedule the return visit to finish the job.", { title: esc(wo.title), site: esc(loc(wo, t)) })}`,
+      detailTable([
+        [t("Where it is"), esc([where, part.location_note].filter(Boolean).join(" — ") || null)],
+        [t("Part #"), esc(part.part_number)],
+      ]),
+      { id: wo.id, number: wo.number },
+      "Open work order",
+      t,
+    );
+  }
+}

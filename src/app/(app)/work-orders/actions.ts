@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
-import { emailApprovalNeeded, emailGmsNote, emailRequesterApproved, emailRequesterDeclined, emailTechAssigned, emailTechSentBack } from "@/lib/wo-notify";
+import { emailApprovalNeeded, emailGmsNote, emailPartRequested, emailRequesterApproved, emailRequesterDeclined, emailTechAssigned, emailTechSentBack } from "@/lib/wo-notify";
 import { afterClosed, afterWorkDone } from "@/lib/signoff";
 import { sendAndRecord } from "@/lib/dispatch";
 import { ACTIVE_DISPATCH, HOLD_REASONS } from "@/lib/constants";
@@ -390,10 +390,23 @@ export async function putOnHoldWithReport(fd: FormData) {
   });
   after(() => emailGmsNote(id, { body: `Progress report — ${body}`, authorId: profile.id }));
 
+  // Waiting on parts: open a part request from what they typed, unless parts are already being tracked.
+  if (reason === "parts" && parts) {
+    const { count } = await supabase
+      .from("wo_parts")
+      .select("id", { count: "exact", head: true })
+      .eq("work_order_id", id)
+      .in("status", ["requested", "approved", "ordered"]);
+    if (!count) {
+      const { data: part } = await supabase.from("wo_parts").insert({ work_order_id: id, name: parts.slice(0, 200), quantity: 1 }).select("id").single();
+      if (part) after(() => emailPartRequested(part.id, profile.id));
+    }
+  }
+
   revalidatePath(`/work-orders/${id}`);
   revalidatePath("/work-orders");
   revalidatePath("/my-day");
   revalidatePath("/schedule");
   revalidatePath("/");
-  redirect(`/work-orders/${id}?held=1`);
+  redirect(`/work-orders/${id}?held=1${reason === "parts" ? "#parts" : ""}`);
 }
