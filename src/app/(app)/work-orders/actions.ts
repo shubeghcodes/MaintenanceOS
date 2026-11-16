@@ -217,6 +217,16 @@ export async function setStatus(status: WoStatus, fd: FormData) {
   }
   if (wo.status === "requested" && profile.role !== "admin" && status !== "cancelled") fail(id, "This work order is waiting for approval by an admin");
 
+  // A tech starting the job starts their timer too (timer_start also sets the job In progress).
+  let timer: string | null = null;
+  if (status === "in_progress" && profile.role === "tech" && wo.status !== "in_progress") {
+    const { data: t, error: tErr } = await supabase.rpc("timer_start", { p_wo: id });
+    if (tErr && /clock in first/i.test(tErr.message)) redirect(`/my-day?clockin=${id}#clock`);
+    if (tErr) fail(id, tErr.message);
+    const pausedWo = (t as { paused_wo: number | null } | null)?.paused_wo;
+    timer = pausedWo ? `started_paused_${pausedWo}` : "started";
+  }
+
   const patch: Record<string, unknown> = { status };
   if (status === "completed") {
     const notes = str(fd, "resolution_notes");
@@ -235,11 +245,25 @@ export async function setStatus(status: WoStatus, fd: FormData) {
   // Store jobs now wait for the GM's sign-off; others close and send the closing emails.
   if (status === "cancelled") after(() => emailCancelledDispatches(createAdminClient(), id, savedAt));
   if (status === "completed" && wo.status !== "completed") after(() => afterWorkDone(id, profile.id));
+  if (status === "on_hold") await stopMyTimer(supabase, id, profile.id, profile.role === "admin");
   revalidatePath(`/work-orders/${id}`);
   revalidatePath("/work-orders");
   revalidatePath("/my-day");
   revalidatePath("/schedule");
+  revalidatePath("/labor");
   revalidatePath("/");
+  if (timer) redirect(`/work-orders/${id}?timer=${timer}#time`);
+}
+
+/**
+ * Putting a job on hold stops the timer on it (time so far is kept; starting again opens a new entry).
+ * A tech stops their own; an admin stops everyone's on that job.
+ */
+async function stopMyTimer(supabase: Awaited<ReturnType<typeof getSession>>["supabase"], woId: string, userId: string, everyone = false) {
+  let q = supabase.from("time_entries").select("id").eq("work_order_id", woId).in("status", ["running", "paused"]);
+  if (!everyone) q = q.eq("user_id", userId);
+  const { data } = await q;
+  for (const e of (data ?? []) as { id: string }[]) await supabase.rpc("timer_change", { p_entry: e.id, p_action: "stop" });
 }
 
 export async function updateAssignment(fd: FormData) {
@@ -416,5 +440,8 @@ export async function putOnHoldWithReport(fd: FormData) {
   revalidatePath("/my-day");
   revalidatePath("/schedule");
   revalidatePath("/");
+  await stopMyTimer(supabase, id, profile.id, profile.role === "admin");
+  revalidatePath("/my-day");
+  revalidatePath("/labor");
   redirect(`/work-orders/${id}?held=1${reason === "parts" ? "#parts" : ""}`);
 }
