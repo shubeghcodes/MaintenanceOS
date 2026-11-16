@@ -29,6 +29,8 @@ export type BoardTech = { id: string; name: string };
 /** A PM visit that will be put on the calendar automatically but isn't a work order yet. */
 export type BoardForecast = {
   pm_id: string;
+  /** The PM's due date; `date` is where it lands (moved off the tech's day off). */
+  due: string;
   date: string;
   title: string;
   tech_id: string | null;
@@ -60,6 +62,7 @@ export function ScheduleBoard({
   techs,
   jobs: initialJobs,
   forecast = [],
+  off = {},
   canEdit,
   isAdmin,
   view,
@@ -73,6 +76,8 @@ export function ScheduleBoard({
   techs: BoardTech[];
   jobs: BoardJob[];
   forecast?: BoardForecast[];
+  /** `${techId}|${date}` → why they're off ("Vacation", "Regular day off"). */
+  off?: Record<string, string>;
   canEdit: boolean;
   isAdmin: boolean;
   view: "week" | "day";
@@ -137,6 +142,8 @@ export function ScheduleBoard({
     if (!job) return;
     const techId = target.date === null ? job.assigned_tech_id : target.techId; // back to list keeps the tech
     if (job.scheduled_date === target.date && job.assigned_tech_id === techId) return;
+    const why = target.date && techId ? off[`${techId}|${target.date}`] : null;
+    if (why && !confirm(`${techName(techId) ?? "This tech"} is off that day (${why}). Schedule it anyway?`)) return;
 
     const before = jobs;
     setError(null);
@@ -264,6 +271,10 @@ export function ScheduleBoard({
                     <p className="text-[11px] text-slate-500">
                       {techJobs.length} job{techJobs.length === 1 ? "" : "s"}
                       {techPlanned.length > 0 && ` + ${techPlanned.length} upcoming PM`}
+                      {(() => {
+                        const n = days.filter((d) => off[`${t.id}|${d}`]).length;
+                        return n > 0 ? <span className="block text-amber-700">{view === "day" ? `Off: ${off[`${t.id}|${days[0]}`]}` : `Off ${n} day${n === 1 ? "" : "s"}`}</span> : null;
+                      })()}
                       {weekHours ? ` · ${weekHours}h` : ""}
                     </p>
                     {view === "day" && t.id !== NO_TECH && (
@@ -295,10 +306,17 @@ export function ScheduleBoard({
                         className={clsx(
                           "min-h-[84px] border-b border-l border-slate-100 p-1.5 transition-colors",
                           d === today && "bg-brand-50/30",
+                          off[key] && "bg-[repeating-linear-gradient(135deg,#fff7ed_0,#fff7ed_6px,#ffedd5_6px,#ffedd5_12px)]",
                           over === key && "bg-brand-100/60 ring-2 ring-inset ring-brand-500",
                           t.id === NO_TECH && "bg-slate-50/60",
                         )}
                       >
+                        {off[key] && (
+                          <p className="mb-1 truncate rounded bg-white/80 px-1.5 py-0.5 text-[10px] font-medium text-amber-800" title={off[key]}>
+                            Off · {off[key]}
+                          </p>
+                        )}
+                        {off[key] && list.length > 0 && <p className="mb-1 text-[10px] font-semibold text-red-700">Jobs on a day off</p>}
                         {view === "week" && sent[key] && <p className="mb-1 text-[10px] text-emerald-700">✓ emailed {sent[key]}</p>}
                         <div className={clsx("gap-1.5", view === "day" ? "grid grid-cols-1 sm:grid-cols-2 2xl:grid-cols-3" : "flex flex-col")}>
                           {list.map((j) => card(j, { showAddress: view === "day" }))}
@@ -315,9 +333,10 @@ export function ScheduleBoard({
                                 {f.start_time && <span className="ml-auto font-semibold text-slate-600">{fmtTime(f.start_time)}</span>}
                               </span>
                               <span className="mt-0.5 line-clamp-2 block font-medium text-slate-700">{f.title}</span>
-                              <span className="mt-0.5 flex gap-2 text-[11px] text-slate-500">
+                              <span className="mt-0.5 flex flex-wrap gap-x-2 text-[11px] text-slate-500">
                                 <span className="font-medium text-slate-600">{f.site_code}</span>
                                 {f.estimated_hours ? <span>{f.estimated_hours}h</span> : null}
+                                {f.due !== f.date && <span className="text-amber-700">due {dayLabels[f.due] ?? f.due.slice(5).replace("-", "/")}</span>}
                               </span>
                             </Link>
                           ))}
