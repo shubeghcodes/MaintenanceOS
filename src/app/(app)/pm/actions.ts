@@ -101,6 +101,31 @@ export async function deletePm(fd: FormData) {
   redirect("/pm");
 }
 
+/** Delete several PM schedules at once (admins). Optionally cancel the work orders they created that nobody started. */
+export async function deletePms(fd: FormData) {
+  const { supabase } = await requireRole("admin");
+  const ids = fd.getAll("ids").map(String).filter(Boolean);
+  const back = str(fd, "back") ?? "/pm";
+  const sep = back.includes("?") ? "&" : "?";
+  if (!ids.length) redirect(`${back}${sep}error=${encodeURIComponent("Pick at least one PM schedule")}`);
+  let cancelled = 0;
+  if (fd.get("cancel_open") === "on") {
+    const { data } = await supabase
+      .from("work_orders")
+      .update({ status: "cancelled" })
+      .in("pm_schedule_id", ids)
+      .in("status", ["new", "assigned"])
+      .select("id");
+    cancelled = data?.length ?? 0;
+  }
+  const { error, count } = await supabase.from("pm_schedules").delete({ count: "exact" }).in("id", ids);
+  if (error) redirect(`${back}${sep}error=${encodeURIComponent(error.message)}`);
+  revalidatePath("/pm");
+  revalidatePath("/schedule");
+  revalidatePath("/work-orders");
+  redirect(`${back}${sep}deleted=${count ?? ids.length}${cancelled ? `&cancelled=${cancelled}` : ""}`);
+}
+
 /** Creates any PM / compliance work orders that have entered their lead window. */
 export async function runScheduler(fd: FormData) {
   const { supabase, profile } = await requireRole("admin");
