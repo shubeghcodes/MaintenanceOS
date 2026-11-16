@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, Clock, MapPin, Navigation, Pause, Phone, Play, Receipt, Square } from "lucide-react";
 import { getSession } from "@/lib/auth";
-import { WORKABLE_STATUSES } from "@/lib/constants";
+import { PART_READY_WHERE, WORKABLE_STATUSES } from "@/lib/constants";
 import { addDaysISO, dayLabel, fmtTime, isISODate, personName, relativeDue, dueWhen, todayISO } from "@/lib/format";
 import type { WoPriority, WoStatus, WoType } from "@/lib/types";
 import { Alert, Card, CardHeader, EmptyState, PageHeader, Select, Button } from "@/components/ui";
@@ -60,6 +60,26 @@ export default async function MyDayPage({ searchParams }: { searchParams: Promis
       : Promise.resolve({ data: [] as { id: string; full_name: string | null; email: string | null }[] }),
   ]);
   // Open timers for this tech (any work order), so a running timer is always visible here.
+  // Things that need the tech's attention beyond today: overdue jobs and parts that are in.
+  const [{ data: overdueData }, { data: readyParts }] = await Promise.all([
+    supabase
+      .from("work_orders")
+      .select("id,number,title,due_at")
+      .eq("assigned_tech_id", techId)
+      .in("status", ["new", "assigned", "in_progress", "on_hold"])
+      .lt("due_at", new Date().toISOString())
+      .order("due_at")
+      .limit(10),
+    supabase
+      .from("wo_parts")
+      .select("id,name,ready_location,wo:work_orders!inner(id,number,title,assigned_tech_id)")
+      .eq("status", "ready")
+      .eq("wo.assigned_tech_id", techId)
+      .limit(10),
+  ]);
+  const overdue = (overdueData ?? []) as { id: string; number: number; title: string; due_at: string }[];
+  const partsReady = (readyParts ?? []) as unknown as { id: string; name: string; ready_location: string | null; wo: { id: string; number: number; title: string } }[];
+
   const { data: timerData } = await supabase
     .from("time_entries")
     .select(`${ENTRY_COLS}, wo:work_orders(number,title)`)
@@ -187,6 +207,45 @@ export default async function MyDayPage({ searchParams }: { searchParams: Promis
         <p className={`mb-4 rounded-lg px-4 py-2.5 text-sm ring-1 ring-inset ${shift ? "bg-emerald-50 text-emerald-900 ring-emerald-200" : "bg-slate-50 text-slate-600 ring-slate-200"}`}>
           {shift ? `${shift.lunch ? `${t("On lunch since {time}", { time: shift.lunch.sinceTime })} · ` : ""}${t("Clocked in since {time}", { time: shift.clockInTime })} · ${t("started on {job}", { job: shift.firstLabel })}` : t("Clocked out")}
         </p>
+      )}
+      {(overdue.length > 0 || partsReady.length > 0) && (
+        <div className="mb-4 grid gap-3 sm:grid-cols-2">
+          {overdue.length > 0 && (
+            <div className="rounded-lg bg-red-50 px-4 py-3 ring-1 ring-inset ring-red-200">
+              <p className="text-sm font-semibold text-red-900">{plural(t, overdue.length, "{n} overdue job", "{n} overdue jobs")}</p>
+              <ul className="mt-1 space-y-0.5 text-sm">
+                {overdue.slice(0, 4).map((w) => (
+                  <li key={w.id} className="truncate">
+                    <Link href={`/work-orders/${w.id}`} className="text-red-800 hover:underline">
+                      <span className="font-mono text-xs">#{w.number}</span> {w.title}
+                    </Link>
+                    <span className="text-xs text-red-700"> · {t("was due {date}", { date: fmtDate(w.due_at, L) })}</span>
+                  </li>
+                ))}
+              </ul>
+              {overdue.length > 4 && (
+                <Link href="/work-orders?status=overdue&mine=1" className="mt-1 inline-block text-xs font-medium text-red-800 hover:underline">
+                  {t("See all")} →
+                </Link>
+              )}
+            </div>
+          )}
+          {partsReady.length > 0 && (
+            <div className="rounded-lg bg-emerald-50 px-4 py-3 ring-1 ring-inset ring-emerald-200">
+              <p className="text-sm font-semibold text-emerald-900">{plural(t, partsReady.length, "{n} part ready to install", "{n} parts ready to install")}</p>
+              <ul className="mt-1 space-y-0.5 text-sm">
+                {partsReady.slice(0, 4).map((p) => (
+                  <li key={p.id} className="truncate">
+                    <Link href={`/work-orders/${p.wo.id}#parts`} className="text-emerald-800 hover:underline">
+                      {p.name} · <span className="font-mono text-xs">#{p.wo.number}</span> {p.wo.title}
+                    </Link>
+                    {p.ready_location && <span className="text-xs text-emerald-700"> · {t(PART_READY_WHERE[p.ready_location] ?? p.ready_location)}</span>}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
       )}
       {sp.timer?.includes("_paused_") && <Alert tone="good">{t("Timer started. Your other timer (#{n}) was paused, since only one can run at a time.", { n: sp.timer.split("_paused_")[1] })}</Alert>}
 

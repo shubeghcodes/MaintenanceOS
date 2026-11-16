@@ -116,7 +116,7 @@ function stepsFor(role: UserRole, firstName: string | null): Step[] {
   };
 
   if (role === "manager") return [welcome, dashboard, company, locations, workOrders, rm, help];
-  if (role === "tech") return [welcome, dashboard, company, workOrders, time, help];
+  if (role === "tech") return [welcome, workOrders, time, help];
   return [welcome, dashboard, company, locations, workOrders, vendors, time, rm, help];
 }
 

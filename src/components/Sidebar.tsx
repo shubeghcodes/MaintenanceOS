@@ -32,7 +32,7 @@ import { START_TOUR_EVENT } from "./OnboardingTour";
 import { useT } from "@/lib/i18n/client";
 
 const NAV: { href: string; label: string; icon: typeof Wrench; roles: UserRole[]; superOnly?: boolean }[] = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboard, roles: ["admin", "manager", "tech"] },
+  { href: "/", label: "Dashboard", icon: LayoutDashboard, roles: ["admin", "manager"] },
   { href: "/my-day", label: "My day", icon: ListChecks, roles: ["tech"] },
   { href: "/work-orders", label: "Work orders", icon: ClipboardList, roles: ["admin", "manager", "tech", "vendor"] },
   { href: "/schedule", label: "Schedule", icon: CalendarDays, roles: ["admin", "tech"] },
