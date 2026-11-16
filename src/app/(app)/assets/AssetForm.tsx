@@ -41,6 +41,8 @@ export function AssetForm({
             {CATEGORIES.map((c) => (
               <option key={c}>{c}</option>
             ))}
+            {/* Imported categories that aren't in the standard list stay selectable. */}
+            {asset?.category && !(CATEGORIES as readonly string[]).includes(asset.category) && <option>{asset.category}</option>}
           </Select>
         </Field>
         <Field label="Status">
@@ -52,7 +54,10 @@ export function AssetForm({
             ))}
           </Select>
         </Field>
-        <Field label="Location in site">
+        <Field label="Description" className="sm:col-span-2 lg:col-span-3">
+          <Input name="description" defaultValue={asset?.description ?? ""} />
+        </Field>
+        <Field label="Area in store">
           <Input name="location_detail" defaultValue={asset?.location_detail ?? ""} placeholder="e.g. Roof, BOH" />
         </Field>
         <Field label="Manufacturer">
@@ -64,8 +69,14 @@ export function AssetForm({
         <Field label="Serial number">
           <Input name="serial_number" defaultValue={asset?.serial_number ?? ""} />
         </Field>
+        <Field label="Purchase date">
+          <Input type="date" name="purchase_date" defaultValue={asset?.purchase_date ?? ""} />
+        </Field>
         <Field label="Install date">
           <Input type="date" name="install_date" defaultValue={asset?.install_date ?? ""} />
+        </Field>
+        <Field label="Service date">
+          <Input type="date" name="service_date" defaultValue={asset?.service_date ?? ""} />
         </Field>
         <Field label="Warranty expires">
           <Input type="date" name="warranty_expires_on" defaultValue={asset?.warranty_expires_on ?? ""} />
@@ -75,6 +86,9 @@ export function AssetForm({
         </Field>
         <Field label="Expected life (years)">
           <Input name="expected_life_years" inputMode="numeric" defaultValue={asset?.expected_life_years ?? ""} />
+        </Field>
+        <Field label="Parts" hint="Part names, separated by commas" className="sm:col-span-2 lg:col-span-3">
+          <Input name="parts" defaultValue={asset?.parts ?? ""} />
         </Field>
         <Field label="Notes" className="sm:col-span-2 lg:col-span-3">
           <Textarea name="notes" defaultValue={asset?.notes ?? ""} />

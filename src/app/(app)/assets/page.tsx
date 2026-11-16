@@ -1,6 +1,6 @@
 import { getCompanyScope, inCompany } from "@/lib/company";
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { FileSpreadsheet, Plus } from "lucide-react";
 import { getSession } from "@/lib/auth";
 import { getLookups } from "@/lib/data";
 import { ASSET_STATUS_LABEL, CATEGORIES } from "@/lib/constants";
@@ -37,9 +37,16 @@ export default async function AssetsPage({ searchParams }: { searchParams: Promi
         subtitle={`${rows.length} asset${rows.length === 1 ? "" : "s"}`}
         actions={
           canEdit && (
-            <ButtonLink href={`/assets/new${sp.site ? `?site=${sp.site}` : ""}`}>
-              <Plus className="h-4 w-4" aria-hidden /> Add asset
-            </ButtonLink>
+            <>
+              {profile.role === "admin" && (
+                <ButtonLink href={`/assets/import${sp.site ? `?site=${sp.site}` : ""}`} variant="secondary">
+                  <FileSpreadsheet className="h-4 w-4" aria-hidden /> Import from Excel
+                </ButtonLink>
+              )}
+              <ButtonLink href={`/assets/new${sp.site ? `?site=${sp.site}` : ""}`}>
+                <Plus className="h-4 w-4" aria-hidden /> Add asset
+              </ButtonLink>
+            </>
           )
         }
       />
