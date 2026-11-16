@@ -186,11 +186,13 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
           <input type="hidden" name="date" value={anchor} />
           <Select name="tech" defaultValue={sp.tech ?? ""} className="w-auto py-1.5">
             <option value="">All techs</option>
-            {people.map((p) => (
-              <option key={p.id} value={p.id}>
-                {personName(p)}
-              </option>
-            ))}
+            {people
+              .filter((p) => p.role === "tech")
+              .map((p) => (
+                <option key={p.id} value={p.id}>
+                  {personName(p)}
+                </option>
+              ))}
           </Select>
           <Button variant="secondary" size="sm" type="submit">
             Show
