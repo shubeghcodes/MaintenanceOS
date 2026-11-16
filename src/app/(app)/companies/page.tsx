@@ -90,6 +90,9 @@ export default async function CompaniesPage({ searchParams }: { searchParams: Pr
                   <Field label="Legal name">
                     <Input name="legal_name" defaultValue={c.legal_name ?? ""} />
                   </Field>
+                  <Field label="Parts approval limit ($)" hint="Techs can order parts up to this amount; above it an admin approves first.">
+                    <Input name="parts_approval_limit" inputMode="decimal" defaultValue={c.parts_approval_limit ?? 250} />
+                  </Field>
                   <Field label="Notes" className="md:row-span-2">
                     <Textarea name="notes" defaultValue={c.notes ?? ""} />
                   </Field>

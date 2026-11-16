@@ -5,7 +5,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getSession, requireSuper } from "@/lib/auth";
 import { COMPANY_COOKIE } from "@/lib/company";
-import { str } from "@/lib/format";
+import { num, str } from "@/lib/format";
 
 async function rememberCompany(id: string) {
   (await cookies()).set(COMPANY_COOKIE, id, { path: "/", httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", maxAge: 60 * 60 * 24 * 365 });
@@ -27,7 +27,15 @@ export async function saveCompany(fd: FormData) {
   const id = str(fd, "id");
   const name = str(fd, "name");
   if (!name) redirect(`/companies?error=${encodeURIComponent("Company name is required")}`);
-  const row = { name, legal_name: str(fd, "legal_name"), notes: str(fd, "notes"), active: id ? fd.get("active") === "on" : true };
+  const limit = num(fd, "parts_approval_limit");
+  if (limit != null && limit < 0) redirect(`/companies?error=${encodeURIComponent("The parts approval limit can't be negative")}`);
+  const row = {
+    name,
+    legal_name: str(fd, "legal_name"),
+    notes: str(fd, "notes"),
+    active: id ? fd.get("active") === "on" : true,
+    ...(limit != null ? { parts_approval_limit: limit } : {}),
+  };
 
   const res = id
     ? await supabase.from("companies").update(row).eq("id", id).select("id").single()

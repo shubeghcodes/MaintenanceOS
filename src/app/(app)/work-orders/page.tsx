@@ -7,7 +7,7 @@ import { getLookups } from "@/lib/data";
 import { OPEN_STATUSES, PRIORITY_LABEL, STATUS_LABEL, TYPE_LABEL } from "@/lib/constants";
 import { fmtDateTime, fmtMoney, isOverdue, personName } from "@/lib/format";
 import type { WoPriority, WoStatus, WoType } from "@/lib/types";
-import { Button, ButtonLink, Card, EmptyState, Input, PageHeader, Select, Table, Td, Th } from "@/components/ui";
+import { Badge, Button, ButtonLink, Card, EmptyState, Input, PageHeader, Select, Table, Td, Th } from "@/components/ui";
 import { OverdueBadge, PriorityBadge, StatusBadge, TypeBadge } from "@/components/badges";
 
 import { getT } from "@/lib/i18n/server";
@@ -77,6 +77,23 @@ export default async function WorkOrdersPage({ searchParams }: { searchParams: P
   // Admins see the full R&M cost, including internal labor.
   const labor = profile.role === "admin" ? await laborCostByWo(supabase, rows.map((r) => r.id)) : new Map<string, { labor_cost: number }>();
   for (const r of rows) r.total_cost = Number(r.total_cost || 0) + Number(labor.get(r.id)?.labor_cost ?? 0);
+
+  // Open parts per work order: the "furthest behind" one decides the badge (to order → on order → ready).
+  const partState = new Map<string, "to_order" | "ordered" | "ready">();
+  if (profile.role !== "vendor" && rows.length) {
+    const { data: pr } = await supabase
+      .from("wo_parts")
+      .select("work_order_id,status")
+      .in("work_order_id", rows.map((r) => r.id))
+      .in("status", ["requested", "approved", "ordered", "ready"]);
+    const rank = { to_order: 0, ordered: 1, ready: 2 } as const;
+    for (const p of (pr ?? []) as { work_order_id: string; status: string }[]) {
+      const s = p.status === "ready" ? "ready" : p.status === "ordered" ? "ordered" : "to_order";
+      const cur = partState.get(p.work_order_id);
+      if (!cur || rank[s] < rank[cur]) partState.set(p.work_order_id, s);
+    }
+  }
+  const PART_BADGE = { to_order: ["Parts: to order", "warning"], ordered: ["Parts: on order", "info"], ready: ["Parts: ready", "good"] } as const;
 
   // Emergencies float to the top of open lists; otherwise keep due-date order (stable sort).
   if (status === "open" || status === "overdue") {
@@ -192,6 +209,11 @@ export default async function WorkOrdersPage({ searchParams }: { searchParams: P
                     <div className="flex flex-col items-start gap-1">
                       <StatusBadge status={r.status} />
                       <OverdueBadge dueAt={r.due_at} status={r.status} />
+                      {partState.get(r.id) && (
+                        <Badge tone={PART_BADGE[partState.get(r.id)!][1]} dot={false}>
+                          {t(PART_BADGE[partState.get(r.id)!][0])}
+                        </Badge>
+                      )}
                     </div>
                   </Td>
                   <Td className="text-xs">

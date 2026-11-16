@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import clsx from "clsx";
-import {
+import { Package,
   Boxes,
   Briefcase,
   BarChart3,
@@ -37,6 +37,7 @@ const NAV: { href: string; label: string; icon: typeof Wrench; roles: UserRole[]
   { href: "/work-orders", label: "Work orders", icon: ClipboardList, roles: ["admin", "manager", "tech", "vendor"] },
   { href: "/schedule", label: "Schedule", icon: CalendarDays, roles: ["admin", "tech"] },
   { href: "/vendor-jobs", label: "Vendor work", icon: Send, roles: ["admin", "tech"] },
+  { href: "/parts", label: "Parts", icon: Package, roles: ["admin", "tech"] },
   { href: "/analytics", label: "Analytics", icon: BarChart3, roles: ["admin"] },
   { href: "/purchases", label: "Purchases", icon: Receipt, roles: ["manager", "tech"] },
   { href: "/pm", label: "Preventive maint.", icon: CalendarClock, roles: ["admin", "manager", "tech"] },

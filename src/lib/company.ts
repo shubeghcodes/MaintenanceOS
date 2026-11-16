@@ -5,7 +5,7 @@ import { getSession } from "./auth";
 
 export const COMPANY_COOKIE = "mos_company";
 
-export type Company = { id: string; name: string; legal_name: string | null; notes: string | null; active: boolean };
+export type Company = { id: string; name: string; legal_name: string | null; notes: string | null; active: boolean; parts_approval_limit?: number };
 
 /**
  * The companies the viewer can pick from and the one currently selected.
@@ -14,7 +14,7 @@ export type Company = { id: string; name: string; legal_name: string | null; not
  */
 export const getCompanyScope = cache(async () => {
   const { supabase, profile } = await getSession();
-  const { data, error } = await supabase.from("companies").select("id,name,legal_name,notes,active").order("name");
+  const { data, error } = await supabase.from("companies").select("id,name,legal_name,notes,active,parts_approval_limit").order("name");
   if (error) return { enabled: false, companies: [] as Company[], companyId: null as string | null, company: null as Company | null };
 
   const companies = (data ?? []) as Company[];

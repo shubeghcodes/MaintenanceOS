@@ -193,3 +193,29 @@ export const HOLD_REASONS: Record<string, string> = {
   return_visit: "Needs another visit (time ran out)",
   other: "Other",
 };
+
+/** Parts ordered for a work order (wo_parts). */
+export type PartStatus = "requested" | "approved" | "ordered" | "ready" | "installed" | "cancelled";
+export const PART_STATUS_LABEL: Record<PartStatus, string> = {
+  requested: "Requested",
+  approved: "Approved",
+  ordered: "Ordered",
+  ready: "Ready",
+  installed: "Installed",
+  cancelled: "Cancelled",
+};
+export const PART_STATUS_TONE: Record<PartStatus, Tone> = {
+  requested: "warning",
+  approved: "info",
+  ordered: "info",
+  ready: "good",
+  installed: "muted",
+  cancelled: "muted",
+};
+export const PART_OPEN: PartStatus[] = ["requested", "approved", "ordered", "ready"];
+export const PART_READY_WHERE: Record<string, string> = {
+  shop: "At the shop",
+  store: "Delivered to the store",
+  supplier: "Ready for pickup at the supplier",
+  other: "Other",
+};

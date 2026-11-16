@@ -18,6 +18,7 @@ import { HOLD_REASONS, SIGNOFF_AUTO_CLOSE_DAYS } from "@/lib/constants";
 import { Send } from "lucide-react";
 import { VendorPanel } from "./VendorPanel";
 import { ReceiptsCard } from "./ReceiptsCard";
+import { PartsCard } from "./PartsCard";
 import { TimeCard } from "./TimeCard";
 import { ChecklistCard, type ChecklistItem } from "./ChecklistCard";
 import { TechOptions } from "@/components/TechOptions";
@@ -40,6 +41,16 @@ function timerNotice(v: string, t: T) {
   return TIMER_NOTICE[v] && t(TIMER_NOTICE[v]);
 }
 
+const PART_NOTICE: Record<string, string> = {
+  requested: "Part requested. The admins were notified.",
+  saved: "Part updated.",
+  approved: "Part approved. It can be ordered now.",
+  ordered: "Marked ordered. The store's GM was told when to expect it.",
+  ready: "Part is ready. The tech and the store's GM were notified.",
+  installed: "Part marked installed.",
+  cancelled: "Part cancelled.",
+  removed: "Part request removed.",
+};
 const RECEIPT_NOTICE: Record<string, string> = {
   added: "Receipt saved and added to this work order's cost.",
   approved: "Receipt approved.",
@@ -68,6 +79,7 @@ const VENDOR_NOTICE: Record<string, string> = {
 };
 
 type Detail = WorkOrder & {
+  company_id: string | null;
   site: { id: string; name: string; code: string | null; address: string | null; city: string | null; phone: string | null } | null;
   asset: { id: string; name: string; tag: string | null; manufacturer: string | null; model: string | null } | null;
   vendor: { id: string; name: string; phone: string | null; email: string | null } | null;
@@ -231,6 +243,7 @@ export default async function WorkOrderPage({
       {sp.signoff === "sent_back" && <Alert tone="good">Sent back. It&apos;s open again as a return visit, and the tech or vendor has been emailed your note.</Alert>}
       {sp.vendor && VENDOR_NOTICE[sp.vendor] && <Alert tone="good">{VENDOR_NOTICE[sp.vendor]}</Alert>}
       {sp.receipt && RECEIPT_NOTICE[sp.receipt] && <Alert tone="good">{t(RECEIPT_NOTICE[sp.receipt])}</Alert>}
+      {sp.part && PART_NOTICE[sp.part] && <Alert tone="good">{t(PART_NOTICE[sp.part])}</Alert>}
       {sp.held && <Alert tone="good">{t("Job put on hold. Your progress report is posted below and the store's GM was emailed.")}</Alert>}
       {sp.timer && timerNotice(sp.timer, t) && <Alert tone="good">{timerNotice(sp.timer, t)}</Alert>}
       <AutoRefresh seconds={30} />
@@ -294,9 +307,13 @@ export default async function WorkOrderPage({
             <TimeCard supabase={supabase} woId={id} woStatus={wo.status} visit={wo.visit ?? 1} profile={profile} techs={lookups?.staff ?? []} />
           )}
 
+          {role !== "vendor" && (
+            <PartsCard supabase={supabase} woId={id} companyId={wo.company_id} profile={profile} closed={closed} files={files} open={!!sp.add_part} />
+          )}
+
           {role !== "vendor" && <ReceiptsCard supabase={supabase} woId={id} profile={profile} open={!!sp.add_receipt} />}
 
-          <Attachments items={files.filter((f) => f.category !== "receipt" && f.category !== "checklist" && !(role === "manager" && ["invoice", "quote", "vendor_receipt"].includes(f.category ?? "")))} action={uploadWoFiles} hidden={{ id }} allowInternal={role === "admin" || role === "tech"} categories={role === "admin" || role === "tech"} />
+          <Attachments items={files.filter((f) => f.category !== "receipt" && f.category !== "checklist" && f.category !== "part" && !(role === "manager" && ["invoice", "quote", "vendor_receipt"].includes(f.category ?? "")))} action={uploadWoFiles} hidden={{ id }} allowInternal={role === "admin" || role === "tech"} categories={role === "admin" || role === "tech"} />
 
           <Card>
             <CardHeader title={t("Activity")} />
@@ -546,7 +563,7 @@ export default async function WorkOrderPage({
                     <Field label={`${t("What's left / next step")} *`}>
                       <Textarea name="next_steps" rows={2} required placeholder={t("e.g. Install new motor and test temps once part arrives")} />
                     </Field>
-                    <Field label={t("Parts needed")} hint={t("Required when waiting on parts. Include part #, qty and supplier if known.")}>
+                    <Field label={t("Parts needed")} hint={t("Required when waiting on parts. This opens a part request below; add the part #, price and a photo there.")}>
                       <Input name="parts_needed" placeholder={t("e.g. 1× condenser fan motor 1/3 HP 208-230V")} />
                     </Field>
                     <Field label={t("Expected back on")}>
