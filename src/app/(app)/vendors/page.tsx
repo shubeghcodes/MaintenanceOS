@@ -80,7 +80,7 @@ export default async function VendorsPage() {
                   </Td>
                   <Td className="text-xs">
                     <div>{v.contact_name}</div>
-                    <div className="text-slate-500">{v.phone}</div>
+                    <div className="text-slate-500">{[v.phone && `Office ${v.phone}`, v.mobile_phone && `Mobile ${v.mobile_phone}`].filter(Boolean).join(" · ")}</div>
                   </Td>
                   <Td>
                     <DueBadge date={v.coi_expires_on} label="Expired" />

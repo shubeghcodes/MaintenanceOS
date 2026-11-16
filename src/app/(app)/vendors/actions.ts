@@ -20,6 +20,7 @@ export async function saveVendor(fd: FormData) {
     contact_name: str(fd, "contact_name"),
     email: str(fd, "email"),
     phone: str(fd, "phone"),
+    mobile_phone: str(fd, "mobile_phone"),
     after_hours_phone: str(fd, "after_hours_phone"),
     license_number: str(fd, "license_number"),
     coi_expires_on: str(fd, "coi_expires_on"),
