@@ -13,6 +13,9 @@ export const CATEGORIES = [
   "Pest Control",
   "Health/Sanitation",
   "Permits",
+  "Equipment",
+  "Landscaping",
+  "Power Wash",
   "Other",
 ] as const;
 

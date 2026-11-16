@@ -1,4 +1,5 @@
-import { CATEGORIES, FREQ_UNIT_LABEL, PRIORITY_LABEL } from "@/lib/constants";
+import { CATEGORIES, PRIORITY_LABEL } from "@/lib/constants";
+import { FrequencyPicker } from "@/components/FrequencyPicker";
 import { personName, todayISO } from "@/lib/format";
 import type { PmSchedule } from "@/lib/types";
 import { Card, Field, Input, Select, Textarea } from "@/components/ui";
@@ -64,20 +65,7 @@ export function PmForm({
             ))}
           </Select>
         </Field>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Every">
-            <Input type="number" min={1} name="frequency_interval" required defaultValue={pm?.frequency_interval ?? 1} />
-          </Field>
-          <Field label="Unit">
-            <Select name="frequency_unit" defaultValue={pm?.frequency_unit ?? "month"}>
-              {Object.entries(FREQ_UNIT_LABEL).map(([k, v]) => (
-                <option key={k} value={k}>
-                  {v}(s)
-                </option>
-              ))}
-            </Select>
-          </Field>
-        </div>
+        <FrequencyPicker interval={pm?.frequency_interval} unit={pm?.frequency_unit} />
         <div className="grid grid-cols-2 gap-3">
           <Field label="Next due">
             <Input type="date" name="next_due_on" required defaultValue={pm?.next_due_on ?? todayISO()} />

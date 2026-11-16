@@ -21,8 +21,11 @@ export function VendorForm({ vendor }: { vendor?: Vendor }) {
         <Field label="Email">
           <Input type="email" name="email" defaultValue={vendor?.email ?? ""} />
         </Field>
-        <Field label="Phone">
+        <Field label="Office phone">
           <Input name="phone" defaultValue={vendor?.phone ?? ""} />
+        </Field>
+        <Field label="Mobile phone">
+          <Input name="mobile_phone" type="tel" defaultValue={vendor?.mobile_phone ?? ""} />
         </Field>
         <Field label="After-hours / emergency">
           <Input name="after_hours_phone" defaultValue={vendor?.after_hours_phone ?? ""} />

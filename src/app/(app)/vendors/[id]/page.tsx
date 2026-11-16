@@ -77,7 +77,8 @@ export default async function VendorPage({
               <DefList
                 items={[
                   ["Contact", v.contact_name ?? "—"],
-                  ["Phone", v.phone ?? "—"],
+                  ["Office", v.phone ?? "—"],
+                  ["Mobile", v.mobile_phone ?? "—"],
                   ["After hours", v.after_hours_phone ?? "—"],
                   ["Email", v.email ?? "—"],
                   ["License", v.license_number ?? "—"],

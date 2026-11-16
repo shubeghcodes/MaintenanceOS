@@ -50,6 +50,7 @@ export interface Vendor {
   email: string | null;
   phone: string | null;
   after_hours_phone: string | null;
+  mobile_phone?: string | null;
   license_number: string | null;
   coi_expires_on: string | null;
   hourly_rate: number | null;
