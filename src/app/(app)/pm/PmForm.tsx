@@ -119,6 +119,21 @@ export function PmForm({
           <input type="checkbox" name="active" defaultChecked={pm?.active ?? true} className="rounded border-slate-300" />
           Active (generates work orders)
         </label>
+        <div className="grid gap-3 rounded-lg bg-slate-50 p-3 ring-1 ring-slate-200 sm:col-span-2 sm:grid-cols-[1fr_auto] sm:items-end">
+          <label className="flex items-start gap-2 text-sm text-slate-800">
+            <input type="checkbox" name="auto_schedule" defaultChecked={pm?.auto_schedule ?? true} className="mt-0.5 rounded border-slate-300" />
+            <span>
+              Put it on the schedule automatically
+              <span className="block text-xs text-slate-500">
+                Each work order goes on the dispatch calendar on its due date for the assigned tech (today if it&apos;s already overdue). Upcoming
+                visits show on the calendar ahead of time. Untick to drag it on yourself.
+              </span>
+            </span>
+          </label>
+          <Field label="Start time (optional)" className="sm:w-40">
+            <Input type="time" name="start_time" defaultValue={pm?.start_time?.slice(0, 5) ?? ""} />
+          </Field>
+        </div>
         <div className="sm:col-span-2">
           <SubmitButton>{pm ? "Save schedule" : "Create schedule(s)"}</SubmitButton>
         </div>

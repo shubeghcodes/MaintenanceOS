@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import clsx from "clsx";
-import { GripVertical, Mail, Search } from "lucide-react";
+import { CalendarClock, GripVertical, Mail, Search } from "lucide-react";
 import type { WoPriority, WoStatus, WoType } from "@/lib/types";
 import { moveWorkOrder, emailSchedules } from "./actions";
 
@@ -26,6 +26,16 @@ export type BoardJob = {
   due_at: string | null;
 };
 export type BoardTech = { id: string; name: string };
+/** A PM visit that will be put on the calendar automatically but isn't a work order yet. */
+export type BoardForecast = {
+  pm_id: string;
+  date: string;
+  title: string;
+  tech_id: string | null;
+  site_code: string;
+  start_time: string | null;
+  estimated_hours: number | null;
+};
 
 const NO_TECH = "__none__";
 const PRIORITY_BAR: Record<WoPriority, string> = {
@@ -49,6 +59,7 @@ export function ScheduleBoard({
   dayLabels,
   techs,
   jobs: initialJobs,
+  forecast = [],
   canEdit,
   isAdmin,
   view,
@@ -61,6 +72,7 @@ export function ScheduleBoard({
   dayLabels: Record<string, string>;
   techs: BoardTech[];
   jobs: BoardJob[];
+  forecast?: BoardForecast[];
   canEdit: boolean;
   isAdmin: boolean;
   view: "week" | "day";
@@ -101,6 +113,17 @@ export function ScheduleBoard({
       .filter((j) => !term || j.title.toLowerCase().includes(term) || String(j.number).includes(term) || j.site_code.toLowerCase().includes(term))
       .sort((a, b) => PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority] || (a.due_at ?? "z").localeCompare(b.due_at ?? "z"));
   }, [jobs, q, siteFilter, onlyUnassigned]);
+
+  const planned = useMemo(() => {
+    const m = new Map<string, BoardForecast[]>();
+    for (const f of forecast) {
+      if (!days.includes(f.date)) continue;
+      const key = `${f.tech_id ?? NO_TECH}|${f.date}`;
+      m.set(key, [...(m.get(key) ?? []), f]);
+    }
+    m.forEach((list) => list.sort((a, b) => (a.start_time ?? "99").localeCompare(b.start_time ?? "99")));
+    return m;
+  }, [forecast, days]);
 
   const rows: BoardTech[] = [...techs, { id: NO_TECH, name: "No tech (vendor / unassigned)" }];
   const techName = (id: string | null) => techs.find((t) => t.id === id)?.name;
@@ -232,13 +255,15 @@ export function ScheduleBoard({
             {/* Rows */}
             {rows.map((t) => {
               const techJobs = days.flatMap((d) => cells.get(`${t.id}|${d}`) ?? []);
-              const weekHours = techJobs.reduce((s, j) => s + Number(j.estimated_hours || 0), 0);
+              const techPlanned = days.flatMap((d) => planned.get(`${t.id}|${d}`) ?? []);
+              const weekHours = [...techJobs, ...techPlanned].reduce((s, j) => s + Number(j.estimated_hours || 0), 0);
               return (
                 <div key={t.id} className="contents">
                   <div className="sticky left-0 z-10 border-b border-slate-100 bg-white px-3 py-2">
                     <p className={clsx("text-sm font-medium", t.id === NO_TECH ? "text-slate-500" : "text-slate-900")}>{t.name}</p>
                     <p className="text-[11px] text-slate-500">
                       {techJobs.length} job{techJobs.length === 1 ? "" : "s"}
+                      {techPlanned.length > 0 && ` + ${techPlanned.length} upcoming PM`}
                       {weekHours ? ` · ${weekHours}h` : ""}
                     </p>
                     {view === "day" && t.id !== NO_TECH && (
@@ -260,7 +285,8 @@ export function ScheduleBoard({
                   {days.map((d) => {
                     const key = `${t.id}|${d}`;
                     const list = cells.get(key) ?? [];
-                    const hours = list.reduce((s, j) => s + Number(j.estimated_hours || 0), 0);
+                    const pmList = planned.get(key) ?? [];
+                    const hours = [...list, ...pmList].reduce((s, j) => s + Number(j.estimated_hours || 0), 0);
                     return (
                       <div
                         key={key}
@@ -276,6 +302,25 @@ export function ScheduleBoard({
                         {view === "week" && sent[key] && <p className="mb-1 text-[10px] text-emerald-700">✓ emailed {sent[key]}</p>}
                         <div className={clsx("gap-1.5", view === "day" ? "grid grid-cols-1 sm:grid-cols-2 2xl:grid-cols-3" : "flex flex-col")}>
                           {list.map((j) => card(j, { showAddress: view === "day" }))}
+                          {pmList.map((f) => (
+                            <Link
+                              key={`${f.pm_id}|${f.date}`}
+                              href={`/pm/${f.pm_id}`}
+                              draggable={false}
+                              title="Upcoming PM: the work order is created and put here automatically"
+                              className="block rounded-md border border-dashed border-slate-300 bg-slate-50/80 px-2 py-1.5 text-xs text-slate-600 hover:border-brand-400 hover:bg-white"
+                            >
+                              <span className="flex items-center gap-1 text-[11px] text-slate-500">
+                                <CalendarClock className="h-3 w-3" aria-hidden /> Upcoming PM
+                                {f.start_time && <span className="ml-auto font-semibold text-slate-600">{fmtTime(f.start_time)}</span>}
+                              </span>
+                              <span className="mt-0.5 line-clamp-2 block font-medium text-slate-700">{f.title}</span>
+                              <span className="mt-0.5 flex gap-2 text-[11px] text-slate-500">
+                                <span className="font-medium text-slate-600">{f.site_code}</span>
+                                {f.estimated_hours ? <span>{f.estimated_hours}h</span> : null}
+                              </span>
+                            </Link>
+                          ))}
                         </div>
                         {hours > 0 && (
                           <p className={clsx("mt-1 text-right text-[10px]", hours > 8 ? "font-semibold text-orange-700" : "text-slate-400")}>
@@ -290,7 +335,12 @@ export function ScheduleBoard({
             })}
           </div>
         </div>
-        {canEdit && <p className="mt-2 text-xs text-slate-500">Drag jobs between techs and days. Drop on the unscheduled list to take a job off the calendar. Set exact start times on the work order.</p>}
+        {canEdit && (
+          <p className="mt-2 text-xs text-slate-500">
+            Drag jobs between techs and days. Drop on the unscheduled list to take a job off the calendar. Set exact start times on the work order.
+            {forecast.length > 0 && " Dashed cards are upcoming PM visits: their work orders are created and put on the calendar automatically. Change the date or tech on the PM schedule."}
+          </p>
+        )}
       </div>
 
       {/* Unscheduled backlog */}

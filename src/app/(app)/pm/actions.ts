@@ -28,6 +28,8 @@ export async function savePm(fd: FormData) {
     assigned_tech_id: str(fd, "assigned_tech_id"),
     vendor_id: str(fd, "vendor_id"),
     estimated_hours: num(fd, "estimated_hours"),
+    auto_schedule: fd.get("auto_schedule") === "on",
+    start_time: str(fd, "start_time"),
     active: fd.get("active") === "on",
   };
 
@@ -76,6 +78,8 @@ export async function copyPm(fd: FormData) {
     frequency_unit: src.frequency_unit,
     next_due_on: nextDue,
     lead_days: src.lead_days,
+    auto_schedule: src.auto_schedule ?? true,
+    start_time: src.start_time ?? null,
     priority: src.priority,
     assigned_tech_id: src.assigned_tech_id,
     vendor_id: src.vendor_id,

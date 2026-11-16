@@ -6,7 +6,9 @@ import { WORK_WEEK_START_DAY, WORKABLE_STATUSES } from "@/lib/constants";
 import { addDaysISO, dayLabel, isISODate, personName, todayISO, weekStartISO } from "@/lib/format";
 import type { WoPriority, WoStatus, WoType } from "@/lib/types";
 import { Alert, Button, PageHeader, Select, btnClass } from "@/components/ui";
-import { ScheduleBoard, type BoardJob } from "./ScheduleBoard";
+import { ScheduleBoard, type BoardJob, type BoardForecast } from "./ScheduleBoard";
+import { upcomingDueDates } from "@/lib/pm-forecast";
+import type { FreqUnit } from "@/lib/types";
 
 export const metadata = { title: "Schedule" };
 export const dynamic = "force-dynamic";
@@ -43,7 +45,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
   const end = days[days.length - 1];
   const step = view === "week" ? 7 : 1;
 
-  const [{ data: techData }, { data: schedData }, { data: backlogData }, { data: siteData }, { data: sentData }] = await Promise.all([
+  const [{ data: techData }, { data: schedData }, { data: backlogData }, { data: siteData }, { data: sentData }, { data: pmData }, { data: openPmData }] = await Promise.all([
     supabase.from("profiles").select("id,full_name,email,role").eq("active", true).in("role", ["tech", "admin"]).order("full_name"),
     inCompany(supabase.from("work_orders").select(SELECT).gte("scheduled_date", start).lte("scheduled_date", end).neq("status", "cancelled"), cid),
     inCompany(supabase.from("work_orders").select(SELECT).is("scheduled_date", null).in("status", WORKABLE_STATUSES), cid).limit(300),
@@ -51,12 +53,49 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
     profile.role === "admin"
       ? supabase.from("schedule_emails").select("tech_id,schedule_date,sent_at").eq("status", "sent").gte("schedule_date", start).lte("schedule_date", end)
       : Promise.resolve({ data: [] as { tech_id: string; schedule_date: string; sent_at: string }[] }),
+    // PM schedules that put their work orders on the calendar: show visits that aren't created yet.
+    inCompany(
+      supabase
+        .from("pm_schedules")
+        .select("id,title,next_due_on,lead_days,frequency_interval,frequency_unit,assigned_tech_id,estimated_hours,start_time,site:sites(code,name)")
+        .eq("active", true)
+        .eq("auto_schedule", true)
+        .lte("next_due_on", end),
+      cid,
+    ),
+    inCompany(supabase.from("work_orders").select("pm_schedule_id").not("pm_schedule_id", "is", null).not("status", "in", "(completed,cancelled)"), cid),
   ]);
+
+  type PmRow = {
+    id: string;
+    title: string;
+    next_due_on: string;
+    lead_days: number;
+    frequency_interval: number;
+    frequency_unit: FreqUnit;
+    assigned_tech_id: string | null;
+    estimated_hours: number | null;
+    start_time: string | null;
+    site: { code: string | null; name: string } | null;
+  };
+  const openPm = new Set(((openPmData ?? []) as { pm_schedule_id: string }[]).map((r) => r.pm_schedule_id));
+  let forecast: BoardForecast[] = ((pmData ?? []) as unknown as PmRow[]).flatMap((p) =>
+    upcomingDueDates(p, start, end, today, openPm.has(p.id)).map((date) => ({
+      pm_id: p.id,
+      date,
+      title: p.title,
+      tech_id: p.assigned_tech_id,
+      site_code: p.site?.code ?? p.site?.name ?? "",
+      start_time: p.start_time,
+      estimated_hours: p.estimated_hours,
+    })),
+  );
+  if (sp.tech) forecast = forecast.filter((f) => f.tech_id === sp.tech);
 
   const scheduled = (schedData ?? []) as unknown as Row[];
   const people = (techData ?? []) as { id: string; full_name: string | null; email: string | null; role: string }[];
   // Rows: every tech, plus admins only if they have work on the calendar this period.
-  const busy = new Set(scheduled.map((r) => r.assigned_tech_id));
+  const busy = new Set([...scheduled.map((r) => r.assigned_tech_id), ...forecast.map((f) => f.tech_id)]);
   let techs = people.filter((p) => p.role === "tech" || busy.has(p.id)).map((p) => ({ id: p.id, name: personName(p) }));
   if (sp.tech) techs = techs.filter((t) => t.id === sp.tech);
 
@@ -154,6 +193,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
         dayLabels={dayLabels}
         techs={techs}
         jobs={jobs}
+        forecast={forecast}
         canEdit
         isAdmin={profile.role === "admin"}
         view={view}
