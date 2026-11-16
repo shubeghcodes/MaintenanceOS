@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Coffee, LogIn, LogOut, MapPin, Play } from "lucide-react";
-import { TimerClock } from "@/components/TimerClock";
 import { clockIn, clockOut, lunchEnd, lunchStart } from "./clock-actions";
 import { useT } from "@/lib/i18n/client";
 
@@ -172,7 +171,6 @@ export function ClockCard({
               : t("Your job timer is paused. It picks up again when you end lunch.")}
           </p>
         </div>
-        <TimerClock worked={0} resumedAt={shift.lunch.since} className="font-mono text-xl font-semibold tabular-nums text-amber-950" />
         <form action={lunchEnd}>
           <button
             disabled={lunchLocked}
@@ -196,7 +194,6 @@ export function ClockCard({
               {shift.lunchMinutes > 0 && ` · ${t("lunch {n} min", { n: shift.lunchMinutes })}`}
             </p>
           </div>
-          <TimerClock worked={0} resumedAt={shift.clock_in_at} className="font-mono text-xl font-semibold tabular-nums text-emerald-900" />
           <div className="flex flex-wrap gap-2">
             <form action={lunchStart}>
               <button className="inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2.5 text-sm font-semibold text-amber-900 shadow-sm ring-1 ring-inset ring-amber-300 hover:bg-amber-50">
