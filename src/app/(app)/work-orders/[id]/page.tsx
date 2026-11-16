@@ -259,7 +259,7 @@ export default async function WorkOrderPage({
       {sp.vendor && VENDOR_NOTICE[sp.vendor] && <Alert tone="good">{VENDOR_NOTICE[sp.vendor]}</Alert>}
       {sp.receipt && RECEIPT_NOTICE[sp.receipt] && <Alert tone="good">{t(RECEIPT_NOTICE[sp.receipt])}</Alert>}
       {sp.part && PART_NOTICE[sp.part] && <Alert tone="good">{t(PART_NOTICE[sp.part])}</Alert>}
-      {sp.held && <Alert tone="good">{t("Job put on hold. Your progress report is posted below and the store's GM was emailed.")}</Alert>}
+      {sp.held && <Alert tone="good">{t("Job put on hold and the timer was stopped. Your progress report is posted below and the store's GM was emailed.")}</Alert>}
       {sp.timer && timerNotice(sp.timer, t) && <Alert tone="good">{timerNotice(sp.timer, t)}</Alert>}
       <AutoRefresh seconds={30} />
 

@@ -212,6 +212,7 @@ export const ES: Record<string, string> = {
   "invoice": "factura",
   "Invoice #": "Núm. de factura",
   "Is this job finished?": "¿Este trabajo está terminado?",
+  "Job put on hold and the timer was stopped. Your progress report is posted below and the store's GM was emailed.": "Trabajo en espera y se detuvo el tiempo. Tu reporte de avance está abajo y se le envió un correo al gerente de la tienda.",
   "Job put on hold. Your progress report is posted below and the store's GM was emailed.": "Trabajo puesto en espera. Tu reporte de avance está abajo y se le envió un correo al gerente de la tienda.",
   "Jobs assigned to you live here. Open one to see the details, add notes and photos, and mark it complete. New requests you submit go to an admin to approve.": "Aquí están los trabajos asignados a ti. Abre uno para ver los detalles, agregar notas y fotos, y marcarlo completo. Las solicitudes nuevas que envíes van a un administrador para aprobarlas.",
   "Jobs sent to outside vendors and where each one stands: accepted, in progress, or completed.": "Trabajos enviados a proveedores externos y en qué estado está cada uno: aceptado, en progreso o completado.",
