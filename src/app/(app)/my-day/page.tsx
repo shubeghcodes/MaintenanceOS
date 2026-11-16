@@ -103,7 +103,6 @@ export default async function MyDayPage({ searchParams }: { searchParams: Promis
   let shift: OpenShift | null = null;
   let clockJobs: ClockJob[] = [];
   let lastJobId: string | null = null;
-  let breakUntil: { at: string; time: string } | null = null;
   if (clocks) {
     const [{ data: s }, { data: openJobs }] = await Promise.all([
       supabase
@@ -132,15 +131,6 @@ export default async function MyDayPage({ searchParams }: { searchParams: Promis
     }));
     clockJobs = [...open.filter((j) => j.today), ...open.filter((j) => !j.today)];
     const sh = s as unknown as { id: string; clock_in_at: string; start_reason: string | null; first: { number: number; title: string } | null } | null;
-    if (!sh) {
-      // Clocked out less than 30 minutes ago? They can't clock back in yet.
-      const { data: last } = await supabase.from("tech_shifts").select("clock_out_at").eq("user_id", techId).not("clock_out_at", "is", null).order("clock_out_at", { ascending: false }).limit(1).maybeSingle();
-      const out = (last as { clock_out_at: string } | null)?.clock_out_at;
-      if (out && Date.now() - new Date(out).getTime() < 30 * 60_000) {
-        const at = new Date(new Date(out).getTime() + 30 * 60_000).toISOString();
-        breakUntil = { at, time: fmtClockTime(at) };
-      }
-    }
     if (sh) {
       // Jobs timed during this shift come first on Clock out, even if they're no longer open.
       const { data: worked } = await supabase
@@ -217,7 +207,7 @@ export default async function MyDayPage({ searchParams }: { searchParams: Promis
       {sp.clock === "lunch" && <Alert tone="good">{t("Enjoy your lunch. Your job timer is paused.")}</Alert>}
       {sp.clock === "back" && <Alert tone="good">{t("Welcome back.")}{sp.resumed ? ` ${t("Your timer on #{n} is running again.", { n: sp.resumed })}` : ""}</Alert>}
       {sp.clock === "out_done" && <Alert tone="good">{t("Clocked out, and the job was sent to the store's GM to confirm it's fixed.")}</Alert>}
-      {clocks && isMe && <ClockCard key={shift ? "on" : "off"} shift={shift} jobs={clockJobs} lastJobId={lastJobId} preselectJobId={sp.clockin || null} breakUntil={breakUntil} />}
+      {clocks && isMe && <ClockCard key={shift ? "on" : "off"} shift={shift} jobs={clockJobs} lastJobId={lastJobId} preselectJobId={sp.clockin || null} />}
       {clocks && !isMe && (
         <p className={`mb-4 rounded-lg px-4 py-2.5 text-sm ring-1 ring-inset ${shift ? "bg-emerald-50 text-emerald-900 ring-emerald-200" : "bg-slate-50 text-slate-600 ring-slate-200"}`}>
           {shift ? `${shift.lunch ? `${t("On lunch since {time}", { time: shift.lunch.sinceTime })} · ` : ""}${t("Clocked in since {time}", { time: shift.clockInTime })} · ${t("started on {job}", { job: shift.firstLabel })}` : t("Clocked out")}
