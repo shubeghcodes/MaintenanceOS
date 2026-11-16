@@ -9,6 +9,7 @@ import { sendAndRecord } from "@/lib/dispatch";
 import { ACTIVE_DISPATCH, HOLD_REASONS } from "@/lib/constants";
 import { getSession, isSuper } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { emailCancelledDispatches } from "@/lib/vendor-notify";
 import { saveAttachments } from "@/lib/attachments";
 import { fmtDate, num, str, zonedTimeISO } from "@/lib/format";
 import type { WoStatus } from "@/lib/types";
@@ -223,6 +224,7 @@ export async function setStatus(status: WoStatus, fd: FormData) {
     const cert = str(fd, "certificate_number");
     if (cert) patch.certificate_number = cert;
   }
+  const savedAt = new Date(Date.now() - 2000).toISOString();
   const { error } = await supabase.from("work_orders").update(patch).eq("id", id);
   if (error) fail(id, error.message);
 
@@ -231,6 +233,7 @@ export async function setStatus(status: WoStatus, fd: FormData) {
     after(() => emailGmsNote(id, { body: note, authorId: profile.id }));
   }
   // Store jobs now wait for the GM's sign-off; others close and send the closing emails.
+  if (status === "cancelled") after(() => emailCancelledDispatches(createAdminClient(), id, savedAt));
   if (status === "completed" && wo.status !== "completed") after(() => afterWorkDone(id, profile.id));
   revalidatePath(`/work-orders/${id}`);
   revalidatePath("/work-orders");
@@ -244,7 +247,8 @@ export async function updateAssignment(fd: FormData) {
   const id = str(fd, "id")!;
   if (!(profile.role === "admin" || profile.role === "tech")) fail(id, "Not allowed");
 
-  const { data: before } = await supabase.from("work_orders").select("status,assigned_tech_id").eq("id", id).maybeSingle();
+  const savedAt = new Date(Date.now() - 2000).toISOString();
+  const { data: before } = await supabase.from("work_orders").select("status,assigned_tech_id,vendor_id").eq("id", id).maybeSingle();
   if (before?.status === "requested") fail(id, "Approve this work order first (use Approve & assign)");
   const dueDate = str(fd, "due_date");
   // Only admins choose who does the work; techs can still adjust the schedule and details.
@@ -265,6 +269,7 @@ export async function updateAssignment(fd: FormData) {
     })
     .eq("id", id);
   if (error) fail(id, error.message);
+  if (before?.vendor_id) after(() => emailCancelledDispatches(createAdminClient(), id, savedAt));
   if (techId && techId !== before?.assigned_tech_id) after(() => emailTechAssigned(id, profile.id));
   revalidatePath(`/work-orders/${id}`);
   revalidatePath("/schedule");

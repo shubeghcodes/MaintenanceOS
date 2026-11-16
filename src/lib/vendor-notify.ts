@@ -88,7 +88,7 @@ const vendorFooter = (c: DispatchContext) =>
 
 // ------------------------------------------------------------------ vendor emails
 
-export type VendorEmailKind = "assigned" | "updated" | "approval_decision" | "quote_decision" | "invoice_decision" | "message" | "reminder" | "new_link" | "sent_back" | "closed";
+export type VendorEmailKind = "assigned" | "updated" | "approval_decision" | "quote_decision" | "invoice_decision" | "message" | "reminder" | "new_link" | "sent_back" | "closed" | "cancelled";
 
 export async function emailVendor(
   c: DispatchContext,
@@ -177,6 +177,13 @@ export async function emailVendor(
     title = `Work approved — #${n} closed`;
     intro = `${hi}<br>We reviewed the completed work on <b>${esc(c.wo.title)}</b> and approved it. The work order is now closed.${extra.note ? `<br><br><b>Note:</b> ${esc(extra.note)}` : ""}<br><br>If you haven't sent your invoice yet, you can still submit it from the work order page.`;
     body = linkNote;
+  } else if (kind === "cancelled") {
+    subject = `Cancelled: work order #${n} — ${c.wo.title}`;
+    title = `Work order #${n} has been cancelled for ${esc(c.vendor.name)}`;
+    intro = `${hi}<br>We no longer need ${esc(c.vendor.name)} for <b>${esc(c.wo.title)}</b> at ${esc(loc)}. Please don't start or continue this job. The work order link has been turned off.${
+      extra.note ? `<br><br><b>Note:</b> ${esc(extra.note)}` : ""
+    }<br><br>If you already did work or bought materials for it, reply to this email and we'll sort it out.`;
+    body = "";
   } else if (kind === "reminder") {
     subject = `Reminder: work order #${n} — ${c.wo.title}`;
     title = `Reminder — work order #${n}`;
@@ -310,4 +317,16 @@ export async function workOrderAttachmentsForEmail(db: SupabaseClient, workOrder
     out.push({ filename: a.file_name, content: buf.toString("base64") });
   }
   return out;
+}
+
+/**
+ * Tell vendors whose job was just taken away (the database turns off their link when a work order is switched to a
+ * tech or another vendor, or cancelled). `since` = when the change was saved.
+ */
+export async function emailCancelledDispatches(db: SupabaseClient, woId: string, since: string, note?: string | null) {
+  const { data } = await db.from("vendor_dispatches").select("id").eq("work_order_id", woId).eq("status", "revoked").gte("revoked_at", since);
+  for (const d of (data ?? []) as { id: string }[]) {
+    const c = await loadDispatchContext(db, d.id);
+    if (c) await emailVendor(c, "cancelled", null, { note }).catch(() => undefined);
+  }
 }
