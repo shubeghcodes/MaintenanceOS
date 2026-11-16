@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { isSuper, requireRole } from "@/lib/auth";
 import { fmtDate, fmtMoney, personName } from "@/lib/format";
-import { Alert, Badge, Card, CardHeader, DefList, Field, Input, PageHeader } from "@/components/ui";
+import { Alert, Badge, Card, CardHeader, DefList, Field, Input, PageHeader, Select } from "@/components/ui";
 import { SubmitButton } from "@/components/SubmitButton";
 import { LocationPicker } from "@/components/LocationPicker";
 import { setLaborRate, updateUser } from "../actions";
@@ -77,6 +77,12 @@ export default async function UserPage({
                     </Field>
                     <Field label="Mobile phone">
                       <Input name="phone" defaultValue={u.phone ?? ""} />
+                    </Field>
+                    <Field label="Language" hint="What they see in the app, emails and notifications. They can change it on My account.">
+                      <Select name="language" defaultValue={u.language ?? "en"}>
+                        <option value="en">English</option>
+                        <option value="es">Español (Spanish)</option>
+                      </Select>
                     </Field>
                     <Field label="Email" hint="Used to sign in. Can't be changed here." className="sm:col-span-2">
                       <Input value={u.email ?? ""} disabled readOnly className="bg-slate-50 text-slate-500" />

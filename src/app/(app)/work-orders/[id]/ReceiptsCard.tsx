@@ -7,10 +7,13 @@ import { Badge, Card, CardHeader, Field, Input, Select } from "@/components/ui";
 import { SubmitButton } from "@/components/SubmitButton";
 import { PhotoInput } from "@/components/PhotoInput";
 import { addPurchase, deletePurchase, markReimbursed, reviewPurchase } from "../purchase-actions";
+import { getT } from "@/lib/i18n/server";
 
 const COMMON_STORES = ["Home Depot", "Lowe's", "Grainger", "Ferguson", "Johnstone Supply", "Ace Hardware", "Restaurant Depot", "Parts Town", "Amazon", "Costco"];
 
 export async function ReceiptsCard({ supabase, woId, profile, open }: { supabase: SupabaseClient; woId: string; profile: Profile; open: boolean }) {
+  const t = await getT();
+  const L = t.locale;
   const { data } = await supabase
     .from("wo_purchases")
     .select("*, buyer:profiles!wo_purchases_purchased_by_fkey(full_name,email)")
@@ -44,11 +47,11 @@ export async function ReceiptsCard({ supabase, woId, profile, open }: { supabase
   return (
     <Card id="receipts">
       <CardHeader
-        title="Receipts & purchases"
+        title={t("Receipts & purchases")}
         subtitle={
           rows.length
-            ? `${counted.length} receipt${counted.length === 1 ? "" : "s"} · ${fmtMoney(total, 2)}${toReview ? ` · ${toReview} to review` : ""}${owed ? ` · ${fmtMoney(owed, 2)} to reimburse` : ""}`
-            : "Parts, materials and rentals bought for this job"
+            ? `${t(counted.length === 1 ? "{n} receipt" : "{n} receipts", { n: counted.length })} · ${fmtMoney(total, 2)}${toReview ? ` · ${t("{n} to review", { n: toReview })}` : ""}${owed ? ` · ${t("{amount} to reimburse", { amount: fmtMoney(owed, 2) })}` : ""}`
+            : t("Parts, materials and rentals bought for this job")
         }
       />
       {rows.length > 0 && (
@@ -63,7 +66,7 @@ export async function ReceiptsCard({ supabase, woId, profile, open }: { supabase
                   target="_blank"
                   rel="noreferrer"
                   className="flex h-14 w-14 flex-none items-center justify-center overflow-hidden rounded-lg bg-slate-50 ring-1 ring-slate-200"
-                  title={f ? "Open receipt" : "No receipt attached"}
+                  title={f ? t("Open receipt") : t("No receipt attached")}
                 >
                   {f?.image ? (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -76,26 +79,26 @@ export async function ReceiptsCard({ supabase, woId, profile, open }: { supabase
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-sm font-semibold text-slate-900">{r.store}</span>
                     <span className="text-sm tabular-nums text-slate-900">{fmtMoney(r.total, 2)}</span>
-                    <Badge tone={PURCHASE_STATUS_TONE[r.status]}>{PURCHASE_STATUS_LABEL[r.status]}</Badge>
+                    <Badge tone={PURCHASE_STATUS_TONE[r.status]}>{t(PURCHASE_STATUS_LABEL[r.status])}</Badge>
                     {r.reimbursable && r.status !== "rejected" && (
                       <Badge tone={r.reimbursed_at ? "good" : "serious"} dot={false}>
-                        {r.reimbursed_at ? `Reimbursed ${fmtDate(r.reimbursed_at)}` : "Reimburse"}
+                        {r.reimbursed_at ? t("Reimbursed {date}", { date: fmtDate(r.reimbursed_at, L) }) : t("Reimburse")}
                       </Badge>
                     )}
                   </div>
                   <p className="text-xs text-slate-500">
-                    {fmtDate(r.purchase_date)} · {r.category} · {PAYMENT_LABEL[r.payment_method]}
+                    {fmtDate(r.purchase_date, L)} · {t(r.category)} · {t(PAYMENT_LABEL[r.payment_method])}
                     {r.card_last4 && ` ••${r.card_last4}`} · {personName(r.buyer)}
-                    {!f && " · no receipt"}
+                    {!f && ` · ${t("no receipt")}`}
                   </p>
                   {r.description && <p className="text-sm text-slate-700">{r.description}</p>}
                   {(r.subtotal != null || r.tax != null) && (
                     <p className="text-xs text-slate-500">
-                      Subtotal {fmtMoney(r.subtotal, 2)} · Tax {fmtMoney(r.tax, 2)}
+                      {t("Subtotal")} {fmtMoney(r.subtotal, 2)} · {t("Tax")} {fmtMoney(r.tax, 2)}
                     </p>
                   )}
-                  {r.review_note && <p className="text-xs text-slate-600">Note: {r.review_note}</p>}
-                  {r.reimbursement_ref && <p className="text-xs text-slate-500">Reimbursement ref {r.reimbursement_ref}</p>}
+                  {r.review_note && <p className="text-xs text-slate-600">{t("Note:")} {r.review_note}</p>}
+                  {r.reimbursement_ref && <p className="text-xs text-slate-500">{t("Reimbursement ref")} {r.reimbursement_ref}</p>}
 
                   {(isAdmin || canDelete) && (
                     <form className="mt-2 flex flex-wrap items-center gap-2">
@@ -118,8 +121,8 @@ export async function ReceiptsCard({ supabase, woId, profile, open }: { supabase
                         </>
                       )}
                       {canDelete && (
-                        <SubmitButton size="sm" variant="ghost" formAction={deletePurchase} confirm={`Delete the ${r.store} receipt?`}>
-                          Delete
+                        <SubmitButton size="sm" variant="ghost" formAction={deletePurchase} confirm={t("Delete the {store} receipt?", { store: r.store })}>
+                          {t("Delete")}
                         </SubmitButton>
                       )}
                     </form>
@@ -132,14 +135,14 @@ export async function ReceiptsCard({ supabase, woId, profile, open }: { supabase
       )}
 
       <details open={open || rows.length === 0} className="border-t border-slate-100">
-        <summary className="cursor-pointer px-5 py-3 text-sm font-medium text-brand-700">+ Add a receipt</summary>
+        <summary className="cursor-pointer px-5 py-3 text-sm font-medium text-brand-700">+ {t("Add a receipt")}</summary>
         <form action={addPurchase} className="grid gap-3 px-5 pb-5 sm:grid-cols-2">
           <input type="hidden" name="work_order_id" value={woId} />
           <input type="hidden" name="client_key" value={key} />
-          <Field label="Receipt photo" className="sm:col-span-2">
+          <Field label={t("Receipt photo")} className="sm:col-span-2">
             <PhotoInput name="receipt" multiple={false} capture="environment" accept="image/*,application/pdf" />
           </Field>
-          <Field label="Store / supplier">
+          <Field label={t("Store / supplier")}>
             <Input name="store" required list={`stores-${woId}`} placeholder="Home Depot" />
             <datalist id={`stores-${woId}`}>
               {stores.map((s) => (
@@ -147,50 +150,52 @@ export async function ReceiptsCard({ supabase, woId, profile, open }: { supabase
               ))}
             </datalist>
           </Field>
-          <Field label="Total paid ($)">
+          <Field label={t("Total paid ($)")}>
             <Input name="total" required inputMode="decimal" placeholder="0.00" />
           </Field>
-          <Field label="Date">
+          <Field label={t("Date")}>
             <Input type="date" name="purchase_date" defaultValue={todayISO()} />
           </Field>
-          <Field label="Category">
+          <Field label={t("Category")}>
             <Select name="category" defaultValue="Parts">
               {PURCHASE_CATEGORIES.map((c) => (
-                <option key={c}>{c}</option>
-              ))}
-            </Select>
-          </Field>
-          <Field label="What was bought" className="sm:col-span-2">
-            <Input name="description" placeholder="e.g. 45/5 MFD capacitor, contactor, wire nuts" />
-          </Field>
-          <Field label="Paid with">
-            <Select name="payment_method" defaultValue="company_card">
-              {Object.entries(PAYMENT_LABEL).map(([k, v]) => (
-                <option key={k} value={k}>
-                  {v}
+                <option key={c} value={c}>
+                  {t(c)}
                 </option>
               ))}
             </Select>
           </Field>
-          <Field label="Card last 4 (company card)">
+          <Field label={t("What was bought")} className="sm:col-span-2">
+            <Input name="description" placeholder={t("e.g. 45/5 MFD capacitor, contactor, wire nuts")} />
+          </Field>
+          <Field label={t("Paid with")}>
+            <Select name="payment_method" defaultValue="company_card">
+              {Object.entries(PAYMENT_LABEL).map(([k, v]) => (
+                <option key={k} value={k}>
+                  {t(v)}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label={t("Card last 4 (company card)")}>
             <Input name="card_last4" inputMode="numeric" maxLength={4} placeholder="1234" />
           </Field>
           <details className="sm:col-span-2">
-            <summary className="cursor-pointer text-xs text-slate-500">Add subtotal &amp; tax (optional)</summary>
+            <summary className="cursor-pointer text-xs text-slate-500">{t("Add subtotal & tax (optional)")}</summary>
             <div className="mt-2 grid grid-cols-2 gap-3">
-              <Field label="Subtotal ($)">
+              <Field label={t("Subtotal ($)")}>
                 <Input name="subtotal" inputMode="decimal" />
               </Field>
-              <Field label="Tax ($)">
+              <Field label={t("Tax ($)")}>
                 <Input name="tax" inputMode="decimal" />
               </Field>
             </div>
           </details>
           <label className="flex items-center gap-2 text-xs text-slate-600 sm:col-span-2">
-            <input type="checkbox" name="no_receipt" className="rounded border-slate-300" /> No receipt available (explain in “What was bought”)
+            <input type="checkbox" name="no_receipt" className="rounded border-slate-300" /> {t("No receipt available (explain in “What was bought”)")}
           </label>
           <div className="sm:col-span-2">
-            <SubmitButton pendingText="Saving…">Save receipt</SubmitButton>
+            <SubmitButton pendingText={t("Saving…")}>{t("Save receipt")}</SubmitButton>
           </div>
         </form>
       </details>

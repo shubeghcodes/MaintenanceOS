@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Field, Select } from "./ui";
+import { useT } from "@/lib/i18n/client";
 
 type SiteOpt = { id: string; name: string; code: string | null };
 type AssetOpt = { id: string; name: string; tag: string | null; site_id: string };
@@ -12,7 +13,7 @@ export function SiteAssetPicker({
   assets,
   defaultSiteId,
   defaultAssetId,
-  assetLabel = "Asset (optional)",
+  assetLabel,
   requireAsset = false,
 }: {
   sites: SiteOpt[];
@@ -22,15 +23,16 @@ export function SiteAssetPicker({
   assetLabel?: string;
   requireAsset?: boolean;
 }) {
+  const t = useT();
   const [siteId, setSiteId] = useState(defaultSiteId ?? (sites.length === 1 ? sites[0].id : ""));
   const siteAssets = assets.filter((a) => a.site_id === siteId);
 
   return (
     <>
-      <Field label="Site">
+      <Field label={t("Site")}>
         <Select name="site_id" required value={siteId} onChange={(e) => setSiteId(e.target.value)}>
           <option value="" disabled>
-            Select a site…
+            {t("Select a site…")}
           </option>
           {sites.map((s) => (
             <option key={s.id} value={s.id}>
@@ -40,9 +42,9 @@ export function SiteAssetPicker({
           ))}
         </Select>
       </Field>
-      <Field label={assetLabel}>
+      <Field label={assetLabel ?? t("Asset (optional)")}>
         <Select name="asset_id" defaultValue={defaultAssetId ?? ""} key={siteId} required={requireAsset} disabled={!siteId}>
-          <option value="">{siteId ? (requireAsset ? "Select…" : "— None / not sure —") : "Pick a site first"}</option>
+          <option value="">{siteId ? (requireAsset ? t("Select…") : t("— None / not sure —")) : t("Pick a site first")}</option>
           {siteAssets.map((a) => (
             <option key={a.id} value={a.id}>
               {a.name}

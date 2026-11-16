@@ -9,6 +9,7 @@ import { SubmitButton } from "@/components/SubmitButton";
 import { PhotoInput } from "@/components/PhotoInput";
 import { redirect } from "next/navigation";
 import { createWorkOrder } from "../actions";
+import { getT } from "@/lib/i18n/server";
 
 export const metadata = { title: "New work order" };
 
@@ -20,6 +21,7 @@ export default async function NewWorkOrderPage({
   const sp = await searchParams;
   const { supabase, profile } = await getSession();
   if (profile.role === "vendor") redirect("/work-orders");
+  const t = await getT();
   const { sites, vendors, techs, assets } = await getLookups(supabase, { assets: true });
   // Only admins assign on creation; requests from GMs and techs wait for an admin's approval.
   const isStaff = profile.role === "admin";
@@ -28,13 +30,13 @@ export default async function NewWorkOrderPage({
   return (
     <>
       <PageHeader
-        title={isManager ? "Submit a maintenance request" : "New work order"}
-        subtitle={isManager ? "Describe the problem. An admin will approve it and assign a technician or vendor." : undefined}
-        back={{ href: "/work-orders", label: "Work orders" }}
+        title={isManager ? t("Submit a maintenance request") : t("New work order")}
+        subtitle={isManager ? t("Describe the problem. An admin will approve it and assign a technician or vendor.") : undefined}
+        back={{ href: "/work-orders", label: t("Work orders") }}
       />
-      {sp.error && <Alert>{sp.error}</Alert>}
+      {sp.error && <Alert>{t(sp.error)}</Alert>}
       {sites.length === 0 && (
-        <Alert tone="warning">You aren’t assigned to any sites yet. Ask an admin to add you to your location.</Alert>
+        <Alert tone="warning">{t("You aren’t assigned to any sites yet. Ask an admin to add you to your location.")}</Alert>
       )}
 
       <form action={createWorkOrder} className="grid gap-6 lg:grid-cols-3">
@@ -42,25 +44,27 @@ export default async function NewWorkOrderPage({
           <div className="grid gap-4 sm:grid-cols-2">
             <SiteAssetPicker sites={sites} assets={assets} defaultSiteId={sp.site} defaultAssetId={sp.asset} />
           </div>
-          <Field label="What’s the problem?">
-            <Input name="title" required maxLength={140} placeholder="e.g. Walk-in cooler reading 45°F" />
+          <Field label={t("What’s the problem?")}>
+            <Input name="title" required maxLength={140} placeholder={t("e.g. Walk-in cooler reading 45°F")} />
           </Field>
-          <Field label="Details" hint="When did it start? Anything already tried? Is it affecting service?">
+          <Field label={t("Details")} hint={t("When did it start? Anything already tried? Is it affecting service?")}>
             <Textarea name="description" rows={5} />
           </Field>
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Category">
+            <Field label={t("Category")}>
               <Select name="category" defaultValue="Other">
                 {CATEGORIES.map((c) => (
-                  <option key={c}>{c}</option>
+                  <option key={c} value={c}>
+                    {t(c)}
+                  </option>
                 ))}
               </Select>
             </Field>
-            <Field label="Where in the building?">
-              <Input name="location_detail" placeholder="e.g. Back of house, men’s restroom" />
+            <Field label={t("Where in the building?")}>
+              <Input name="location_detail" placeholder={t("e.g. Back of house, men’s restroom")} />
             </Field>
           </div>
-          <Field label="Photos" hint="Images or PDFs, up to 10 MB each.">
+          <Field label={t("Photos")} hint={t("Images or PDFs, up to 10 MB each.")}>
             <PhotoInput name="files" />
           </Field>
         </Card>
@@ -68,16 +72,16 @@ export default async function NewWorkOrderPage({
         <div className="space-y-6">
           <Card className="space-y-4 p-5">
             <fieldset>
-              <legend className="mb-2 text-sm font-medium text-slate-700">Priority</legend>
+              <legend className="mb-2 text-sm font-medium text-slate-700">{t("Priority")}</legend>
               <div className="space-y-2">
                 {(Object.keys(PRIORITY_LABEL) as (keyof typeof PRIORITY_LABEL)[]).map((p) => (
                   <label key={p} className="flex cursor-pointer items-start gap-2 rounded-lg p-2 ring-1 ring-slate-200 has-[:checked]:bg-brand-50 has-[:checked]:ring-brand-500">
                     <input type="radio" name="priority" value={p} defaultChecked={p === "medium"} className="mt-0.5" />
                     <span>
-                      <span className="block text-sm font-medium">{PRIORITY_LABEL[p]}</span>
+                      <span className="block text-sm font-medium">{t(PRIORITY_LABEL[p])}</span>
                       <span className="block text-xs text-slate-500">
-                        Target: {PRIORITY_SLA[p]}
-                        {p === "emergency" && " · safety, food safety, or can’t operate"}
+                        {t("Target: {time}", { time: t(PRIORITY_SLA[p]) })}
+                        {p === "emergency" && ` · ${t("safety, food safety, or can’t operate")}`}
                       </span>
                     </span>
                   </label>
@@ -135,7 +139,7 @@ export default async function NewWorkOrderPage({
             </Card>
           )}
 
-          <SubmitButton pendingText="Submitting…">{isManager ? "Submit request" : "Create work order"}</SubmitButton>
+          <SubmitButton pendingText={t("Submitting…")}>{isManager ? t("Submit request") : t("Create work order")}</SubmitButton>
         </div>
       </form>
     </>

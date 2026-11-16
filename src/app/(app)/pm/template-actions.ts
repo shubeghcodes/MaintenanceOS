@@ -62,6 +62,8 @@ export async function saveTemplateItem(fd: FormData) {
   const row = {
     activity: str(fd, "activity"),
     description: str(fd, "description"),
+    activity_es: str(fd, "activity_es"),
+    description_es: str(fd, "description_es"),
     photo_rule: PHOTO_RULES.includes(photo) ? photo : "before_after",
   };
   if (!row.activity) redirect(`${back}?error=Activity+name+is+required`);

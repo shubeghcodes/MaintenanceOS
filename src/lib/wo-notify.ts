@@ -7,6 +7,7 @@ import { fmtDate, fmtDateTime, fmtTime } from "./format";
 import { adminCoverage, detailTable, shell } from "./vendor-notify";
 import { teamReplyAddress } from "./reply-address";
 import type { WoPriority } from "./types";
+import { asLocale, makeT, type T } from "./i18n";
 
 /**
  * Work order emails to people inside the company: admins (new requests to approve),
@@ -14,7 +15,8 @@ import type { WoPriority } from "./types";
  * and the technician it was assigned to. Failures never block the action that sent them.
  */
 
-type Person = { id: string; full_name: string | null; email: string | null; active: boolean; role: string };
+type Person = { id: string; full_name: string | null; email: string | null; active: boolean; role: string; language?: string | null };
+const EN: T = makeT("en");
 type Wo = {
   id: string;
   number: number;
@@ -43,7 +45,7 @@ async function load(woId: string) {
       "id,number,title,description,priority,category,location_detail,due_at,scheduled_date,scheduled_start,resolution_notes,company_id,requested_by," +
         "site:sites(name,code,address,city,state), vendor:vendors(name)," +
         "requester:profiles!work_orders_requested_by_fkey(id,full_name,email,active,role)," +
-        "tech:profiles!work_orders_assigned_tech_id_fkey(id,full_name,email,active,role)",
+        "tech:profiles!work_orders_assigned_tech_id_fkey(id,full_name,email,active,role,language)",
     )
     .eq("id", woId)
     .maybeSingle();
@@ -51,27 +53,27 @@ async function load(woId: string) {
 }
 
 const first = (p: Person | null) => (p?.full_name ? p.full_name.split(" ")[0] : null);
-const hello = (p: Person | null) => (first(p) ? `Hi ${esc(first(p))},` : "Hello,");
-const loc = (wo: Wo) => `${wo.site?.name ?? ""}${wo.site?.code ? ` (Store ${wo.site.code})` : ""}`;
+const hello = (p: Person | null, t: T = EN) => (first(p) ? t("Hi {name},", { name: esc(first(p)) }) : t("Hello,"));
+const loc = (wo: Wo, t: T = EN) => `${wo.site?.name ?? ""}${wo.site?.code ? ` (${t("Store {code}", { code: wo.site.code })})` : ""}`;
 const address = (wo: Wo) => [wo.site?.address, [wo.site?.city, wo.site?.state].filter(Boolean).join(", ")].filter(Boolean).join(", ");
 const reachable = (p: Person | null, actorId: string | null): p is Person => !!p && p.active && !!p.email && p.id !== actorId;
 /** Requester emails go to the GMs and techs who asked; admins already see everything in the app. */
 const requesterReachable = (p: Person | null, actorId: string | null): p is Person => reachable(p, actorId) && p!.role !== "admin";
 const strip = (html: string) => html.replace(/<br\s*\/?>/g, "\n").replace(/<[^>]+>/g, "");
 
-function summary(wo: Wo, extra: [string, string | null | undefined][] = []) {
+function summary(wo: Wo, extra: [string, string | null | undefined][] = [], t: T = EN) {
   return detailTable([
-    ["Location", esc(loc(wo))],
-    ["Address", esc(address(wo))],
-    ["Priority", esc(PRIORITY_LABEL[wo.priority])],
-    ["Category", esc(wo.category)],
-    ["Where on site", esc(wo.location_detail)],
-    ["Details", wo.description ? esc(wo.description).replace(/\n/g, "<br>") : null],
+    [t("Location"), esc(loc(wo, t))],
+    [t("Address"), esc(address(wo))],
+    [t("Priority"), esc(t(PRIORITY_LABEL[wo.priority]))],
+    [t("Category"), esc(t(wo.category))],
+    [t("Where on site"), esc(wo.location_detail)],
+    [t("Details"), wo.description ? esc(wo.description).replace(/\n/g, "<br>") : null],
     ...extra,
   ]);
 }
 
-async function send(to: string | string[], subject: string, eyebrow: string, title: string, intro: string, body: string, wo: { id: string; number: number }, label = "Open work order") {
+async function send(to: string | string[], subject: string, eyebrow: string, title: string, intro: string, body: string, wo: { id: string; number: number }, label = "Open work order", t: T = EN) {
   const woId = wo.id;
   // Replies come back as a note on the work order (from this location's GMs, techs and admins).
   const replyTo = teamReplyAddress(wo.id, wo.number);
@@ -86,8 +88,8 @@ async function send(to: string | string[], subject: string, eyebrow: string, tit
         title,
         intro,
         body,
-        button: { label, url: appUrl(`/work-orders/${woId}`) },
-        footer: replyTo ? "Reply to this email to add a note to the work order." : undefined,
+        button: { label: t(label), url: appUrl(`/work-orders/${woId}`) },
+        footer: replyTo ? t("Reply to this email to add a note to the work order.") : t("Sent by MaintenanceOS."),
       }),
       text: `${title}\n\n${strip(intro)}\n\n${appUrl(`/work-orders/${woId}`)}`,
       ...(replyTo ? { replyTo } : {}),
@@ -182,19 +184,29 @@ export async function emailRequesterCompleted(woId: string, actorId: string | nu
 export async function emailTechAssigned(woId: string, actorId: string, note?: string | null) {
   const { wo } = await load(woId);
   if (!wo || !reachable(wo.tech, actorId)) return;
-  const when = wo.scheduled_date ? `${fmtDate(wo.scheduled_date)}${wo.scheduled_start ? ` at ${fmtTime(wo.scheduled_start)}` : ""}` : "Not scheduled yet";
+  const lang = asLocale(wo.tech.language);
+  const t = makeT(lang);
+  const when = wo.scheduled_date
+    ? `${fmtDate(wo.scheduled_date, lang)}${wo.scheduled_start ? ` ${t("at {time}", { time: fmtTime(wo.scheduled_start) })}` : ""}`
+    : t("Not scheduled yet");
   const urgent = wo.priority === "emergency" || wo.priority === "high";
   await send(
     wo.tech.email!,
-    `${urgent ? `[${PRIORITY_LABEL[wo.priority].toUpperCase()}] ` : ""}Assigned to you: WO #${wo.number} — ${wo.title} (${wo.site?.name ?? ""})`,
-    `Assigned to you · WO #${wo.number}`,
+    `${urgent ? `[${t(PRIORITY_LABEL[wo.priority]).toUpperCase()}] ` : ""}${t("Assigned to you: WO #{n} — {title} ({site})", { n: wo.number, title: wo.title, site: wo.site?.name ?? "" })}`,
+    t("Assigned to you · WO #{n}", { n: wo.number }),
     wo.title,
-    `${hello(wo.tech)}<br>You've been assigned this work order.${note ? `<br><br><b>Note:</b> ${esc(note)}` : ""}`,
-    summary(wo, [
-      ["Scheduled", esc(when)],
-      ["Due", esc(fmtDateTime(wo.due_at))],
-    ]),
+    `${hello(wo.tech, t)}<br>${t("You've been assigned this work order.")}${note ? `<br><br><b>${t("Note:")}</b> ${esc(note)}` : ""}`,
+    summary(
+      wo,
+      [
+        [t("Scheduled"), esc(when)],
+        [t("Due"), esc(fmtDateTime(wo.due_at, lang))],
+      ],
+      t,
+    ),
     { id: woId, number: wo.number },
+    "Open work order",
+    t,
   );
 }
 
@@ -230,14 +242,17 @@ export async function emailSignoffRequest(woId: string, opts: { reminder?: boole
 export async function emailTechSentBack(woId: string, actorId: string, note: string) {
   const { wo } = await load(woId);
   if (!wo || !reachable(wo.tech, actorId)) return;
+  const t = makeT(asLocale(wo.tech.language));
   await send(
     wo.tech.email!,
-    `Not fixed — back to you: WO #${wo.number} — ${wo.title} (${wo.site?.name ?? ""})`,
-    `Sent back · WO #${wo.number}`,
-    `The store says it isn't fixed`,
-    `${hello(wo.tech)}<br>The GM at ${esc(loc(wo))} checked <b>${esc(wo.title)}</b> and it still needs work. The work order is open again as a return visit.<br><br><b>Their note:</b> ${esc(note)}`,
+    t("Not fixed — back to you: WO #{n} — {title} ({site})", { n: wo.number, title: wo.title, site: wo.site?.name ?? "" }),
+    t("Sent back · WO #{n}", { n: wo.number }),
+    t("The store says it isn't fixed"),
+    `${hello(wo.tech, t)}<br>${t("The GM at {site} checked <b>{title}</b> and it still needs work. The work order is open again as a return visit.", { site: esc(loc(wo, t)), title: esc(wo.title) })}<br><br><b>${t("Their note:")}</b> ${esc(note)}`,
     "",
     { id: woId, number: wo.number },
+    "Open work order",
+    t,
   );
 }
 

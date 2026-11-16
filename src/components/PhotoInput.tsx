@@ -1,5 +1,6 @@
 "use client";
 
+import { useT } from "@/lib/i18n/client";
 import { useRef, useState } from "react";
 
 const MAX_DIM = 1800;
@@ -25,6 +26,7 @@ export function PhotoInput({
   capture?: "environment" | "user";
 }) {
   const ref = useRef<HTMLInputElement>(null);
+  const t = useT();
   const [status, setStatus] = useState<string | null>(null);
 
   async function shrink(f: File): Promise<File> {
@@ -62,7 +64,7 @@ export function PhotoInput({
           const input = e.currentTarget;
           const files = Array.from(input.files ?? []);
           if (!files.length) return setStatus(null);
-          setStatus("Preparing…");
+          setStatus(t("Preparing…"));
           const form = input.form;
           const buttons = form ? Array.from(form.querySelectorAll<HTMLButtonElement>("button[type=submit]")) : [];
           buttons.forEach((b) => (b.disabled = true));
@@ -75,8 +77,8 @@ export function PhotoInput({
           const tooBig = out.filter((f) => f.size > 10 * 1024 * 1024);
           setStatus(
             tooBig.length
-              ? `${tooBig.map((f) => f.name).join(", ")} is over 10 MB. Please choose a smaller file.`
-              : `${out.length} file${out.length > 1 ? "s" : ""} ready · ${total < 100 * 1024 ? `${Math.max(1, Math.round(total / 1024))} KB` : `${(total / 1024 / 1024).toFixed(1)} MB`}`,
+              ? t("{name} is over 10 MB. Please choose a smaller file.", { name: tooBig.map((f) => f.name).join(", ") })
+              : `${t(out.length > 1 ? "{n} files ready" : "{n} file ready", { n: out.length })} · ${total < 100 * 1024 ? `${Math.max(1, Math.round(total / 1024))} KB` : `${(total / 1024 / 1024).toFixed(1)} MB`}`,
           );
         }}
       />

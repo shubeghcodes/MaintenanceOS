@@ -8,7 +8,7 @@ export async function updateAccount(fd: FormData) {
   const { supabase, profile } = await getSession();
   const { error } = await supabase
     .from("profiles")
-    .update({ full_name: str(fd, "full_name"), phone: str(fd, "phone") })
+    .update({ full_name: str(fd, "full_name"), phone: str(fd, "phone"), language: str(fd, "language") === "es" ? "es" : "en" })
     .eq("id", profile.id);
   if (error) redirect(`/account?error=${encodeURIComponent(error.message)}`);
 

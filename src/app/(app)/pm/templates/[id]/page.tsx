@@ -13,7 +13,7 @@ export const metadata = { title: "PM template" };
 
 const PHOTO_LABEL = { before_after: "Before & after", single: "One photo", none: "No photo" } as const;
 
-type Item = { id: string; position: number; activity: string; description: string | null; photo_rule: keyof typeof PHOTO_LABEL };
+type Item = { id: string; position: number; activity: string; description: string | null; activity_es: string | null; description_es: string | null; photo_rule: keyof typeof PHOTO_LABEL };
 type Sched = { id: string; next_due_on: string; active: boolean; site: { name: string; code: string | null } | null };
 
 export default async function TemplatePage({
@@ -28,7 +28,7 @@ export default async function TemplatePage({
   const { supabase } = await requireRole("admin");
   const [{ data: tplData }, { data: itemData }, { data: schedData }] = await Promise.all([
     supabase.from("pm_templates").select("*").eq("id", id).maybeSingle(),
-    supabase.from("pm_template_items").select("id,position,activity,description,photo_rule").eq("template_id", id).order("position"),
+    supabase.from("pm_template_items").select("id,position,activity,description,activity_es,description_es,photo_rule").eq("template_id", id).order("position"),
     supabase.from("pm_schedules").select("id,next_due_on,active,site:sites(name,code)").eq("template_id", id).order("next_due_on"),
   ]);
   if (!tplData) notFound();
@@ -76,6 +76,7 @@ export default async function TemplatePage({
                         <span className="min-w-0 flex-1">
                           <span className="block text-sm font-medium text-slate-900">{it.activity}</span>
                           {it.description && <span className="line-clamp-1 text-xs text-slate-500 group-open:hidden">{it.description}</span>}
+                          {!it.activity_es && <span className="text-[11px] text-amber-700 group-open:hidden">No Spanish yet</span>}
                         </span>
                         <span
                           className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${
@@ -91,6 +92,11 @@ export default async function TemplatePage({
                           <input type="hidden" name="item_id" value={it.id} />
                           <Input name="activity" defaultValue={it.activity} required />
                           <Textarea name="description" rows={2} defaultValue={it.description ?? ""} />
+                          <div className="space-y-2 rounded-lg bg-slate-50 p-2 ring-1 ring-inset ring-slate-200">
+                            <p className="text-xs font-medium text-slate-600">Spanish (shown to techs who use the app in Spanish)</p>
+                            <Input name="activity_es" defaultValue={it.activity_es ?? ""} placeholder="Actividad en español" />
+                            <Textarea name="description_es" rows={2} defaultValue={it.description_es ?? ""} placeholder="Instrucciones en español" />
+                          </div>
                           <div className="flex flex-wrap items-center gap-2">
                             <Select name="photo_rule" defaultValue={it.photo_rule} className="w-auto">
                               {Object.entries(PHOTO_LABEL).map(([k, v]) => (
@@ -130,6 +136,13 @@ export default async function TemplatePage({
               <div className="text-sm font-medium text-slate-800">Add an activity</div>
               <Input name="activity" required placeholder="e.g. Condenser coils" />
               <Textarea name="description" rows={2} placeholder="What the tech should do" />
+              <details>
+                <summary className="cursor-pointer text-xs text-slate-500">Add Spanish (optional)</summary>
+                <div className="mt-2 space-y-2">
+                  <Input name="activity_es" placeholder="Actividad en español" />
+                  <Textarea name="description_es" rows={2} placeholder="Instrucciones en español" />
+                </div>
+              </details>
               <div className="flex flex-wrap items-center gap-2">
                 <Select name="photo_rule" defaultValue="before_after" className="w-auto">
                   {Object.entries(PHOTO_LABEL).map(([k, v]) => (
