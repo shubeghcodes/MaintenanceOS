@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import clsx from "clsx";
-import { CalendarClock } from "lucide-react";
+import { CalendarClock, Search } from "lucide-react";
 import type { WoPriority } from "@/lib/types";
 import { moveWorkOrder } from "./actions";
 import type { BoardForecast, BoardJob } from "./ScheduleBoard";
@@ -44,6 +44,7 @@ export function MonthCalendar({
   canEdit,
   dayHref,
   showTech,
+  sites,
 }: {
   /** Every day in the grid (whole weeks, Sunday first). */
   days: string[];
@@ -60,6 +61,7 @@ export function MonthCalendar({
   dayHref: string;
   /** Show who each job is assigned to (off when filtered to one tech). */
   showTech: boolean;
+  sites: { id: string; code: string }[];
 }) {
   const router = useRouter();
   const [jobs, setJobs] = useState(initialJobs);
@@ -67,21 +69,32 @@ export function MonthCalendar({
   const [over, setOver] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  const [q, setQ] = useState("");
+  const [siteFilter, setSiteFilter] = useState("");
+  const [onlyUnassigned, setOnlyUnassigned] = useState(false);
   useEffect(() => setJobs(initialJobs), [initialJobs]);
+
+  const term = q.trim().toLowerCase();
+  const backlog = jobs
+    .filter((j) => !j.scheduled_date && !["completed", "cancelled"].includes(j.status))
+    .filter((j) => !siteFilter || j.site_id === siteFilter)
+    .filter((j) => !onlyUnassigned || (!j.assigned_tech_id && !j.vendor_name))
+    .filter((j) => !term || j.title.toLowerCase().includes(term) || String(j.number).includes(term) || j.site_code.toLowerCase().includes(term))
+    .sort((a, b) => RANK[a.priority] - RANK[b.priority] || (a.due_at ?? "z").localeCompare(b.due_at ?? "z"));
 
   const byDay = new Map<string, BoardJob[]>();
   for (const j of jobs) if (j.scheduled_date) byDay.set(j.scheduled_date, [...(byDay.get(j.scheduled_date) ?? []), j]);
   const pmByDay = new Map<string, BoardForecast[]>();
   for (const f of forecast) pmByDay.set(f.date, [...(pmByDay.get(f.date) ?? []), f]);
 
-  function drop(date: string) {
+  function drop(date: string | null) {
     const id = drag;
     setDrag(null);
     setOver(null);
     const job = jobs.find((j) => j.id === id);
     if (!job || job.scheduled_date === date) return;
     const before = jobs;
-    setJobs(jobs.map((j) => (j.id === id ? { ...j, scheduled_date: date } : j)));
+    setJobs(jobs.map((j) => (j.id === id ? { ...j, scheduled_date: date, ...(date === null && { scheduled_start: null }) } : j)));
     setError(null);
     start(async () => {
       const res = await moveWorkOrder({ id: job.id, date });
@@ -218,9 +231,92 @@ export function MonthCalendar({
         </div>
       </div>
       <p className="mt-2 text-xs text-slate-500">
-        Drag a job to another day to move it (it stays with the same tech). Dashed items are planned PMs that become work orders automatically. Click a date to
-        open that day.
+        Drag a job to another day to move it (it stays with the same tech), or drop it on Unscheduled to take it off the calendar. Dashed items are planned PMs
+        that become work orders automatically. Click a date to open that day.
       </p>
+
+      {/* Unscheduled: drag onto a day to schedule it; drop a job here to take it off the calendar. */}
+      <div
+        onDragOver={(e) => {
+          if (!drag) return;
+          e.preventDefault();
+          setOver("backlog");
+        }}
+        onDragLeave={() => setOver((o) => (o === "backlog" ? null : o))}
+        onDrop={(e) => {
+          e.preventDefault();
+          drop(null);
+        }}
+        className={clsx("mt-4 rounded-xl border border-slate-200 bg-white shadow-sm", over === "backlog" && "ring-2 ring-brand-500")}
+      >
+        <div className="flex flex-wrap items-end gap-3 border-b border-slate-100 px-4 py-3">
+          <div className="mr-auto">
+            <p className="text-sm font-semibold">Unscheduled</p>
+            <p className="text-xs text-slate-500">
+              {backlog.length} open job{backlog.length === 1 ? "" : "s"} without a date · drag one onto a day to schedule it
+            </p>
+          </div>
+          <div className="flex items-center gap-2 rounded-lg px-2 ring-1 ring-slate-200">
+            <Search className="h-3.5 w-3.5 text-slate-400" aria-hidden />
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search" className="w-40 border-0 py-1.5 text-sm focus:ring-0" />
+          </div>
+          <select value={siteFilter} onChange={(e) => setSiteFilter(e.target.value)} className="rounded-lg border-0 py-1.5 pl-2 text-sm ring-1 ring-slate-200">
+            <option value="">All sites</option>
+            {sites.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.code}
+              </option>
+            ))}
+          </select>
+          <label className="flex items-center gap-1 text-sm text-slate-600">
+            <input type="checkbox" checked={onlyUnassigned} onChange={(e) => setOnlyUnassigned(e.target.checked)} className="rounded border-slate-300" />
+            Unassigned
+          </label>
+        </div>
+        <div className="grid max-h-[50vh] grid-cols-1 gap-1.5 overflow-y-auto p-2 sm:grid-cols-2 lg:grid-cols-4">
+          {backlog.length === 0 ? (
+            <p className="col-span-full px-2 py-6 text-center text-xs text-slate-500">Everything open is on the calendar.</p>
+          ) : (
+            backlog.map((j) => {
+              const tech = j.assigned_tech_id ? techNames[j.assigned_tech_id] : null;
+              const late = j.due_at && new Date(j.due_at) < new Date();
+              return (
+                <div
+                  key={j.id}
+                  draggable={canEdit}
+                  onDragStart={(e) => {
+                    e.dataTransfer.effectAllowed = "move";
+                    setDrag(j.id);
+                  }}
+                  onDragEnd={() => {
+                    setDrag(null);
+                    setOver(null);
+                  }}
+                  className={clsx(
+                    "rounded-md border border-l-4 border-slate-200 bg-white px-2 py-1.5 text-xs shadow-sm",
+                    BAR[j.priority],
+                    canEdit && "cursor-grab active:cursor-grabbing",
+                    drag === j.id && "opacity-40",
+                  )}
+                  title={`#${j.number} ${j.title}`}
+                >
+                  <span className="font-mono text-[11px] text-slate-500">#{j.number}</span>
+                  <Link href={`/work-orders/${j.id}`} draggable={false} className="block truncate font-medium text-slate-900 hover:text-brand-700">
+                    {j.title}
+                  </Link>
+                  <div className="flex flex-wrap gap-x-2 text-[11px] text-slate-500">
+                    <span className="font-medium text-slate-600">{j.site_code}</span>
+                    {tech && <span>{tech}</span>}
+                    {j.vendor_name && <span>{j.vendor_name}</span>}
+                    {!tech && !j.vendor_name && <span className="text-amber-700">Unassigned</span>}
+                    {late && <span className="font-medium text-red-700">overdue</span>}
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
     </div>
   );
 }

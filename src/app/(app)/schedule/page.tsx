@@ -58,9 +58,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
   const [{ data: techData }, { data: schedData }, { data: backlogData }, { data: siteData }, { data: sentData }, { data: pmData }, { data: openPmData }] = await Promise.all([
     supabase.from("profiles").select("id,full_name,email,role").eq("active", true).in("role", ["tech", "admin"]).order("full_name"),
     inCompany(supabase.from("work_orders").select(SELECT).gte("scheduled_date", start).lte("scheduled_date", end).neq("status", "cancelled"), cid),
-    view === "month"
-      ? Promise.resolve({ data: [] })
-      : inCompany(supabase.from("work_orders").select(SELECT).is("scheduled_date", null).in("status", WORKABLE_STATUSES), cid).limit(300),
+    inCompany(supabase.from("work_orders").select(SELECT).is("scheduled_date", null).in("status", WORKABLE_STATUSES), cid).limit(300),
     inCompany(supabase.from("sites").select("id,code,name").eq("active", true), cid).order("name"),
     profile.role === "admin"
       ? supabase.from("schedule_emails").select("tech_id,schedule_date,sent_at").eq("status", "sent").gte("schedule_date", start).lte("schedule_date", end)
@@ -236,7 +234,8 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
           days={days}
           month={monthKey}
           today={today}
-          jobs={jobs.filter((j) => j.scheduled_date)}
+          jobs={jobs}
+          sites={((siteData ?? []) as { id: string; code: string | null; name: string }[]).map((s) => ({ id: s.id, code: s.code ?? s.name }))}
           forecast={forecast}
           techNames={Object.fromEntries(people.map((p) => [p.id, personName(p)]))}
           off={offByDay}
