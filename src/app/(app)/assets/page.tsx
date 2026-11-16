@@ -1,4 +1,5 @@
 import { getCompanyScope, inCompany } from "@/lib/company";
+import { AutoSubmit } from "@/components/AutoSubmit";
 import Link from "next/link";
 import { FileSpreadsheet, Plus } from "lucide-react";
 import { getSession } from "@/lib/auth";
@@ -75,6 +76,7 @@ export default async function AssetsPage({ searchParams }: { searchParams: Promi
               </option>
             ))}
           </Select>
+          <AutoSubmit />
           <Button variant="secondary" type="submit">
             Filter
           </Button>

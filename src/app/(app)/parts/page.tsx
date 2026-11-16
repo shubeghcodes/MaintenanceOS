@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AutoSubmit } from "@/components/AutoSubmit";
 import { requireRole } from "@/lib/auth";
 import { getCompanyScope } from "@/lib/company";
 import { getLookups } from "@/lib/data";
@@ -115,6 +116,7 @@ export default async function PartsPage({ searchParams }: { searchParams: Promis
               <option value="0">{t("Everyone's")}</option>
             </Select>
           )}
+          <AutoSubmit />
           <Button variant="secondary" type="submit">
             {t("Filter")}
           </Button>

@@ -1,4 +1,5 @@
 import { getCompanyScope, inCompany } from "@/lib/company";
+import { AutoSubmit } from "@/components/AutoSubmit";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { requireRole } from "@/lib/auth";
@@ -213,6 +214,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
                 </option>
               ))}
           </Select>
+          <AutoSubmit />
           <Button variant="secondary" size="sm" type="submit">
             Show
           </Button>

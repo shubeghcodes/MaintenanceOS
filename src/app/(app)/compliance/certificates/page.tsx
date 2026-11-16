@@ -1,4 +1,5 @@
 import { getCompanyScope } from "@/lib/company";
+import { AutoSubmit } from "@/components/AutoSubmit";
 import Link from "next/link";
 import { Download, FileText } from "lucide-react";
 import { getSession } from "@/lib/auth";
@@ -76,6 +77,7 @@ export default async function CertificatesPage({ searchParams }: { searchParams:
           <label className="flex items-center gap-1 text-xs text-slate-500">
             to <Input type="date" name="to" defaultValue={sp.to} className="w-auto py-1.5" />
           </label>
+          <AutoSubmit />
           <Button variant="secondary" type="submit">
             Filter
           </Button>
