@@ -1,5 +1,5 @@
 import "server-only";
-import { emailGmsNote } from "./wo-notify";
+import { emailGmsNote, notifyNote } from "./wo-notify";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { resendApiBase } from "./email";
@@ -233,6 +233,7 @@ export async function processInboundEmail(
     actor_type: "system",
     actor_label: from,
     visibility: "internal",
+    staff_only: true,
     meta: { ...meta, unverified: true, files: saved.length },
   });
   await notifyManagement(db, ctx, "unverified_email", from, { note: body });
@@ -267,8 +268,8 @@ export async function processInboundEmail(
         visibility: "internal",
         meta: { ...meta, files: saved.length },
       });
-      // A tech's or admin's reply is a note the GMs should see; a GM's reply doesn't email the GMs.
-      await emailGmsNote(woId, { body, authorId: person!.id });
+      // Same people hear about it as a note posted in the app (GM → tech, tech/admin → GMs, …).
+      await notifyNote(woId, { body, authorId: person!.id });
       return finish("team_reply", { work_order_id: woId, attachment_count: saved.length });
     }
     await db.from("work_order_events").insert({
@@ -278,6 +279,7 @@ export async function processInboundEmail(
       actor_type: "system",
       actor_label: from,
       visibility: "internal",
+      staff_only: true,
       meta: { ...meta, unverified: true, files: saved.length },
     });
     return finish("unverified", { work_order_id: woId, attachment_count: saved.length, detail: `Sender ${from} not recognized` });

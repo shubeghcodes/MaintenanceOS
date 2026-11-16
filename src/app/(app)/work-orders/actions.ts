@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
-import { emailApprovalNeeded, emailGmsNote, emailPartRequested, emailRequesterApproved, emailRequesterDeclined, emailTechAssigned, emailTechSentBack } from "@/lib/wo-notify";
+import { emailApprovalNeeded, emailGmsNote, emailPartRequested, notifyNote, emailRequesterApproved, emailRequesterDeclined, emailTechAssigned, emailTechSentBack } from "@/lib/wo-notify";
 import { afterClosed, afterWorkDone } from "@/lib/signoff";
 import { sendAndRecord } from "@/lib/dispatch";
 import { ACTIVE_DISPATCH, HOLD_REASONS } from "@/lib/constants";
@@ -292,12 +292,15 @@ export async function addComment(fd: FormData) {
   const { supabase, profile } = await getSession();
   const id = str(fd, "id")!;
   const body = str(fd, "body");
+  // Admins and techs can keep a note from the store's GM (pricing, vendor issues).
+  const staffOnly = fd.get("staff_only") === "on" && (profile.role === "admin" || profile.role === "tech");
   if (body) {
     const { error } = await supabase
       .from("work_order_events")
-      .insert({ work_order_id: id, user_id: profile.id, kind: "comment", body });
+      .insert({ work_order_id: id, user_id: profile.id, kind: "comment", body, staff_only: staffOnly });
     if (error) fail(id, error.message);
-    after(() => emailGmsNote(id, { body, authorId: profile.id }));
+    if (profile.role !== "vendor") after(() => notifyNote(id, { body, authorId: profile.id, staffOnly }));
+    else after(() => emailGmsNote(id, { body, authorId: profile.id }));
   }
   revalidatePath(`/work-orders/${id}`);
 }
