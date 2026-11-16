@@ -129,3 +129,33 @@ export async function deletePurchase(fd: FormData) {
   const back = backTo(fd, p.work_order_id);
   go(back.startsWith(`/purchases/${id}`) ? "/purchases" : back, "receipt", "deleted");
 }
+
+/** Attach the receipt photo to a line that's already there (e.g. one added automatically for an ordered part). */
+export async function attachReceipt(fd: FormData) {
+  const { supabase, profile } = await getSession();
+  const woId = str(fd, "work_order_id")!;
+  const back = backTo(fd, woId);
+  if (profile.role !== "admin" && profile.role !== "tech") go(back, "error", "Not allowed");
+  const file = fd.get("receipt");
+  if (!(file instanceof File) || file.size === 0) go(back, "error", "Choose the receipt photo first.");
+  const bad = fileProblems([file as File]);
+  if (bad) go(back, "error", bad);
+  const [attachmentId] = await saveAttachments(supabase, "work_order", woId, profile.id, [file as File], {
+    category: "receipt",
+    visibility: "internal",
+    label: profile.full_name ?? undefined,
+  });
+  if (!attachmentId) go(back, "error", "The receipt photo didn't upload. Check your connection and try again.");
+  const method = str(fd, "payment_method") as PaymentMethod | null;
+  const last4 = str(fd, "card_last4");
+  if (last4 && !/^\d{4}$/.test(last4)) go(back, "error", "Card: enter just the last 4 digits.");
+  const { error } = await supabase.rpc("purchase_attach_receipt", {
+    p_purchase: str(fd, "purchase_id"),
+    p_attachment: attachmentId,
+    p_method: method && method in PAYMENT_LABEL ? method : null,
+    p_last4: last4,
+  });
+  if (error) go(back, "error", error.message);
+  refresh(woId);
+  go(back, "receipt", "attached");
+}

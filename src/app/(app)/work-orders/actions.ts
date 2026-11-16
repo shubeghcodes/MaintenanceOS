@@ -317,6 +317,26 @@ export async function updateCosts(fd: FormData) {
   revalidatePath(`/work-orders/${id}`);
 }
 
+/** Costs card: saves itself as fields change (no Save button). Returns instead of redirecting. */
+export async function saveCosts(fd: FormData): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { supabase, profile } = await getSession();
+  const id = str(fd, "id")!;
+  if (profile.role === "manager") return { ok: false, error: "Not allowed" };
+  const amounts = ["vendor_invoice_amount", "parts_cost"].map((k) => num(fd, k));
+  if (amounts.some((n) => n != null && (Number.isNaN(n) || n < 0))) return { ok: false, error: "Enter amounts as numbers, like 125.50" };
+  const patch: Record<string, unknown> = {
+    vendor_invoice_amount: num(fd, "vendor_invoice_amount") ?? 0,
+    invoice_number: str(fd, "invoice_number"),
+    resolution_notes: str(fd, "resolution_notes"),
+  };
+  if (profile.role !== "vendor") patch.parts_cost = num(fd, "parts_cost") ?? 0;
+  const { error } = await supabase.from("work_orders").update(patch).eq("id", id);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath(`/work-orders/${id}`);
+  revalidatePath("/work-orders");
+  return { ok: true };
+}
+
 export async function addComment(fd: FormData) {
   const { supabase, profile } = await getSession();
   const id = str(fd, "id")!;

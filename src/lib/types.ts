@@ -323,6 +323,8 @@ export interface Purchase {
   kind: PurchaseKind;
   /** Set for work-order receipts; null for store supplies. */
   work_order_id: string | null;
+  /** Set when the line was added automatically for a part ordered on the work order (wo_parts). */
+  part_id?: string | null;
   /** Location (copied from the work order for parts); null = shop / warehouse supplies. */
   site_id: string | null;
   company_id: string | null;

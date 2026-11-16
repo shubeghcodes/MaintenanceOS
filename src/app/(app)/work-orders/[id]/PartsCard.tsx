@@ -208,7 +208,7 @@ export async function PartsCard({
                                   {t("Bought it — have it now")}
                                 </SubmitButton>
                               </div>
-                              <p className="text-xs text-slate-500 sm:col-span-2">{t("Add the receipt under Receipts & purchases so the cost counts toward this job.")}</p>
+                              <p className="text-xs text-slate-500 sm:col-span-2">{t("The cost is added to this job automatically. Attach the receipt photo to its line under Receipts & purchases.")}</p>
                             </form>
                           </details>
                         )}

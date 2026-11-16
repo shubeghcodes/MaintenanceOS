@@ -6,7 +6,7 @@ import type { Profile, Purchase } from "@/lib/types";
 import { Badge, Card, CardHeader, Field, Input, Select } from "@/components/ui";
 import { SubmitButton } from "@/components/SubmitButton";
 import { PhotoInput } from "@/components/PhotoInput";
-import { addPurchase, deletePurchase, markReimbursed, reviewPurchase } from "../purchase-actions";
+import { addPurchase, attachReceipt, deletePurchase, markReimbursed, reviewPurchase } from "../purchase-actions";
 import { getT } from "@/lib/i18n/server";
 
 const COMMON_STORES = ["Home Depot", "Lowe's", "Grainger", "Ferguson", "Johnstone Supply", "Ace Hardware", "Restaurant Depot", "Parts Town", "Amazon", "Costco"];
@@ -80,6 +80,11 @@ export async function ReceiptsCard({ supabase, woId, profile, open }: { supabase
                     <span className="text-sm font-semibold text-slate-900">{r.store}</span>
                     <span className="text-sm tabular-nums text-slate-900">{fmtMoney(r.total, 2)}</span>
                     <Badge tone={PURCHASE_STATUS_TONE[r.status]}>{t(PURCHASE_STATUS_LABEL[r.status])}</Badge>
+                    {!f && r.part_id && r.status !== "rejected" && (
+                      <Badge tone="warning" dot={false}>
+                        {t("Receipt needed")}
+                      </Badge>
+                    )}
                     {r.reimbursable && r.status !== "rejected" && (
                       <Badge tone={r.reimbursed_at ? "good" : "serious"} dot={false}>
                         {r.reimbursed_at ? t("Reimbursed {date}", { date: fmtDate(r.reimbursed_at, L) }) : t("Reimburse")}
@@ -100,6 +105,23 @@ export async function ReceiptsCard({ supabase, woId, profile, open }: { supabase
                   {r.review_note && <p className="text-xs text-slate-600">{t("Note:")} {r.review_note}</p>}
                   {r.reimbursement_ref && <p className="text-xs text-slate-500">{t("Reimbursement ref")} {r.reimbursement_ref}</p>}
 
+                  {!f && r.status !== "rejected" && (isAdmin || (profile.role === "tech" && r.status === "submitted")) && (
+                    <form action={attachReceipt} className="mt-2 flex flex-wrap items-center gap-2 rounded-lg bg-amber-50 p-2 ring-1 ring-inset ring-amber-200">
+                      <input type="hidden" name="work_order_id" value={woId} />
+                      <input type="hidden" name="purchase_id" value={r.id} />
+                      <PhotoInput name="receipt" multiple={false} capture="environment" />
+                      <Select name="payment_method" defaultValue={r.payment_method} className="w-auto py-1 text-xs" aria-label={t("Paid with")}>
+                        {Object.entries(PAYMENT_LABEL).map(([k, v]) => (
+                          <option key={k} value={k}>
+                            {t(v)}
+                          </option>
+                        ))}
+                      </Select>
+                      <SubmitButton size="sm" pendingText={t("Uploading…")}>
+                        {t("Attach receipt")}
+                      </SubmitButton>
+                    </form>
+                  )}
                   {(isAdmin || canDelete) && (
                     <form className="mt-2 flex flex-wrap items-center gap-2">
                       <input type="hidden" name="purchase_id" value={r.id} />
