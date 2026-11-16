@@ -18,11 +18,7 @@ export default async function PurchasesPage({ searchParams }: { searchParams: Pr
   const today = todayISO();
   // Default: this month, unless a status queue is selected (then all dates).
   const f = { ...sp, from: sp.from ?? (sp.status || sp.all ? undefined : today.slice(0, 8) + "01"), to: sp.to };
-  const [rows, { sites }, { data: people }] = await Promise.all([
-    loadPurchases(supabase, { ...f, company: (await getCompanyScope()).companyId }),
-    getLookups(supabase),
-    supabase.from("profiles").select("id,full_name,email").in("role", ["admin", "tech", "manager"]).order("full_name"),
-  ]);
+  const [rows, { sites }] = await Promise.all([loadPurchases(supabase, { ...f, company: (await getCompanyScope()).companyId }), getLookups(supabase)]);
 
   const counted = rows.filter((r) => r.status !== "rejected");
   const total = counted.reduce((s, r) => s + Number(r.total), 0);
@@ -153,14 +149,6 @@ export default async function PurchasesPage({ searchParams }: { searchParams: Pr
             {Object.entries(PAYMENT_LABEL).map(([k, v]) => (
               <option key={k} value={k}>
                 {v}
-              </option>
-            ))}
-          </Select>
-          <Select name="person" defaultValue={sp.person ?? ""} className="w-auto">
-            <option value="">Anyone</option>
-            {((people ?? []) as { id: string; full_name: string | null; email: string | null }[]).map((p) => (
-              <option key={p.id} value={p.id}>
-                {personName(p)}
               </option>
             ))}
           </Select>
