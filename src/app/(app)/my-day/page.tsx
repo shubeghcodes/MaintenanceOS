@@ -359,46 +359,61 @@ export default async function MyDayPage({ searchParams }: { searchParams: Promis
                           </span>
                         ) : null}
                       </div>
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        {addr && (
-                          <a
-                            href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(addr)}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center gap-1.5 rounded-lg bg-white px-3 py-1.5 text-xs font-medium text-slate-700 ring-1 ring-slate-300 hover:bg-slate-50"
-                          >
-                            <Navigation className="h-3.5 w-3.5" aria-hidden /> {t("Directions")}
-                          </a>
-                        )}
-                        {j.site?.phone && (
-                          <a href={`tel:${j.site.phone}`} className="inline-flex items-center gap-1.5 rounded-lg bg-white px-3 py-1.5 text-xs font-medium text-slate-700 ring-1 ring-slate-300 hover:bg-slate-50">
-                            <Phone className="h-3.5 w-3.5" aria-hidden /> {t("Call site")}
-                          </a>
-                        )}
-                        {isMe && !closed && j.status !== "cancelled" && !timerFor(j.id) && (
-                          <form action={startTimer}>
-                            <input type="hidden" name="work_order_id" value={j.id} />
-                            <input type="hidden" name="back" value={back} />
-                            <SubmitButton size="sm" variant="secondary" pendingText={t("Starting…")}>
-                              <Play className="h-3.5 w-3.5" aria-hidden /> {j.status === "in_progress" ? t("Start timer") : t("Start work")}
-                            </SubmitButton>
-                          </form>
-                        )}
-                        {timerFor(j.id) && (
-                          <span className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium ring-1 ring-inset ${timerFor(j.id)!.status === "running" ? "bg-emerald-50 text-emerald-800 ring-emerald-200" : "bg-amber-50 text-amber-800 ring-amber-200"}`}>
-                            <Clock className="h-3.5 w-3.5" aria-hidden />
-                            <TimerClock worked={timerFor(j.id)!.worked_seconds} resumedAt={timerFor(j.id)!.status === "running" ? timerFor(j.id)!.last_resumed_at : null} className="font-mono tabular-nums" />
-                          </span>
-                        )}
-                        {!closed && (
-                          <Link href={`/work-orders/${j.id}?add_receipt=1#receipts`} className="inline-flex items-center gap-1.5 rounded-lg bg-white px-3 py-1.5 text-xs font-medium text-slate-700 ring-1 ring-slate-300 hover:bg-slate-50">
-                            <Receipt className="h-3.5 w-3.5" aria-hidden /> {t("Add receipt")}
-                          </Link>
-                        )}
-                        <Link href={`/work-orders/${j.id}`} className="inline-flex items-center rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-700">
-                          {closed ? t("View") : t("Open job")}
-                        </Link>
-                      </div>
+                      {(() => {
+                        const timer = timerFor(j.id);
+                        const working = timer?.status === "running";
+                        const canStart = isMe && !closed && j.status !== "cancelled" && !working;
+                        const small = "inline-flex items-center gap-1.5 rounded-lg bg-white px-3 py-1.5 text-xs font-medium text-slate-700 ring-1 ring-slate-300 hover:bg-slate-50";
+                        return (
+                          <>
+                            {/* One clear main action: start (or resume) the job. Time is tracked automatically. */}
+                            <div className="mt-3 flex flex-wrap items-center gap-2">
+                              {working && (
+                                <span className="inline-flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800 ring-1 ring-inset ring-emerald-200">
+                                  <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" aria-hidden /> {t("Working on it")}
+                                  <TimerClock worked={timer!.worked_seconds} resumedAt={timer!.last_resumed_at} className="font-mono tabular-nums" />
+                                </span>
+                              )}
+                              {canStart && (
+                                <form action={startTimer}>
+                                  <input type="hidden" name="work_order_id" value={j.id} />
+                                  <input type="hidden" name="back" value={back} />
+                                  <SubmitButton pendingText={t("Starting…")} className="!bg-emerald-600 hover:!bg-emerald-700">
+                                    <Play className="h-4 w-4" aria-hidden /> {j.status === "in_progress" || j.status === "on_hold" || timer ? t("Resume job") : t("Start job")}
+                                  </SubmitButton>
+                                </form>
+                              )}
+                              <Link
+                                href={`/work-orders/${j.id}`}
+                                className={
+                                  canStart
+                                    ? "inline-flex items-center rounded-lg bg-white px-3 py-2 text-sm font-medium text-slate-700 ring-1 ring-slate-300 hover:bg-slate-50"
+                                    : "inline-flex items-center rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700"
+                                }
+                              >
+                                {closed ? t("View") : t("Open job")}
+                              </Link>
+                            </div>
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              {addr && (
+                                <a href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(addr)}`} target="_blank" rel="noreferrer" className={small}>
+                                  <Navigation className="h-3.5 w-3.5" aria-hidden /> {t("Directions")}
+                                </a>
+                              )}
+                              {j.site?.phone && (
+                                <a href={`tel:${j.site.phone}`} className={small}>
+                                  <Phone className="h-3.5 w-3.5" aria-hidden /> {t("Call site")}
+                                </a>
+                              )}
+                              {!closed && (
+                                <Link href={`/work-orders/${j.id}?add_receipt=1#receipts`} className={small}>
+                                  <Receipt className="h-3.5 w-3.5" aria-hidden /> {t("Add receipt")}
+                                </Link>
+                              )}
+                            </div>
+                          </>
+                        );
+                      })()}
                     </div>
                   </div>
                 </Card>
