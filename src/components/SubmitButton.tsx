@@ -15,6 +15,7 @@ export function SubmitButton({
   confirm,
   formAction,
   disabled,
+  className,
 }: {
   children: ReactNode;
   variant?: "primary" | "secondary" | "danger" | "ghost";
@@ -26,6 +27,8 @@ export function SubmitButton({
   /** Per-button server action (e.g. a bound action) — use instead of name/value for multi-button forms. */
   formAction?: (fd: FormData) => void | Promise<void>;
   disabled?: boolean;
+  /** Extra classes (e.g. a different color for one important button). */
+  className?: string;
 }) {
   const t = useT();
   const { pending, data, action } = useFormStatus();
@@ -40,7 +43,7 @@ export function SubmitButton({
       formAction={formAction}
       disabled={pending || disabled}
       aria-busy={isMine}
-      className={btnClass(variant, size)}
+      className={className ? `${btnClass(variant, size)} ${className}` : btnClass(variant, size)}
       onClick={(e) => {
         if (confirm && !window.confirm(confirm)) e.preventDefault();
       }}
