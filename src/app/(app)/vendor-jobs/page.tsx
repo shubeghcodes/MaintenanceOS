@@ -1,4 +1,5 @@
 import { getCompanyScope, inCompany } from "@/lib/company";
+import { AutoSubmit } from "@/components/AutoSubmit";
 import Link from "next/link";
 import { requireRole } from "@/lib/auth";
 import { ACTIVE_DISPATCH, DISPATCH_LABEL, DISPATCH_TONE, INVOICE_LABEL, INVOICE_TONE } from "@/lib/constants";
@@ -98,6 +99,7 @@ export default async function VendorJobsPage({ searchParams }: { searchParams: P
               </option>
             ))}
           </Select>
+          <AutoSubmit />
           <Button variant="secondary" type="submit">
             Filter
           </Button>

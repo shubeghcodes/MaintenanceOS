@@ -1,4 +1,5 @@
 import { getCompanyScope, inCompany } from "@/lib/company";
+import { AutoSubmit } from "@/components/AutoSubmit";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, Send } from "lucide-react";
 import { getSession } from "@/lib/auth";
@@ -148,6 +149,7 @@ export default async function ComplianceCalendarPage({ searchParams }: { searchP
               <option key={c}>{c}</option>
             ))}
           </Select>
+          <AutoSubmit />
           <Button variant="secondary" size="sm" type="submit">
             Filter
           </Button>

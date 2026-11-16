@@ -1,4 +1,5 @@
 import { getCompanyScope, getReceiptsToReview } from "@/lib/company";
+import { AutoSubmit } from "@/components/AutoSubmit";
 import { AnalyticsTabs } from "@/components/AnalyticsTabs";
 import Link from "next/link";
 import { Download, Plus, Receipt } from "lucide-react";
@@ -154,6 +155,7 @@ export default async function PurchasesPage({ searchParams }: { searchParams: Pr
           </Select>
           <Input type="date" name="from" defaultValue={f.from} className="w-auto py-1.5" aria-label="From" />
           <Input type="date" name="to" defaultValue={f.to} className="w-auto py-1.5" aria-label="To" />
+          <AutoSubmit />
           <Button variant="secondary" type="submit">
             Filter
           </Button>

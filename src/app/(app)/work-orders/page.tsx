@@ -1,4 +1,5 @@
 import { laborCostByWo } from "@/lib/labor";
+import { AutoSubmit } from "@/components/AutoSubmit";
 import { getCompanyScope, inCompany } from "@/lib/company";
 import Link from "next/link";
 import { Plus } from "lucide-react";
@@ -160,6 +161,7 @@ export default async function WorkOrdersPage({ searchParams }: { searchParams: P
                 {profile.role === "manager" ? t("Mine") : t("Assigned to me")}
               </label>
             )}
+            <AutoSubmit />
             <Button variant="secondary" type="submit" className="flex-1">
               {t("Filter")}
             </Button>

@@ -1,4 +1,5 @@
 import { getCompanyScope, inCompany } from "@/lib/company";
+import { AutoSubmit } from "@/components/AutoSubmit";
 import Link from "next/link";
 import { Plus } from "lucide-react";
 import { getSession } from "@/lib/auth";
@@ -107,6 +108,7 @@ export default async function CompliancePage({ searchParams }: { searchParams: P
               <option key={c}>{c}</option>
             ))}
           </Select>
+          <AutoSubmit />
           <Button variant="secondary" type="submit">
             Filter
           </Button>

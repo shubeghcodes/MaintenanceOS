@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AutoSubmit } from "@/components/AutoSubmit";
 import { FileText } from "lucide-react";
 import { requireRole } from "@/lib/auth";
 import { getCompanyScope, getReceiptsToReview } from "@/lib/company";
@@ -91,6 +92,7 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
             To
             <Input type="date" name="to" defaultValue={sp.to} className="mt-1 w-40" />
           </label>
+          <AutoSubmit />
           <button className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800">Filter</button>
           {filtered && (
             <ButtonLink href="/invoices" variant="ghost" size="sm">
