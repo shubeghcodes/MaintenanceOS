@@ -1,6 +1,7 @@
 import type { Vendor } from "@/lib/types";
 import { Card, Field, Input, Select, Textarea } from "@/components/ui";
 import { SubmitButton } from "@/components/SubmitButton";
+import { PhotoInput } from "@/components/PhotoInput";
 import { saveVendor } from "./actions";
 
 export function VendorForm({ vendor }: { vendor?: Vendor }) {
@@ -32,6 +33,11 @@ export function VendorForm({ vendor }: { vendor?: Vendor }) {
         <Field label="COI expires" hint="Certificate of insurance">
           <Input type="date" name="coi_expires_on" defaultValue={vendor?.coi_expires_on ?? ""} />
         </Field>
+        {!vendor && (
+          <Field label="Certificate of insurance (photo or PDF)" hint="Optional. Saved under the vendor's Documents, where you can view and download it." className="sm:col-span-2">
+            <PhotoInput name="coi_file" multiple={false} accept="image/*,application/pdf" />
+          </Field>
+        )}
         <Field label="Hourly rate ($)">
           <Input name="hourly_rate" inputMode="decimal" defaultValue={vendor?.hourly_rate ?? ""} />
         </Field>

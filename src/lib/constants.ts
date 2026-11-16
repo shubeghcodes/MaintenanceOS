@@ -219,3 +219,6 @@ export const PART_READY_WHERE: Record<string, string> = {
   supplier: "Ready for pickup at the supplier",
   other: "Other",
 };
+
+/** Documents kept on a vendor (attachments.category). */
+export const VENDOR_DOC_TYPES: Record<string, string> = { coi: "Certificate of insurance", w9: "W-9", license: "License", contract: "Contract", other: "Other" };
