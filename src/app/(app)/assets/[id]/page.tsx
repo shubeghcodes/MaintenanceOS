@@ -128,15 +128,31 @@ export default async function AssetPage({
             <DefList
               items={[
                 ["Category", asset.category],
-                ["Location", asset.location_detail ?? "—"],
+                ...(asset.description ? ([["Description", asset.description]] as [string, string][]) : []),
+                ["Area in store", asset.location_detail ?? "—"],
+                ...(asset.tag ? ([["Barcode / tag", asset.tag]] as [string, string][]) : []),
                 ["Manufacturer", asset.manufacturer ?? "—"],
                 ["Model", asset.model ?? "—"],
                 ["Serial", asset.serial_number ?? "—"],
+                ...(asset.purchase_date ? ([["Purchased", fmtDate(asset.purchase_date)]] as [string, string][]) : []),
                 ["Installed", fmtDate(asset.install_date)],
+                ...(asset.service_date ? ([["Service date", fmtDate(asset.service_date)]] as [string, string][]) : []),
                 ["Purchase cost", fmtMoney(asset.purchase_cost)],
                 ["Expected life", asset.expected_life_years ? `${asset.expected_life_years} years` : "—"],
               ]}
             />
+            {asset.parts && (
+              <div className="border-t border-slate-100 px-5 py-3">
+                <p className="mb-1.5 text-xs font-medium text-slate-500">Parts</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {asset.parts.split(/\s*,\s*/).filter(Boolean).map((p) => (
+                    <span key={p} className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-700">
+                      {p}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
             {asset.notes && <p className="whitespace-pre-wrap border-t border-slate-100 px-5 py-4 text-sm">{asset.notes}</p>}
           </Card>
 

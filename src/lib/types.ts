@@ -68,6 +68,10 @@ export interface Asset {
   model: string | null;
   serial_number: string | null;
   install_date: string | null;
+  description?: string | null;
+  purchase_date?: string | null;
+  service_date?: string | null;
+  parts?: string | null;
   warranty_expires_on: string | null;
   purchase_cost: number | null;
   expected_life_years: number | null;
