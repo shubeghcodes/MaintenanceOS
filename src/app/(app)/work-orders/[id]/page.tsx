@@ -628,10 +628,10 @@ export default async function WorkOrderPage({
                 />
                 <div className="grid grid-cols-3 gap-3 rounded-lg bg-slate-50 p-3">
                   <Field label={t("Schedule date")}>
-                    <Input type="date" name="scheduled_date" defaultValue={wo.scheduled_date ?? ""} />
+                    <Input type="date" name="scheduled_date" defaultValue={wo.scheduled_date ?? ""} disabled={role !== "admin"} />
                   </Field>
                   <Field label={t("Start")}>
-                    <Input type="time" name="scheduled_start" step={900} defaultValue={wo.scheduled_start?.slice(0, 5) ?? ""} />
+                    <Input type="time" name="scheduled_start" step={900} defaultValue={wo.scheduled_start?.slice(0, 5) ?? ""} disabled={role !== "admin"} />
                   </Field>
                   <Field label={t("Est. hrs")}>
                     <Input name="estimated_hours" inputMode="decimal" defaultValue={wo.estimated_hours ?? ""} />

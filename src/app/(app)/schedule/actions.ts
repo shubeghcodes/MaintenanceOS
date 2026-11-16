@@ -15,7 +15,7 @@ export async function moveWorkOrder(input: {
   date: string | null;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   const { supabase, profile } = await getSession();
-  if (!(profile.role === "admin" || profile.role === "tech")) return { ok: false, error: "Only admins and techs can schedule work." };
+  if (profile.role !== "admin") return { ok: false, error: "Only admins can move work on the schedule." };
   if (input.date !== null && !isISODate(input.date)) return { ok: false, error: "Invalid date" };
 
   const { data: cur } = await supabase.from("work_orders").select("assigned_tech_id,status").eq("id", input.id).maybeSingle();

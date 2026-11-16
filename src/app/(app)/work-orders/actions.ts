@@ -39,8 +39,7 @@ export async function createWorkOrder(fd: FormData) {
       ...(profile.role === "admin" && { assigned_tech_id: str(fd, "assigned_tech_id"), vendor_id: str(fd, "vendor_id") }),
       nte_amount: num(fd, "nte_amount"),
       due_at: dueDate ? zonedTimeISO(dueDate) : null,
-      scheduled_date: str(fd, "scheduled_date"),
-      scheduled_start: str(fd, "scheduled_start"),
+      ...(profile.role === "admin" && { scheduled_date: str(fd, "scheduled_date"), scheduled_start: str(fd, "scheduled_start") }),
       estimated_hours: num(fd, "estimated_hours"),
     }),
   };
@@ -286,8 +285,11 @@ export async function updateAssignment(fd: FormData) {
       type: str(fd, "type") ?? "reactive",
       category: str(fd, "category") ?? "Other",
       nte_amount: num(fd, "nte_amount"),
-      scheduled_date: str(fd, "scheduled_date"),
-      scheduled_start: str(fd, "scheduled_date") ? str(fd, "scheduled_start") : null,
+      // Only admins set when a job happens; techs can't move work around the schedule.
+      ...(isAdmin && {
+        scheduled_date: str(fd, "scheduled_date"),
+        scheduled_start: str(fd, "scheduled_date") ? str(fd, "scheduled_start") : null,
+      }),
       estimated_hours: num(fd, "estimated_hours"),
       ...(dueDate && { due_at: zonedTimeISO(dueDate) }),
     })
