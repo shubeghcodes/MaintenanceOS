@@ -3,11 +3,11 @@ import { personName, todayISO } from "@/lib/format";
 import type { PmSchedule } from "@/lib/types";
 import { Card, Field, Input, Select, Textarea } from "@/components/ui";
 import { SiteAssetPicker } from "@/components/SiteAssetPicker";
+import { AssigneePicker } from "@/components/AssigneePicker";
 import { PmLocationsPicker } from "@/components/PmLocationsPicker";
 import { SubmitButton } from "@/components/SubmitButton";
 import type { getLookups } from "@/lib/data";
 import { savePm } from "./actions";
-import { TechOptions } from "@/components/TechOptions";
 
 export function PmForm({
   pm,
@@ -86,22 +86,9 @@ export function PmForm({
             <Input type="number" min={0} name="lead_days" defaultValue={pm?.lead_days ?? 7} />
           </Field>
         </div>
-        <Field label="Assign technician">
-          <Select name="assigned_tech_id" defaultValue={pm?.assigned_tech_id ?? ""}>
-            <option value="">— Unassigned —</option>
-            <TechOptions techs={lookups.techs} staff={lookups.staff} current={pm?.assigned_tech_id} />
-          </Select>
-        </Field>
-        <Field label="Or vendor">
-          <Select name="vendor_id" defaultValue={pm?.vendor_id ?? ""}>
-            <option value="">— None —</option>
-            {lookups.vendors.map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.name}
-              </option>
-            ))}
-          </Select>
-        </Field>
+        <div className="sm:col-span-2">
+          <AssigneePicker techs={lookups.techs} staff={lookups.staff} vendors={lookups.vendors} defaultTechId={pm?.assigned_tech_id} defaultVendorId={pm?.vendor_id} />
+        </div>
         <Field label="Instructions" className="sm:col-span-2">
           <Textarea name="instructions" rows={3} defaultValue={pm?.instructions ?? ""} />
         </Field>
