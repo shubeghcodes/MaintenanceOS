@@ -50,7 +50,7 @@ export default async function Dashboard() {
   const since90 = new Date(Date.now() - 90 * 86_400_000).toISOString();
   const monthStart = today.slice(0, 8) + "01";
 
-  const isStaff = profile.role === "admin" || profile.role === "tech";
+  const isStaff = profile.role === "admin"; // techs are sent to My day above
   const scope = await getCompanyScope();
   const cid = scope.companyId;
   const co = scope.enabled ? ",company_id" : "";
