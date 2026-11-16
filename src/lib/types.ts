@@ -140,6 +140,8 @@ export interface PmSchedule {
   site_id: string;
   asset_id: string | null;
   template_id?: string | null;
+  auto_schedule?: boolean;
+  start_time?: string | null;
   category: string;
   instructions: string | null;
   checklist: string[];
