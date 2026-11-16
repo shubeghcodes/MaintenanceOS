@@ -404,3 +404,80 @@ export async function emailPartUpdate(partId: string, actorId: string) {
     );
   }
 }
+
+// ---------------------------------------------------------------- Activity / Notes
+/**
+ * Someone posted a note on a work order (in the app or by replying to an email). Who hears about it:
+ * - a GM writes → the assigned tech (or, with no tech yet, the admins who cover the company)
+ * - a tech writes → the store's GMs (unless staff-only), plus the admins when the job is waiting on them
+ * - an admin writes → the store's GMs (unless staff-only) and the assigned tech
+ * Never the person who wrote it. Each email can be answered by replying, which adds to the conversation.
+ */
+export async function notifyNote(woId: string, note: { body: string; authorId: string; staffOnly?: boolean }) {
+  const text = note.body?.trim();
+  if (!text) return;
+  const { db, wo } = await load(woId);
+  if (!wo) return;
+  const { data: p } = await db.from("profiles").select("id,full_name,email,role").eq("id", note.authorId).maybeSingle();
+  const author = p as { id: string; full_name: string | null; email: string | null; role: string } | null;
+  if (!author || author.role === "vendor") return;
+  const name = author.full_name ?? author.email ?? "Someone";
+  const roleLabel = (t: T) => t(author.role === "admin" ? "Admin" : author.role === "manager" ? "Store GM" : "Technician");
+  const quote = `<div style="margin-top:10px;padding:12px;background:#f8fafc;border-radius:8px;color:#0f172a">${esc(text).replace(/\n/g, "<br>")}</div>`;
+  const ref = { id: woId, number: wo.number };
+
+  const { data: row } = await db.from("work_orders").select("site_id,status").eq("id", woId).single();
+  const { site_id, status } = row as { site_id: string; status: string };
+
+  // GMs (English).
+  if (author.role !== "manager" && !note.staffOnly) {
+    const gms = (await siteGms(db, site_id)).filter((g) => g.id !== author.id);
+    if (gms.length) {
+      await send(
+        gms.map((g) => g.email!),
+        `New note on WO #${wo.number} — ${wo.title}`,
+        `New note · WO #${wo.number}`,
+        wo.title,
+        `<b>${esc(name)}</b> (${roleLabel(EN)}) added a note on this work order for ${esc(loc(wo))}:${quote}`,
+        "",
+        ref,
+      );
+    }
+  }
+
+  // The assigned tech, in their language.
+  const techGets = author.role === "manager" || author.role === "admin";
+  if (techGets && reachable(wo.tech, author.id)) {
+    const t = makeT(asLocale(wo.tech.language));
+    await send(
+      wo.tech.email!,
+      t("New note on WO #{n} — {title}", { n: wo.number, title: wo.title }),
+      t("New note · WO #{n}", { n: wo.number }),
+      wo.title,
+      `${hello(wo.tech, t)}<br>${t("<b>{name}</b> ({role}) added a note on this work order for {site}:", { name: esc(name), role: roleLabel(t), site: esc(loc(wo, t)) })}${quote}`,
+      "",
+      ref,
+      "Open work order",
+      t,
+    );
+  }
+
+  // Admins: when a GM writes and no tech is on it yet, or a tech writes while the job waits on the office.
+  const adminsGet = (author.role === "manager" && !reachable(wo.tech, author.id)) || (author.role === "tech" && ["requested", "on_hold", "new"].includes(status));
+  if (adminsGet) {
+    const covers = await adminCoverage(db, wo.company_id);
+    const { data } = await db.from("profiles").select("id,email").eq("role", "admin").eq("active", true);
+    const to = ((data ?? []) as { id: string; email: string | null }[]).filter((a) => a.email && a.id !== author.id && covers(a.id)).map((a) => a.email!);
+    if (to.length) {
+      await send(
+        to,
+        `${note.staffOnly ? "[Staff only] " : ""}New note on WO #${wo.number} — ${wo.title} (${wo.site?.name ?? ""})`,
+        `New note · WO #${wo.number}`,
+        wo.title,
+        `<b>${esc(name)}</b> (${roleLabel(EN)}) added a note on this work order for ${esc(loc(wo))}:${quote}`,
+        "",
+        ref,
+      );
+    }
+  }
+}

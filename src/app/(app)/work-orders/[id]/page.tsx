@@ -207,6 +207,20 @@ export default async function WorkOrderPage({
   // Techs must file a progress report to put a job on hold, so "on hold" gets its own form for them.
   const techHold = role === "tech" && statuses.includes("on_hold");
   const statusButtons = techHold ? statuses.filter((s) => s !== "on_hold") : statuses;
+  // Who gets an email/phone alert when this person posts a note (mirrors notifyNote in lib/wo-notify).
+  const hasTech = !!wo.assigned_tech_id;
+  const noteAudience =
+    role === "manager"
+      ? hasTech
+        ? t("The assigned tech is notified.")
+        : t("The admins are notified (no tech assigned yet).")
+      : role === "tech"
+        ? ["requested", "on_hold", "new"].includes(wo.status)
+          ? t("The store's GM and the admins are notified.")
+          : t("The store's GM is notified.")
+        : hasTech
+          ? t("The store's GM and the assigned tech are notified.")
+          : t("The store's GM is notified.");
   const closed = wo.status === "completed" || wo.status === "cancelled";
 
   return (
@@ -316,7 +330,7 @@ export default async function WorkOrderPage({
           <Attachments items={files.filter((f) => f.category !== "receipt" && f.category !== "checklist" && f.category !== "part" && !(role === "manager" && ["invoice", "quote", "vendor_receipt"].includes(f.category ?? "")))} action={uploadWoFiles} hidden={{ id }} allowInternal={role === "admin" || role === "tech"} categories={role === "admin" || role === "tech"} />
 
           <Card>
-            <CardHeader title={t("Activity")} />
+            <CardHeader title={t("Activity / Notes")} />
             <ol className="space-y-4 px-5 py-4">
               {events.map((e) => (
                 <li key={e.id} className="flex gap-3 text-sm">
@@ -341,6 +355,9 @@ export default async function WorkOrderPage({
                       {e.kind === "progress_report" && t("posted a progress report")}
                       {e.kind === "email_reply" && (e.meta?.unverified ? t("sent an email (unrecognized sender)") : t("replied by email"))}
                       {e.meta?.via === "email" && e.kind === "comment" && <span className="ml-1 text-[10px] text-slate-400">· {t("via email")}</span>}
+                      {e.staff_only && role !== "manager" && (
+                        <span className="ml-1 rounded bg-amber-50 px-1 text-[10px] font-medium text-amber-800">{t("STAFF ONLY")}</span>
+                      )}
                       {e.visibility === "shared" && ["comment", "vendor_update", "email_reply"].includes(e.kind) && role !== "vendor" && (
                         <span className="ml-1 text-[10px] text-slate-400">· {t("visible to vendor")}</span>
                       )}
@@ -355,7 +372,11 @@ export default async function WorkOrderPage({
                       </div>
                     )}
                     {(e.kind === "comment" || e.kind === "vendor_update" || e.kind === "email_reply") && (
-                      <div className={`mt-1 whitespace-pre-wrap rounded-lg px-3 py-2 text-slate-800 ${e.actor_type === "vendor" ? "bg-violet-50" : "bg-slate-50"}`}>
+                      <div
+                        className={`mt-1 whitespace-pre-wrap rounded-lg px-3 py-2 text-slate-800 ${
+                          e.actor_type === "vendor" ? "bg-violet-50" : e.staff_only ? "bg-amber-50/60 ring-1 ring-amber-200" : "bg-slate-50"
+                        }`}
+                      >
                         {e.body}
                         {typeof e.meta?.files === "number" && e.meta.files > 0 && (
                           <p className="mt-1 text-xs text-slate-500">📎 {t(e.meta.files > 1 ? "{n} attachments added to Photos & files" : "{n} attachment added to Photos & files", { n: e.meta.files })}</p>
@@ -372,11 +393,21 @@ export default async function WorkOrderPage({
                 </li>
               ))}
             </ol>
-            <form action={addComment} className="flex gap-2 border-t border-slate-100 px-5 py-4">
+            <form action={addComment} className="border-t border-slate-100 px-5 py-4">
               <input type="hidden" name="id" value={id} />
-              <Textarea name="body" rows={2} placeholder={t("Add an update or question…")} required />
-              <div className="self-end">
-                <SubmitButton size="sm" pendingText="…">{t("Post")}</SubmitButton>
+              <div className="flex gap-2">
+                <Textarea name="body" rows={2} placeholder={t("Add a note, update or question…")} required />
+                <div className="self-end">
+                  <SubmitButton size="sm" pendingText="…">{t("Post")}</SubmitButton>
+                </div>
+              </div>
+              <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
+                {role !== "vendor" && <span>{noteAudience}</span>}
+                {(role === "admin" || role === "tech") && (
+                  <label className="flex items-center gap-1.5 text-slate-600">
+                    <input type="checkbox" name="staff_only" className="rounded border-slate-300" /> {t("Staff only (hidden from the store's GM)")}
+                  </label>
+                )}
               </div>
             </form>
           </Card>

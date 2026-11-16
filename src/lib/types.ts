@@ -125,6 +125,8 @@ export interface WorkOrder {
 }
 
 export interface WorkOrderEvent {
+  /** Hidden from the store's GMs (admins and techs only). */
+  staff_only?: boolean;
   id: string;
   work_order_id: string;
   user_id: string | null;
