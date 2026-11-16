@@ -6,6 +6,7 @@ import { WORK_WEEK_START_DAY, WORKABLE_STATUSES } from "@/lib/constants";
 import { addDaysISO, dayLabel, isISODate, personName, todayISO, weekStartISO } from "@/lib/format";
 import type { WoPriority, WoStatus, WoType } from "@/lib/types";
 import { Alert, Button, PageHeader, Select, btnClass } from "@/components/ui";
+import { MonthCalendar } from "./MonthCalendar";
 import { ScheduleBoard, type BoardJob, type BoardForecast } from "./ScheduleBoard";
 import { upcomingDueDates } from "@/lib/pm-forecast";
 import { addDays, loadTimeOff, offReason, pmScheduleDate } from "@/lib/time-off";
@@ -40,17 +41,25 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
   const { supabase, profile } = await requireRole("admin", "tech");
   const { companyId: cid } = await getCompanyScope();
   const today = todayISO();
-  const view: "week" | "day" = sp.view === "day" ? "day" : "week";
+  const view: "month" | "week" | "day" = sp.view === "day" ? "day" : sp.view === "month" ? "month" : "week";
   const anchor = isISODate(sp.date) ? sp.date : today;
-  const start = view === "week" ? weekStartISO(anchor, WORK_WEEK_START_DAY) : anchor;
-  const days = view === "week" ? Array.from({ length: 7 }, (_, i) => addDaysISO(start, i)) : [anchor];
+  // Month: whole weeks (Sunday first) covering the 1st through the last day of the anchor's month.
+  const monthKey = anchor.slice(0, 7);
+  const firstOfMonth = `${monthKey}-01`;
+  const lastOfMonth = addDaysISO(shiftMonth(firstOfMonth, 1), -1);
+  const start = view === "month" ? weekStartISO(firstOfMonth, 0) : view === "week" ? weekStartISO(anchor, WORK_WEEK_START_DAY) : anchor;
+  const span = view === "month" ? (Date.parse(addDaysISO(weekStartISO(lastOfMonth, 0), 7)) - Date.parse(start)) / 86_400_000 : view === "week" ? 7 : 1;
+  const days = Array.from({ length: span }, (_, i) => addDaysISO(start, i));
   const end = days[days.length - 1];
-  const step = view === "week" ? 7 : 1;
+  const prevDate = view === "month" ? shiftMonth(firstOfMonth, -1) : addDaysISO(anchor, view === "week" ? -7 : -1);
+  const nextDate = view === "month" ? shiftMonth(firstOfMonth, 1) : addDaysISO(anchor, view === "week" ? 7 : 1);
 
   const [{ data: techData }, { data: schedData }, { data: backlogData }, { data: siteData }, { data: sentData }, { data: pmData }, { data: openPmData }] = await Promise.all([
     supabase.from("profiles").select("id,full_name,email,role").eq("active", true).in("role", ["tech", "admin"]).order("full_name"),
     inCompany(supabase.from("work_orders").select(SELECT).gte("scheduled_date", start).lte("scheduled_date", end).neq("status", "cancelled"), cid),
-    inCompany(supabase.from("work_orders").select(SELECT).is("scheduled_date", null).in("status", WORKABLE_STATUSES), cid).limit(300),
+    view === "month"
+      ? Promise.resolve({ data: [] })
+      : inCompany(supabase.from("work_orders").select(SELECT).is("scheduled_date", null).in("status", WORKABLE_STATUSES), cid).limit(300),
     inCompany(supabase.from("sites").select("id,code,name").eq("active", true), cid).order("name"),
     profile.role === "admin"
       ? supabase.from("schedule_emails").select("tech_id,schedule_date,sent_at").eq("status", "sent").gte("schedule_date", start).lte("schedule_date", end)
@@ -129,9 +138,14 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
   if (sp.tech) jobs = jobs.filter((j) => j.assigned_tech_id === sp.tech || !j.scheduled_date);
 
   const off: Record<string, string> = {};
+  const offByDay: Record<string, string[]> = {};
   for (const t of techs) for (const d of days) {
     const why = offReason(offInfo, t.id, d);
-    if (why) off[`${t.id}|${d}`] = why;
+    if (why) {
+      off[`${t.id}|${d}`] = why;
+      // Month view lists who's off, but not everyone's regular weekend (that would fill every Saturday/Sunday).
+      if (view === "month" && (sp.tech || !/regular/i.test(why))) (offByDay[d] ??= []).push(sp.tech ? why : t.name);
+    }
   }
 
   const sent: Record<string, string> = {};
@@ -150,7 +164,12 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
     return `/schedule?${p.toString()}`;
   };
   const dayLabels = Object.fromEntries(days.map((d) => [d, dayLabel(d)]));
-  const title = view === "week" ? `Week of ${dayLabel(start, "long")}` : dayLabel(anchor, "long");
+  const title =
+    view === "month"
+      ? new Date(firstOfMonth + "T12:00:00Z").toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" })
+      : view === "week"
+        ? `Week of ${dayLabel(start, "long")}`
+        : dayLabel(anchor, "long");
 
   return (
     <>
@@ -160,24 +179,24 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <div className="flex items-center rounded-lg ring-1 ring-slate-300">
-          <Link href={qs({ date: addDaysISO(anchor, -step) })} className="rounded-l-lg px-2 py-2 text-slate-600 hover:bg-slate-50" aria-label="Previous">
+          <Link href={qs({ date: prevDate })} className="rounded-l-lg px-2 py-2 text-slate-600 hover:bg-slate-50" aria-label="Previous">
             <ChevronLeft className="h-4 w-4" />
           </Link>
           <Link href={qs({ date: today })} className="border-x border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
             Today
           </Link>
-          <Link href={qs({ date: addDaysISO(anchor, step) })} className="rounded-r-lg px-2 py-2 text-slate-600 hover:bg-slate-50" aria-label="Next">
+          <Link href={qs({ date: nextDate })} className="rounded-r-lg px-2 py-2 text-slate-600 hover:bg-slate-50" aria-label="Next">
             <ChevronRight className="h-4 w-4" />
           </Link>
         </div>
         <div className="flex rounded-lg bg-slate-100 p-0.5">
-          {(["week", "day"] as const).map((v) => (
+          {(["month", "week", "day"] as const).map((v) => (
             <Link
               key={v}
               href={qs({ view: v })}
               className={`rounded-md px-3 py-1.5 text-sm font-medium ${view === v ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900"}`}
             >
-              {v === "week" ? "Week" : "Day"}
+              {v === "month" ? "Month" : v === "week" ? "Week" : "Day"}
             </Link>
           ))}
         </div>
@@ -210,6 +229,20 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
         )}
       </div>
 
+      {view === "month" ? (
+        <MonthCalendar
+          days={days}
+          month={monthKey}
+          today={today}
+          jobs={jobs.filter((j) => j.scheduled_date)}
+          forecast={forecast}
+          techNames={Object.fromEntries(people.map((p) => [p.id, personName(p)]))}
+          off={offByDay}
+          canEdit
+          dayHref={`/schedule?view=day${sp.tech ? `&tech=${sp.tech}` : ""}&date=`}
+          showTech={!sp.tech}
+        />
+      ) : (
       <ScheduleBoard
         days={days}
         dayLabels={dayLabels}
@@ -225,6 +258,14 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
         backUrl={qs({})}
         sites={((siteData ?? []) as { id: string; code: string | null; name: string }[]).map((s) => ({ id: s.id, code: s.code ?? s.name }))}
       />
+      )}
     </>
   );
+}
+
+/** First day of the month `n` months from a YYYY-MM-01 date. */
+function shiftMonth(firstOfMonth: string, n: number) {
+  const d = new Date(firstOfMonth + "T12:00:00Z");
+  d.setUTCMonth(d.getUTCMonth() + n, 1);
+  return d.toISOString().slice(0, 10);
 }
