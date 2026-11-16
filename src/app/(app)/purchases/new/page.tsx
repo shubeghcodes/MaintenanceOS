@@ -3,6 +3,7 @@ import { getCompanyScope } from "@/lib/company";
 import { getLookups } from "@/lib/data";
 import { Alert, Card, PageHeader } from "@/components/ui";
 import { SupplyForm } from "./SupplyForm";
+import { getT } from "@/lib/i18n/server";
 
 export const metadata = { title: "Log a purchase" };
 export const dynamic = "force-dynamic";
@@ -12,6 +13,7 @@ const COMMON_VENDORS = ["Restaurant Depot", "Costco", "Sam's Club", "Webstaurant
 export default async function NewSupplyPurchasePage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const sp = await searchParams;
   const { supabase, profile } = await requireRole("admin", "tech", "manager");
+  const t = await getT();
   const [{ sites }, scope, { data: prev }] = await Promise.all([
     getLookups(supabase),
     getCompanyScope(),
@@ -36,11 +38,11 @@ export default async function NewSupplyPurchasePage({ searchParams }: { searchPa
 
   return (
     <>
-      <PageHeader title="Log a purchase" subtitle="Restaurant supplies bought for a location — smallwares, cleaning, paper goods, uniforms. Not a work order, and not counted as R&M." />
-      {sp.error && <Alert>{sp.error}</Alert>}
+      <PageHeader title={t("Log a purchase")} subtitle={t("Restaurant supplies bought for a location — smallwares, cleaning, paper goods, uniforms. Not a work order, and not counted as R&M.")} />
+      {sp.error && <Alert>{t(sp.error)}</Alert>}
       <Card className="max-w-2xl">
         {sites.length === 0 && !canShop ? (
-          <p className="p-5 text-sm text-slate-600">You aren’t assigned to any location yet. Ask an admin to add you to your store.</p>
+          <p className="p-5 text-sm text-slate-600">{t("You aren’t assigned to any location yet. Ask an admin to add you to your store.")}</p>
         ) : (
           <SupplyForm sites={sites} shopCompanies={shopCompanies} vendors={vendors} preset={preset} back={self} clientKey={key} />
         )}

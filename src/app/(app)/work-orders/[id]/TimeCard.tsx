@@ -8,6 +8,7 @@ import { Badge, Card, CardHeader, Field, Input, Select } from "@/components/ui";
 import { SubmitButton } from "@/components/SubmitButton";
 import { TimerClock } from "@/components/TimerClock";
 import { addManualTime, changeTimer, editTime, startTimer, voidTime } from "../time-actions";
+import { getT } from "@/lib/i18n/server";
 
 type Person = { id: string; full_name: string | null; email: string | null };
 type Entry = TimeEntry & { user: { full_name: string | null; email: string | null } | null };
@@ -27,6 +28,8 @@ export async function TimeCard({
   profile: Profile;
   techs: Person[];
 }) {
+  const tr = await getT();
+  const L = tr.locale;
   const isAdmin = profile.role === "admin";
   const superAdmin = isAdmin && !!profile.is_super; // only super admins see hourly rates
   const canTime = isAdmin || profile.role === "tech";
@@ -63,8 +66,8 @@ export async function TimeCard({
   return (
     <Card id="time" className="scroll-mt-6">
       <CardHeader
-        title="Time & labor"
-        subtitle={`Visit ${visit}${visits.length ? ` · ${fmtHours(totalHours)} hrs logged` : ""}${isAdmin && totalCost ? ` · ${fmtMoney(totalCost, 2)}` : ""}`}
+        title={tr("Time & labor")}
+        subtitle={`${tr("Visit {n}", { n: visit })}${visits.length ? ` · ${tr("{n} hrs logged", { n: fmtHours(totalHours) })}` : ""}${isAdmin && totalCost ? ` · ${fmtMoney(totalCost, 2)}` : ""}`}
       />
       <div className="space-y-4 p-5">
         {/* My timer */}
@@ -72,9 +75,9 @@ export async function TimeCard({
           (mine ? (
             <div className={`flex flex-wrap items-center gap-3 rounded-lg p-3 ring-1 ring-inset ${mine.status === "running" ? "bg-emerald-50 ring-emerald-200" : "bg-amber-50 ring-amber-200"}`}>
               <div className="min-w-0 flex-1">
-                <p className="text-xs font-medium text-slate-600">{mine.status === "running" ? "Your timer is running" : "Your timer is paused"} · visit {mine.visit}</p>
+                <p className="text-xs font-medium text-slate-600">{mine.status === "running" ? tr("Your timer is running") : tr("Your timer is paused")} · {tr("visit {n}", { n: mine.visit })}</p>
                 <TimerClock worked={mine.worked_seconds} resumedAt={mine.status === "running" ? mine.last_resumed_at : null} className="font-mono text-2xl font-semibold tabular-nums text-slate-900" />
-                <p className="text-xs text-slate-500">Started {fmtClockTime(mine.started_at)}{mine.pause_count ? ` · paused ${mine.pause_count}×` : ""}</p>
+                <p className="text-xs text-slate-500">{tr("Started {time}", { time: fmtClockTime(mine.started_at) })}{mine.pause_count ? ` · ${tr("paused {n}×", { n: mine.pause_count })}` : ""}</p>
               </div>
               <form className="flex gap-2">
                 <input type="hidden" name="entry_id" value={mine.id} />
@@ -82,40 +85,40 @@ export async function TimeCard({
                 <input type="hidden" name="back" value={back} />
                 {mine.status === "running" ? (
                   <SubmitButton size="sm" variant="secondary" formAction={changeTimer.bind(null, "pause")} pendingText="…">
-                    <Pause className="h-3.5 w-3.5" aria-hidden /> Pause
+                    <Pause className="h-3.5 w-3.5" aria-hidden /> {tr("Pause")}
                   </SubmitButton>
                 ) : (
                   <SubmitButton size="sm" variant="secondary" formAction={changeTimer.bind(null, "resume")} pendingText="…">
-                    <Play className="h-3.5 w-3.5" aria-hidden /> Resume
+                    <Play className="h-3.5 w-3.5" aria-hidden /> {tr("Resume")}
                   </SubmitButton>
                 )}
-                <SubmitButton size="sm" formAction={changeTimer.bind(null, "stop")} pendingText="…" confirm="Stop your timer for this visit?">
-                  <Square className="h-3.5 w-3.5" aria-hidden /> Stop
+                <SubmitButton size="sm" formAction={changeTimer.bind(null, "stop")} pendingText="…" confirm={tr("Stop your timer for this visit?")}>
+                  <Square className="h-3.5 w-3.5" aria-hidden /> {tr("Stop")}
                 </SubmitButton>
               </form>
             </div>
           ) : closed ? (
             <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600 ring-1 ring-inset ring-slate-200">
               {woStatus === "awaiting_signoff"
-                ? "Work is done and waiting for the GM's sign-off. If it isn't fixed, the GM sends it back and you can log a return visit."
+                ? tr("Work is done and waiting for the GM's sign-off. If it isn't fixed, the GM sends it back and you can log a return visit.")
                 : woStatus === "completed"
-                  ? "Work order is completed. Reopen it to log a return visit; earlier time is kept."
-                  : "Work order is cancelled."}
+                  ? tr("Work order is completed. Reopen it to log a return visit; earlier time is kept.")
+                  : tr("Work order is cancelled.")}
             </p>
           ) : (
             <form action={startTimer} className="flex flex-wrap items-center gap-3">
               <input type="hidden" name="work_order_id" value={woId} />
               <input type="hidden" name="back" value={back} />
-              <SubmitButton pendingText="Starting…">
-                <Play className="h-4 w-4" aria-hidden /> {visit > 1 && entries.length ? `Start timer · return visit ${visit}` : "Start timer"}
+              <SubmitButton pendingText={tr("Starting…")}>
+                <Play className="h-4 w-4" aria-hidden /> {visit > 1 && entries.length ? tr("Start timer · return visit {n}", { n: visit }) : tr("Start timer")}
               </SubmitButton>
-              <span className="text-xs text-slate-500">Starting here pauses any other timer you have running.</span>
+              <span className="text-xs text-slate-500">{tr("Starting here pauses any other timer you have running.")}</span>
             </form>
           ))}
 
         {/* Entries by visit */}
         {visits.length === 0 ? (
-          <p className="text-sm text-slate-500">No time logged yet.</p>
+          <p className="text-sm text-slate-500">{tr("No time logged yet.")}</p>
         ) : (
           visits.map((v) => {
             const rows = entries.filter((e) => e.visit === v);
@@ -124,9 +127,9 @@ export async function TimeCard({
             return (
               <div key={v} className="rounded-lg ring-1 ring-inset ring-slate-200">
                 <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-600">
-                  <span>{v === 1 ? "Visit 1 · original" : `Visit ${v} · return visit`}</span>
+                  <span>{v === 1 ? tr("Visit 1 · original") : tr("Visit {n} · return visit", { n: v })}</span>
                   <span className="tabular-nums">
-                    {fmtHours(vHours)} hrs{isAdmin && ` · ${fmtMoney(vCost, 2)}`}
+                    {fmtHours(vHours)} {tr("hrs")}{isAdmin && ` · ${fmtMoney(vCost, 2)}`}
                   </span>
                 </div>
                 <ul className="divide-y divide-slate-100">
@@ -136,19 +139,19 @@ export async function TimeCard({
                     return (
                       <li key={e.id} className={`px-3 py-2 text-sm ${void_ ? "opacity-50" : ""}`}>
                         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                          <span className="min-w-[8rem] font-medium text-slate-900">{e.user ? personName(e.user) : "Unassigned"}</span>
+                          <span className="min-w-[8rem] font-medium text-slate-900">{e.user ? personName(e.user) : tr("Unassigned")}</span>
                           <span className="text-xs text-slate-500">
-                            {fmtDate(e.started_at)} · {fmtClockTime(e.started_at)}–{e.ended_at ? fmtClockTime(e.ended_at) : "now"}
+                            {fmtDate(e.started_at, L)} · {fmtClockTime(e.started_at)}–{e.ended_at ? fmtClockTime(e.ended_at) : tr("now")}
                           </span>
-                          {e.status === "running" && <Badge tone="good">Running</Badge>}
-                          {e.status === "paused" && <Badge tone="warning">Paused</Badge>}
-                          {e.source === "manual" && !void_ && <Badge tone="muted" dot={false}>Manual</Badge>}
-                          {void_ && <Badge tone="muted" dot={false}>Voided</Badge>}
+                          {e.status === "running" && <Badge tone="good">{tr("Running")}</Badge>}
+                          {e.status === "paused" && <Badge tone="warning">{tr("Paused")}</Badge>}
+                          {e.source === "manual" && !void_ && <Badge tone="muted" dot={false}>{tr("Manual")}</Badge>}
+                          {void_ && <Badge tone="muted" dot={false}>{tr("Voided")}</Badge>}
                           <span className="ml-auto text-right tabular-nums">
                             {e.status === "running" ? (
                               <TimerClock worked={e.worked_seconds} resumedAt={e.last_resumed_at} className="font-mono" />
                             ) : (
-                              <>{fmtHours(e.worked_seconds / 3600)} hrs</>
+                              <>{fmtHours(e.worked_seconds / 3600)} {tr("hrs")}</>
                             )}
                             {isAdmin && c && !void_ && (
                               <span className="block text-xs text-slate-500">

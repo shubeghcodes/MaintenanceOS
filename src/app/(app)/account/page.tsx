@@ -1,6 +1,8 @@
 import { getSession } from "@/lib/auth";
 import { ROLE_LABEL } from "@/lib/constants";
-import { Alert, Card, CardHeader, Field, Input, PageHeader } from "@/components/ui";
+import { LOCALES } from "@/lib/i18n";
+import { getT } from "@/lib/i18n/server";
+import { Alert, Card, CardHeader, Field, Input, PageHeader, Select } from "@/components/ui";
 import { SubmitButton } from "@/components/SubmitButton";
 import { updateAccount } from "./actions";
 import { getVapidPublicKey } from "@/lib/push";
@@ -11,29 +13,39 @@ export const metadata = { title: "My account" };
 export default async function AccountPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const sp = await searchParams;
   const { profile } = await getSession();
+  const t = await getT();
   const vapidKey = await getVapidPublicKey();
   return (
     <>
-      <PageHeader title="My account" subtitle={`${profile.email} · ${ROLE_LABEL[profile.role]}`} />
-      {sp.error && <Alert>{sp.error}</Alert>}
-      {sp.saved && <Alert tone="good">Saved.</Alert>}
+      <PageHeader title={t("My account")} subtitle={`${profile.email} · ${t(ROLE_LABEL[profile.role])}`} />
+      {sp.error && <Alert>{t(sp.error)}</Alert>}
+      {sp.saved && <Alert tone="good">{t("Saved.")}</Alert>}
       <form action={updateAccount} className="max-w-lg">
         <Card className="space-y-4 p-5">
-          <Field label="Name">
+          <Field label={t("Language")} hint={t("Buttons, menus, checklists and your emails and notifications.")}>
+            <Select name="language" defaultValue={profile.language ?? "en"}>
+              {LOCALES.map((l) => (
+                <option key={l.value} value={l.value}>
+                  {l.label}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label={t("Name")}>
             <Input name="full_name" defaultValue={profile.full_name ?? ""} required />
           </Field>
-          <Field label="Mobile phone" hint="So techs and vendors can reach you about your requests.">
+          <Field label={t("Mobile phone")} hint={t("So techs and vendors can reach you about your requests.")}>
             <Input name="phone" defaultValue={profile.phone ?? ""} />
           </Field>
-          <Field label="New password" hint="Set one so you can sign in without an email link. Leave blank to keep your current one.">
+          <Field label={t("New password")} hint={t("Set one so you can sign in without an email link. Leave blank to keep your current one.")}>
             <Input type="password" name="password" autoComplete="new-password" minLength={8} />
           </Field>
-          <SubmitButton>Save</SubmitButton>
+          <SubmitButton>{t("Save")}</SubmitButton>
         </Card>
       </form>
       {profile.role !== "vendor" && (
         <Card className="mt-6 max-w-lg">
-          <CardHeader title="Notifications on this device" subtitle="Work order alerts as phone notifications, in addition to email." />
+          <CardHeader title={t("Notifications on this device")} subtitle={t("Work order alerts as phone notifications, in addition to email.")} />
           <div className="p-5">
             <PushToggle vapidKey={vapidKey} />
           </div>

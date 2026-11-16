@@ -22,6 +22,8 @@ import { TimeCard } from "./TimeCard";
 import { ChecklistCard, type ChecklistItem } from "./ChecklistCard";
 import { TechOptions } from "@/components/TechOptions";
 import { fmtHours } from "@/lib/labor";
+import { getT } from "@/lib/i18n/server";
+import type { T } from "@/lib/i18n";
 
 const TIMER_NOTICE: Record<string, string> = {
   started: "Timer started.",
@@ -32,10 +34,10 @@ const TIMER_NOTICE: Record<string, string> = {
   edited: "Time adjusted and recorded in the adjustment history.",
   voided: "Time entry voided and recorded in the adjustment history.",
 };
-function timerNotice(v: string) {
+function timerNotice(v: string, t: T) {
   const m = v.match(/^(\w+?)_paused_(\d+)$/);
-  if (m) return `${TIMER_NOTICE[m[1]] ?? "Timer started."} Your timer on work order #${m[2]} was paused, since only one timer can run at a time.`;
-  return TIMER_NOTICE[v];
+  if (m) return `${t(TIMER_NOTICE[m[1]] ?? "Timer started.")} ${t("Your timer on work order #{n} was paused, since only one timer can run at a time.", { n: m[2] })}`;
+  return TIMER_NOTICE[v] && t(TIMER_NOTICE[v]);
 }
 
 const RECEIPT_NOTICE: Record<string, string> = {
@@ -109,6 +111,8 @@ export default async function WorkOrderPage({
   const { id } = await params;
   const sp = await searchParams;
   const { supabase, profile } = await getSession();
+  const t = await getT();
+  const L = t.locale;
 
   const { data } = await supabase
     .from("work_orders")
@@ -134,7 +138,7 @@ export default async function WorkOrderPage({
     supabase
       .from("wo_checklist_items")
       .select(
-        "id,activity,description,photo_rule,result,note,before_attachment_id,after_attachment_id,completed_at," +
+        "id,activity,description,activity_es,description_es,photo_rule,result,note,before_attachment_id,after_attachment_id,completed_at," +
           "followup:work_orders!wo_checklist_items_followup_wo_id_fkey(id,number)," +
           "done_by:profiles!wo_checklist_items_completed_by_fkey(full_name,email)",
       )
@@ -144,7 +148,7 @@ export default async function WorkOrderPage({
   // PM checklist: photos come from this work order's attachments (category "checklist").
   const fileUrl = new Map(files.map((f) => [f.id, f.url]));
   type CkRow = {
-    id: string; activity: string; description: string | null; photo_rule: ChecklistItem["photo_rule"]; result: ChecklistItem["result"];
+    id: string; activity: string; description: string | null; activity_es: string | null; description_es: string | null; photo_rule: ChecklistItem["photo_rule"]; result: ChecklistItem["result"];
     note: string | null; before_attachment_id: string | null; after_attachment_id: string | null; completed_at: string | null;
     followup: { id: string; number: number } | null; done_by: { full_name: string | null; email: string | null } | null;
   };
@@ -155,7 +159,7 @@ export default async function WorkOrderPage({
     const photosOk =
       r.result === "na" || r.photo_rule === "none" || (r.photo_rule === "single" ? !!(r.after_attachment_id || r.before_attachment_id) : !!(r.before_attachment_id && r.after_attachment_id));
     return {
-      id: r.id, activity: r.activity, description: r.description, photo_rule: r.photo_rule, result: r.result, note: r.note,
+      id: r.id, activity: r.activity, description: r.description, activity_es: r.activity_es, description_es: r.description_es, photo_rule: r.photo_rule, result: r.result, note: r.note,
       before_url: before, after_url: after, followup: r.followup, completed_at: r.completed_at,
       completed_by_name: r.done_by ? personName(r.done_by) : null,
       done: !!r.result && noteOk && photosOk,
@@ -196,7 +200,7 @@ export default async function WorkOrderPage({
   return (
     <>
       <PageHeader
-        back={{ href: "/work-orders", label: "Work orders" }}
+        back={{ href: "/work-orders", label: t("Work orders") }}
         title={
           <span>
             <span className="mr-2 font-mono text-lg text-slate-400">#{wo.number}</span>
@@ -210,25 +214,25 @@ export default async function WorkOrderPage({
             <TypeBadge type={wo.type} />
             <OverdueBadge dueAt={wo.due_at} status={wo.status} />
             <span>
-              {wo.site?.name} · opened {fmtDateTime(wo.created_at)}
+              {wo.site?.name} · {t("opened {when}", { when: fmtDateTime(wo.created_at, L) })}
             </span>
           </span>
         }
       />
-      {sp.error && <Alert>{sp.error}</Alert>}
+      {sp.error && <Alert>{t(sp.error)}</Alert>}
       {sp.created === "approval" && (
-        <Alert tone="good">Submitted. An admin will review it and assign a technician or vendor. You&apos;ll get an email when it&apos;s approved.</Alert>
+        <Alert tone="good">{t("Submitted. An admin will review it and assign a technician or vendor. You'll get an email when it's approved.")}</Alert>
       )}
-      {sp.created && sp.created !== "approval" && <Alert tone="good">Submitted. You’ll see updates on this page.</Alert>}
+      {sp.created && sp.created !== "approval" && <Alert tone="good">{t("Submitted. You’ll see updates on this page.")}</Alert>}
       {sp.approved === "tech" && <Alert tone="good">Approved and assigned. The technician and the person who asked have been emailed.</Alert>}
       {sp.approved === "declined" && <Alert tone="good">Request declined. The person who asked has been emailed the reason.</Alert>}
       {sp.signoff === "done" && <Alert tone="good">Signed off. The work order is closed.</Alert>}
       {sp.signoff === "closed" && <Alert tone="good">Closed without the GM&apos;s sign-off. The reason is in the activity.</Alert>}
       {sp.signoff === "sent_back" && <Alert tone="good">Sent back. It&apos;s open again as a return visit, and the tech or vendor has been emailed your note.</Alert>}
       {sp.vendor && VENDOR_NOTICE[sp.vendor] && <Alert tone="good">{VENDOR_NOTICE[sp.vendor]}</Alert>}
-      {sp.receipt && RECEIPT_NOTICE[sp.receipt] && <Alert tone="good">{RECEIPT_NOTICE[sp.receipt]}</Alert>}
-      {sp.held && <Alert tone="good">Job put on hold. Your progress report is posted below and the store&apos;s GM was emailed.</Alert>}
-      {sp.timer && timerNotice(sp.timer) && <Alert tone="good">{timerNotice(sp.timer)}</Alert>}
+      {sp.receipt && RECEIPT_NOTICE[sp.receipt] && <Alert tone="good">{t(RECEIPT_NOTICE[sp.receipt])}</Alert>}
+      {sp.held && <Alert tone="good">{t("Job put on hold. Your progress report is posted below and the store's GM was emailed.")}</Alert>}
+      {sp.timer && timerNotice(sp.timer, t) && <Alert tone="good">{timerNotice(sp.timer, t)}</Alert>}
       <AutoRefresh seconds={30} />
 
       <div className="grid gap-6 lg:grid-cols-3">
@@ -240,14 +244,14 @@ export default async function WorkOrderPage({
             />
           )}
           <Card>
-            <CardHeader title="Details" />
+            <CardHeader title={t("Details")} />
             {wo.description && <p className="whitespace-pre-wrap border-b border-slate-100 px-5 py-4 text-sm text-slate-700">{wo.description}</p>}
             <DefList
               items={[
-                ["Site", wo.site && <Link className="text-brand-700 hover:underline" href={`/sites/${wo.site.id}`}>{wo.site.name}</Link>],
-                ["Address", [wo.site?.address, wo.site?.city].filter(Boolean).join(", ") || "—"],
+                [t("Site"), wo.site && <Link className="text-brand-700 hover:underline" href={`/sites/${wo.site.id}`}>{wo.site.name}</Link>],
+                [t("Address"), [wo.site?.address, wo.site?.city].filter(Boolean).join(", ") || "—"],
                 [
-                  "Asset",
+                  t("Asset"),
                   wo.asset ? (
                     <Link className="text-brand-700 hover:underline" href={`/assets/${wo.asset.id}`}>
                       {wo.asset.name} {wo.asset.tag && <span className="text-slate-500">({wo.asset.tag})</span>}
@@ -256,31 +260,31 @@ export default async function WorkOrderPage({
                     "—"
                   ),
                 ],
-                ["Category", wo.category],
-                ["Location", wo.location_detail ?? "—"],
-                ["Requested by", personName(wo.requester)],
-                ["Technician", personName(wo.tech)],
-                ["Vendor", wo.vendor ? `${wo.vendor.name}${wo.vendor.phone ? ` · ${wo.vendor.phone}` : ""}` : "—"],
-                ["Scheduled", wo.scheduled_date ? `${fmtDate(wo.scheduled_date)}${wo.scheduled_start ? ` · ${fmtTime(wo.scheduled_start)}` : ""}${wo.estimated_hours ? ` · ~${wo.estimated_hours}h` : ""}` : "Not scheduled"],
-                ["Due", fmtDateTime(wo.due_at)],
-                [signoff ? "Work done" : "Completed", fmtDateTime(wo.completed_at)],
+                [t("Category"), t(wo.category)],
+                [t("Location"), wo.location_detail ?? "—"],
+                [t("Requested by"), personName(wo.requester)],
+                [t("Technician"), personName(wo.tech)],
+                [t("Vendor"), wo.vendor ? `${wo.vendor.name}${wo.vendor.phone ? ` · ${wo.vendor.phone}` : ""}` : "—"],
+                [t("Scheduled"), wo.scheduled_date ? `${fmtDate(wo.scheduled_date, L)}${wo.scheduled_start ? ` · ${fmtTime(wo.scheduled_start)}` : ""}${wo.estimated_hours ? ` · ~${wo.estimated_hours}h` : ""}` : t("Not scheduled")],
+                [t("Due"), fmtDateTime(wo.due_at, L)],
+                [signoff ? t("Work done") : t("Completed"), fmtDateTime(wo.completed_at, L)],
                 ...(wo.signed_off_at
                   ? [
                       [
-                        "Signed off",
-                        `${fmtDateTime(wo.signed_off_at)} · ${
-                          wo.signoff_method === "auto" ? "closed automatically (no sign-off)" : wo.signoff_method === "admin" ? `closed by ${personName(signer)} (admin)` : personName(signer)
+                        t("Signed off"),
+                        `${fmtDateTime(wo.signed_off_at, L)} · ${
+                          wo.signoff_method === "auto" ? t("closed automatically (no sign-off)") : wo.signoff_method === "admin" ? t("closed by {name} (admin)", { name: personName(signer) }) : personName(signer)
                         }`,
                       ] as [string, React.ReactNode],
                     ]
                   : []),
-                ...(wo.pm_schedule_id ? [["PM schedule", <Link key="pm" className="text-brand-700 hover:underline" href={`/pm/${wo.pm_schedule_id}`}>View schedule</Link>] as [string, React.ReactNode]] : []),
-                ...(wo.compliance_requirement_id ? [["Compliance item", <Link key="c" className="text-brand-700 hover:underline" href={`/compliance/${wo.compliance_requirement_id}`}>View requirement</Link>] as [string, React.ReactNode]] : []),
+                ...(wo.pm_schedule_id ? [[t("PM schedule"), <Link key="pm" className="text-brand-700 hover:underline" href={`/pm/${wo.pm_schedule_id}`}>{t("View schedule")}</Link>] as [string, React.ReactNode]] : []),
+                ...(wo.compliance_requirement_id ? [[t("Compliance item"), <Link key="c" className="text-brand-700 hover:underline" href={`/compliance/${wo.compliance_requirement_id}`}>{t("View requirement")}</Link>] as [string, React.ReactNode]] : []),
               ]}
             />
             {wo.resolution_notes && (
               <div className="border-t border-slate-100 px-5 py-4">
-                <p className="text-xs font-medium text-slate-500">Resolution</p>
+                <p className="text-xs font-medium text-slate-500">{t("Resolution")}</p>
                 <p className="mt-1 whitespace-pre-wrap text-sm">{wo.resolution_notes}</p>
               </div>
             )}
@@ -295,7 +299,7 @@ export default async function WorkOrderPage({
           <Attachments items={files.filter((f) => f.category !== "receipt" && f.category !== "checklist" && !(role === "manager" && ["invoice", "quote", "vendor_receipt"].includes(f.category ?? "")))} action={uploadWoFiles} hidden={{ id }} allowInternal={role === "admin" || role === "tech"} categories={role === "admin" || role === "tech"} />
 
           <Card>
-            <CardHeader title="Activity" />
+            <CardHeader title={t("Activity")} />
             <ol className="space-y-4 px-5 py-4">
               {events.map((e) => (
                 <li key={e.id} className="flex gap-3 text-sm">
@@ -303,33 +307,33 @@ export default async function WorkOrderPage({
                   <div className="min-w-0 flex-1">
                     <p className="text-slate-500">
                       <span className="font-medium text-slate-800">
-                        {e.user ? personName(e.user) : e.actor_label ? e.actor_label : "System"}
+                        {e.user ? personName(e.user) : e.actor_label ? e.actor_label : t("System")}
                       </span>
                       {e.actor_type === "vendor" && <span className="ml-1 rounded bg-violet-50 px-1 text-[10px] font-medium text-violet-700">VENDOR</span>}{" "}
                       {e.kind === "status" && (
                         <>
-                          changed status {e.from_status && <>from <b>{STATUS_LABEL[e.from_status]}</b> </>}to{" "}
-                          <b>{e.to_status && STATUS_LABEL[e.to_status]}</b>
+                          {t("changed status")} {e.from_status && <>{t("from")} <b>{t(STATUS_LABEL[e.from_status])}</b> </>}{t("to")}{" "}
+                          <b>{e.to_status && t(STATUS_LABEL[e.to_status])}</b>
                         </>
                       )}
-                      {e.kind === "assignment" && <>updated assignment: {e.body}</>}
+                      {e.kind === "assignment" && <>{t("updated assignment:")} {e.body}</>}
                       {e.kind === "schedule" && <>{e.body?.replace(/^S/, "s").replace(/^R/, "r")}</>}
-                      {["system", "dispatch", "approval", "invoice", "vendor", "quote", "vendor_cost"].includes(e.kind) && <>{e.body}</>}
-                      {e.kind === "comment" && (e.meta?.to_vendor ? "messaged the vendor" : "commented")}
-                      {e.kind === "vendor_update" && "posted an update"}
-                      {e.kind === "progress_report" && "posted a progress report"}
-                      {e.kind === "email_reply" && (e.meta?.unverified ? "sent an email (unrecognized sender)" : "replied by email")}
-                      {e.meta?.via === "email" && e.kind === "comment" && <span className="ml-1 text-[10px] text-slate-400">· via email</span>}
+                      {["system", "dispatch", "approval", "invoice", "vendor", "quote", "vendor_cost"].includes(e.kind) && <>{e.body && t(e.body)}</>}
+                      {e.kind === "comment" && (e.meta?.to_vendor ? t("messaged the vendor") : t("commented"))}
+                      {e.kind === "vendor_update" && t("posted an update")}
+                      {e.kind === "progress_report" && t("posted a progress report")}
+                      {e.kind === "email_reply" && (e.meta?.unverified ? t("sent an email (unrecognized sender)") : t("replied by email"))}
+                      {e.meta?.via === "email" && e.kind === "comment" && <span className="ml-1 text-[10px] text-slate-400">· {t("via email")}</span>}
                       {e.visibility === "shared" && ["comment", "vendor_update", "email_reply"].includes(e.kind) && role !== "vendor" && (
-                        <span className="ml-1 text-[10px] text-slate-400">· visible to vendor</span>
+                        <span className="ml-1 text-[10px] text-slate-400">· {t("visible to vendor")}</span>
                       )}
-                      <span className="ml-2 text-xs text-slate-400">{fmtDateTime(e.created_at)}</span>
+                      <span className="ml-2 text-xs text-slate-400">{fmtDateTime(e.created_at, L)}</span>
                     </p>
                     {e.kind === "progress_report" && (
                       <div className="mt-1 whitespace-pre-wrap rounded-lg bg-amber-50 px-3 py-2 text-slate-800 ring-1 ring-amber-200">
                         {e.body}
                         {typeof e.meta?.files === "number" && e.meta.files > 0 && (
-                          <p className="mt-1 text-xs text-slate-500">📎 {e.meta.files} photo{e.meta.files > 1 ? "s" : ""} added to Photos &amp; files</p>
+                          <p className="mt-1 text-xs text-slate-500">📎 {t(e.meta.files > 1 ? "{n} photos added to Photos & files" : "{n} photo added to Photos & files", { n: e.meta.files })}</p>
                         )}
                       </div>
                     )}
@@ -337,12 +341,12 @@ export default async function WorkOrderPage({
                       <div className={`mt-1 whitespace-pre-wrap rounded-lg px-3 py-2 text-slate-800 ${e.actor_type === "vendor" ? "bg-violet-50" : "bg-slate-50"}`}>
                         {e.body}
                         {typeof e.meta?.files === "number" && e.meta.files > 0 && (
-                          <p className="mt-1 text-xs text-slate-500">📎 {e.meta.files} attachment{e.meta.files > 1 ? "s" : ""} added to Photos &amp; files</p>
+                          <p className="mt-1 text-xs text-slate-500">📎 {t(e.meta.files > 1 ? "{n} attachments added to Photos & files" : "{n} attachment added to Photos & files", { n: e.meta.files })}</p>
                         )}
-                        {typeof e.meta?.materials === "string" && e.meta.materials && <p className="mt-1 text-xs text-slate-600">Materials: {e.meta.materials}</p>}
+                        {typeof e.meta?.materials === "string" && e.meta.materials && <p className="mt-1 text-xs text-slate-600">{t("Materials:")} {e.meta.materials}</p>}
                         {typeof e.meta?.needs === "string" && e.meta.needs !== "none" && (
                           <p className="mt-1 text-xs font-medium text-orange-700">
-                            Needs {e.meta.needs === "parts" ? "parts" : e.meta.needs === "visit" ? "another visit" : "parts and another visit"}
+                            {e.meta.needs === "parts" ? t("Needs parts") : e.meta.needs === "visit" ? t("Needs another visit") : t("Needs parts and another visit")}
                           </p>
                         )}
                       </div>
@@ -353,9 +357,9 @@ export default async function WorkOrderPage({
             </ol>
             <form action={addComment} className="flex gap-2 border-t border-slate-100 px-5 py-4">
               <input type="hidden" name="id" value={id} />
-              <Textarea name="body" rows={2} placeholder="Add an update or question…" required />
+              <Textarea name="body" rows={2} placeholder={t("Add an update or question…")} required />
               <div className="self-end">
-                <SubmitButton size="sm" pendingText="…">Post</SubmitButton>
+                <SubmitButton size="sm" pendingText="…">{t("Post")}</SubmitButton>
               </div>
             </form>
           </Card>
@@ -395,9 +399,11 @@ export default async function WorkOrderPage({
           )}
           {signoff && role !== "manager" && role !== "admin" && (
             <Card>
-              <CardHeader title="Waiting for GM sign-off" />
+              <CardHeader title={t("Waiting for GM sign-off")} />
               <p className="px-5 py-4 text-sm text-slate-600">
-                The store&apos;s GM checks the work and signs off{closesOn ? `. If no one does, it closes automatically on ${fmtDate(closesOn)}` : ""}. If it isn&apos;t fixed, it comes back to you with a note.
+                {closesOn
+                  ? t("The store's GM checks the work and signs off. If no one does, it closes automatically on {date}. If it isn't fixed, it comes back to you with a note.", { date: fmtDate(closesOn, L) })
+                  : t("The store's GM checks the work and signs off. If it isn't fixed, it comes back to you with a note.")}
               </p>
             </Card>
           )}
@@ -467,35 +473,35 @@ export default async function WorkOrderPage({
           )}
           {awaiting && role !== "admin" && (
             <Card>
-              <CardHeader title="Waiting for approval" />
+              <CardHeader title={t("Waiting for approval")} />
               <p className="px-5 py-4 text-sm text-slate-600">
-                An admin will review this request and assign a technician or vendor. {role === "manager" ? "You'll get an email when it's approved." : ""}
+                {t("An admin will review this request and assign a technician or vendor.")} {role === "manager" ? t("You'll get an email when it's approved.") : ""}
               </p>
             </Card>
           )}
           {role !== "vendor" && !awaiting && <VendorPanel supabase={supabase} wo={wo} profile={profile} />}
           {statuses.length > 0 && (
             <Card>
-              <CardHeader title="Update status" />
+              <CardHeader title={t("Update status")} />
               {statusButtons.length > 0 && (
               <form className="space-y-3 p-5">
                 <input type="hidden" name="id" value={id} />
                 {statuses.includes("completed") && (
-                  <Field label="Resolution notes" hint="What was done? Required details for the record.">
+                  <Field label={t("Resolution notes")} hint={t("What was done? Required details for the record.")}>
                     <Textarea name="resolution_notes" rows={3} defaultValue={wo.resolution_notes ?? ""} />
                   </Field>
                 )}
                 {statuses.includes("completed") && wo.type === "compliance" && (
-                  <Field label="Certificate / tag #" hint="Saved to the compliance record. Upload the certificate under Photos & files as “Certificate”.">
+                  <Field label={t("Certificate / tag #")} hint={t("Saved to the compliance record. Upload the certificate under Photos & files as “Certificate”.")}>
                     <Input name="certificate_number" defaultValue={wo.certificate_number ?? ""} />
                   </Field>
                 )}
-                <Field label="Note (optional)">
-                  <Input name="note" placeholder="e.g. Waiting on part, ETA Friday" />
+                <Field label={t("Note (optional)")}>
+                  <Input name="note" placeholder={t("e.g. Waiting on part, ETA Friday")} />
                 </Field>
                 {checklistOpen > 0 && statusButtons.includes("completed") && (
                   <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 ring-1 ring-amber-200">
-                    {checklistOpen} checklist item{checklistOpen > 1 ? "s" : ""} still need{checklistOpen > 1 ? "" : "s"} photos and a result before this PM can be completed.
+                    {t(checklistOpen > 1 ? "{n} checklist items still need photos and a result before this PM can be completed." : "{n} checklist item still needs photos and a result before this PM can be completed.", { n: checklistOpen })}
                   </p>
                 )}
                 <div className="flex flex-wrap gap-2">
@@ -506,9 +512,9 @@ export default async function WorkOrderPage({
                       disabled={checklistOpen > 0 && s === "completed"}
                       size="sm"
                       variant={s === "completed" ? "primary" : s === "cancelled" ? "danger" : "secondary"}
-                      confirm={s === "cancelled" ? "Cancel this work order?" : undefined}
+                      confirm={s === "cancelled" ? t("Cancel this work order?") : undefined}
                     >
-                      {closed ? "Reopen" : STATUS_VERB[s] ?? STATUS_LABEL[s]}
+                      {closed ? t("Reopen") : t(STATUS_VERB[s] ?? STATUS_LABEL[s])}
                     </SubmitButton>
                   ))}
                 </div>
@@ -517,40 +523,40 @@ export default async function WorkOrderPage({
               {techHold && (
                 <details className={`group ${statusButtons.length ? "border-t border-slate-100" : ""}`} open={!!sp.hold}>
                   <summary className="cursor-pointer list-none px-5 py-3 text-sm font-medium text-slate-800 hover:bg-slate-50">
-                    <span className="mr-1 inline-block transition group-open:rotate-90">›</span> Put on hold
-                    <span className="ml-1 font-normal text-slate-500">· progress report required</span>
+                    <span className="mr-1 inline-block transition group-open:rotate-90">›</span> {t("Put on hold")}
+                    <span className="ml-1 font-normal text-slate-500">· {t("progress report required")}</span>
                   </summary>
                   <form action={putOnHoldWithReport} className="space-y-3 border-t border-slate-100 bg-amber-50/40 p-5">
                     <input type="hidden" name="id" value={id} />
-                    <Field label="Work done so far *">
-                      <Textarea name="work_done" rows={3} required placeholder="e.g. Diagnosed walk-in cooler: failed condenser fan motor. Removed old motor." />
+                    <Field label={`${t("Work done so far")} *`}>
+                      <Textarea name="work_done" rows={3} required placeholder={t("e.g. Diagnosed walk-in cooler: failed condenser fan motor. Removed old motor.")} />
                     </Field>
-                    <Field label="Why is it on hold? *">
+                    <Field label={`${t("Why is it on hold?")} *`}>
                       <Select name="hold_reason" required defaultValue="">
                         <option value="" disabled>
-                          Choose a reason…
+                          {t("Choose a reason…")}
                         </option>
                         {Object.entries(HOLD_REASONS).map(([k, v]) => (
                           <option key={k} value={k}>
-                            {v}
+                            {t(v)}
                           </option>
                         ))}
                       </Select>
                     </Field>
-                    <Field label="What's left / next step *">
-                      <Textarea name="next_steps" rows={2} required placeholder="e.g. Install new motor and test temps once part arrives" />
+                    <Field label={`${t("What's left / next step")} *`}>
+                      <Textarea name="next_steps" rows={2} required placeholder={t("e.g. Install new motor and test temps once part arrives")} />
                     </Field>
-                    <Field label="Parts needed" hint="Required when waiting on parts. Include part #, qty and supplier if known.">
-                      <Input name="parts_needed" placeholder="e.g. 1× condenser fan motor 1/3 HP 208-230V" />
+                    <Field label={t("Parts needed")} hint={t("Required when waiting on parts. Include part #, qty and supplier if known.")}>
+                      <Input name="parts_needed" placeholder={t("e.g. 1× condenser fan motor 1/3 HP 208-230V")} />
                     </Field>
-                    <Field label="Expected back on">
+                    <Field label={t("Expected back on")}>
                       <Input type="date" name="return_on" />
                     </Field>
                     <div>
-                      <span className="mb-1 block text-sm font-medium text-slate-700">Photos (optional)</span>
+                      <span className="mb-1 block text-sm font-medium text-slate-700">{t("Photos (optional)")}</span>
                       <PhotoInput name="files" />
                     </div>
-                    <SubmitButton size="sm">Submit report &amp; put on hold</SubmitButton>
+                    <SubmitButton size="sm">{t("Submit report & put on hold")}</SubmitButton>
                   </form>
                 </details>
               )}
@@ -559,18 +565,18 @@ export default async function WorkOrderPage({
 
           {canAssign && lookups && (
             <Card>
-              <CardHeader title="Assignment & schedule" action={<Link href={`/schedule?date=${wo.scheduled_date ?? ""}`} className="text-xs font-medium text-brand-700">Calendar</Link>} />
+              <CardHeader title={t("Assignment & schedule")} action={<Link href={`/schedule?date=${wo.scheduled_date ?? ""}`} className="text-xs font-medium text-brand-700">{t("Calendar")}</Link>} />
               <form action={updateAssignment} className="space-y-3 p-5">
                 <input type="hidden" name="id" value={id} />
-                <Field label="Technician" hint={role === "admin" ? undefined : "Only admins assign technicians and vendors"}>
+                <Field label={t("Technician")} hint={role === "admin" ? undefined : t("Only admins assign technicians and vendors")}>
                   <Select name="assigned_tech_id" defaultValue={wo.assigned_tech_id ?? ""} disabled={role !== "admin"}>
-                    <option value="">— Unassigned —</option>
+                    <option value="">— {t("Unassigned")} —</option>
                     <TechOptions techs={lookups.techs} staff={lookups.staff} current={wo.assigned_tech_id} />
                   </Select>
                 </Field>
-                <Field label="Vendor">
+                <Field label={t("Vendor")}>
                   <Select name="vendor_id" defaultValue={wo.vendor_id ?? ""} disabled={role !== "admin"}>
-                    <option value="">— None —</option>
+                    <option value="">— {t("None")} —</option>
                     {lookups.vendors.map((v) => (
                       <option key={v.id} value={v.id}>
                         {v.name}
@@ -579,115 +585,117 @@ export default async function WorkOrderPage({
                   </Select>
                 </Field>
                 <div className="grid grid-cols-3 gap-3 rounded-lg bg-slate-50 p-3">
-                  <Field label="Schedule date">
+                  <Field label={t("Schedule date")}>
                     <Input type="date" name="scheduled_date" defaultValue={wo.scheduled_date ?? ""} />
                   </Field>
-                  <Field label="Start">
+                  <Field label={t("Start")}>
                     <Input type="time" name="scheduled_start" step={900} defaultValue={wo.scheduled_start?.slice(0, 5) ?? ""} />
                   </Field>
-                  <Field label="Est. hrs">
+                  <Field label={t("Est. hrs")}>
                     <Input name="estimated_hours" inputMode="decimal" defaultValue={wo.estimated_hours ?? ""} />
                   </Field>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                  <Field label="Priority">
+                  <Field label={t("Priority")}>
                     <Select name="priority" defaultValue={wo.priority}>
                       {Object.entries(PRIORITY_LABEL).map(([k, v]) => (
                         <option key={k} value={k}>
-                          {v}
+                          {t(v)}
                         </option>
                       ))}
                     </Select>
                   </Field>
-                  <Field label="Type">
+                  <Field label={t("Type")}>
                     <Select name="type" defaultValue={wo.type}>
                       {Object.entries(TYPE_LABEL).map(([k, v]) => (
                         <option key={k} value={k}>
-                          {v}
+                          {t(v)}
                         </option>
                       ))}
                     </Select>
                   </Field>
-                  <Field label="Due date">
+                  <Field label={t("Due date")}>
                     <Input type="date" name="due_date" defaultValue={toDateInput(wo.due_at)} />
                   </Field>
                   <Field label="NTE ($)">
                     <Input name="nte_amount" inputMode="decimal" defaultValue={wo.nte_amount ?? ""} />
                   </Field>
                 </div>
-                <Field label="Category">
+                <Field label={t("Category")}>
                   <Select name="category" defaultValue={wo.category}>
                     {CATEGORIES.map((c) => (
-                      <option key={c}>{c}</option>
+                      <option key={c} value={c}>
+                        {t(c)}
+                      </option>
                     ))}
                   </Select>
                 </Field>
-                <SubmitButton size="sm" variant="secondary">Save assignment</SubmitButton>
+                <SubmitButton size="sm" variant="secondary">{t("Save assignment")}</SubmitButton>
               </form>
             </Card>
           )}
 
           {canCost && (
             <Card>
-              <CardHeader title="Costs" subtitle={wo.nte_amount ? `NTE ${fmtMoney(wo.nte_amount)}` : undefined} />
+              <CardHeader title={t("Costs")} subtitle={wo.nte_amount ? `${t("NTE")} ${fmtMoney(wo.nte_amount)}` : undefined} />
               <form action={updateCosts} className="space-y-3 p-5">
                 <input type="hidden" name="id" value={id} />
                 {role !== "vendor" && (
-                  <Field label="Other parts $" hint="Parts not entered as receipts (e.g. from stock)">
+                  <Field label={t("Other parts $")} hint={t("Parts not entered as receipts (e.g. from stock)")}>
                     <Input name="parts_cost" inputMode="decimal" defaultValue={wo.parts_cost || ""} />
                   </Field>
                 )}
                 <div className="grid grid-cols-2 gap-3">
-                  <Field label="Vendor invoice $">
+                  <Field label={t("Vendor invoice $")}>
                     <Input name="vendor_invoice_amount" inputMode="decimal" defaultValue={wo.vendor_invoice_amount || ""} />
                   </Field>
-                  <Field label="Invoice #">
+                  <Field label={t("Invoice #")}>
                     <Input name="invoice_number" defaultValue={wo.invoice_number ?? ""} />
                   </Field>
                 </div>
-                <Field label="Resolution notes">
+                <Field label={t("Resolution notes")}>
                   <Textarea name="resolution_notes" rows={2} defaultValue={wo.resolution_notes ?? ""} />
                 </Field>
                 <table className="w-full overflow-hidden rounded-lg bg-slate-50 text-xs">
                   <thead>
                     <tr className="text-left text-slate-500">
-                      <th className="px-3 pb-1 pt-2 font-medium">Expense category</th>
-                      <th className="px-3 pb-1 pt-2 text-right font-medium">Amount</th>
+                      <th className="px-3 pb-1 pt-2 font-medium">{t("Expense category")}</th>
+                      <th className="px-3 pb-1 pt-2 text-right font-medium">{t("Amount")}</th>
                     </tr>
                   </thead>
                   <tbody>
                     <tr>
                       <td className="px-3 py-1 text-slate-600">
                         <a href="#time" className="hover:text-brand-700">
-                          Internal technician labor ({fmtHours(wo.labor_hours)} hrs)
+                          {t("Internal technician labor ({n} hrs)", { n: fmtHours(wo.labor_hours) })}
                         </a>
                       </td>
-                      <td className="px-3 py-1 text-right tabular-nums text-slate-800">{role === "admin" ? fmtMoney(laborCost, 2) : <span className="text-slate-400">Admin only</span>}</td>
+                      <td className="px-3 py-1 text-right tabular-nums text-slate-800">{role === "admin" ? fmtMoney(laborCost, 2) : <span className="text-slate-400">{t("Admin only")}</span>}</td>
                     </tr>
                     <tr>
                       <td className="px-3 py-1 text-slate-600">
                         <a href="#receipts" className="hover:text-brand-700">
-                          Parts &amp; materials
+                          {t("Parts & materials")}
                         </a>
                       </td>
                       <td className="px-3 py-1 text-right tabular-nums text-slate-800">{fmtMoney(partsTotal, 2)}</td>
                     </tr>
                     <tr>
-                      <td className="px-3 py-1 text-slate-600">Outside vendor costs</td>
+                      <td className="px-3 py-1 text-slate-600">{t("Outside vendor costs")}</td>
                       <td className="px-3 py-1 text-right tabular-nums text-slate-800">{fmtMoney(wo.vendor_invoice_amount, 2)}</td>
                     </tr>
                     <tr className="border-t border-slate-200 font-semibold text-slate-900">
-                      <td className="px-3 pb-2 pt-1.5">{role === "admin" ? "Total R&M cost" : "Total (excl. internal labor)"}</td>
+                      <td className="px-3 pb-2 pt-1.5">{role === "admin" ? t("Total R&M cost") : t("Total (excl. internal labor)")}</td>
                       <td className="px-3 pb-2 pt-1.5 text-right tabular-nums">{fmtMoney(role === "admin" ? rmTotal : wo.total_cost, 2)}</td>
                     </tr>
                   </tbody>
                 </table>
                 {labor?.missing_rate && <p className="text-xs text-orange-700">Some labor has no hourly rate set. Set it on Users.</p>}
                 {wo.nte_amount != null && (role === "admin" ? rmTotal : wo.total_cost) > wo.nte_amount && (
-                  <Alert tone="serious">Total exceeds the not-to-exceed amount — get approval.</Alert>
+                  <Alert tone="serious">{t("Total exceeds the not-to-exceed amount — get approval.")}</Alert>
                 )}
                 <div className="flex items-center justify-end">
-                  <SubmitButton size="sm" variant="secondary">Save costs</SubmitButton>
+                  <SubmitButton size="sm" variant="secondary">{t("Save costs")}</SubmitButton>
                 </div>
               </form>
             </Card>
@@ -701,7 +709,7 @@ export default async function WorkOrderPage({
               </SubmitButton>
             </form>
           )}
-          <p className="text-right text-xs text-slate-400">Last updated {fmtDate(wo.updated_at)}</p>
+          <p className="text-right text-xs text-slate-400">{t("Last updated {date}", { date: fmtDate(wo.updated_at, L) })}</p>
         </div>
       </div>
     </>

@@ -23,6 +23,7 @@ export interface Profile {
   vendor_id: string | null;
   active: boolean;
   is_super?: boolean;
+  language?: "en" | "es";
 }
 
 export interface Site {

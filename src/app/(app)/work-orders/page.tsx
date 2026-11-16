@@ -10,6 +10,8 @@ import type { WoPriority, WoStatus, WoType } from "@/lib/types";
 import { Button, ButtonLink, Card, EmptyState, Input, PageHeader, Select, Table, Td, Th } from "@/components/ui";
 import { OverdueBadge, PriorityBadge, StatusBadge, TypeBadge } from "@/components/badges";
 
+import { getT } from "@/lib/i18n/server";
+
 export const metadata = { title: "Work orders" };
 
 type SP = Record<string, string | undefined>;
@@ -17,6 +19,7 @@ type SP = Record<string, string | undefined>;
 export default async function WorkOrdersPage({ searchParams }: { searchParams: Promise<SP> }) {
   const sp = await searchParams;
   const { supabase, profile } = await getSession();
+  const t = await getT();
   const { companyId: cid } = await getCompanyScope();
   const { sites } = await getLookups(supabase);
 
@@ -83,12 +86,12 @@ export default async function WorkOrdersPage({ searchParams }: { searchParams: P
   return (
     <>
       <PageHeader
-        title={profile.role === "vendor" ? "My jobs" : "Work orders"}
-        subtitle={`${rows.length}${rows.length === 300 ? "+" : ""} shown`}
+        title={profile.role === "vendor" ? "My jobs" : t("Work orders")}
+        subtitle={t("{n} shown", { n: `${rows.length}${rows.length === 300 ? "+" : ""}` })}
         actions={
           profile.role !== "vendor" && (
             <ButtonLink href="/work-orders/new">
-              <Plus className="h-4 w-4" aria-hidden /> {profile.role === "manager" ? "Submit request" : "New work order"}
+              <Plus className="h-4 w-4" aria-hidden /> {profile.role === "manager" ? t("Submit request") : t("New work order")}
             </ButtonLink>
           )
         }
@@ -96,20 +99,20 @@ export default async function WorkOrdersPage({ searchParams }: { searchParams: P
 
       <Card className="mb-4 p-3">
         <form className="grid grid-cols-2 gap-2 md:grid-cols-4 lg:grid-cols-7">
-          <Input name="q" placeholder="Search title or #" defaultValue={sp.q} className="col-span-2 md:col-span-1 lg:col-span-2" />
+          <Input name="q" placeholder={t("Search title or #")} defaultValue={sp.q} className="col-span-2 md:col-span-1 lg:col-span-2" />
           <Select name="status" defaultValue={status}>
-            <option value="open">Open</option>
-            <option value="overdue">Overdue</option>
-            <option value="all">All statuses</option>
+            <option value="open">{t("Open")}</option>
+            <option value="overdue">{t("Overdue")}</option>
+            <option value="all">{t("All statuses")}</option>
             {Object.entries(STATUS_LABEL).map(([k, v]) => (
               <option key={k} value={k}>
-                {v}
+                {t(v)}
               </option>
             ))}
           </Select>
           {profile.role !== "vendor" && (
             <Select name="site" defaultValue={sp.site ?? ""}>
-              <option value="">All sites</option>
+              <option value="">{t("All sites")}</option>
               {sites.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.code ?? s.name}
@@ -118,18 +121,18 @@ export default async function WorkOrdersPage({ searchParams }: { searchParams: P
             </Select>
           )}
           <Select name="priority" defaultValue={sp.priority ?? ""}>
-            <option value="">Any priority</option>
+            <option value="">{t("Any priority")}</option>
             {Object.entries(PRIORITY_LABEL).map(([k, v]) => (
               <option key={k} value={k}>
-                {v}
+                {t(v)}
               </option>
             ))}
           </Select>
           <Select name="type" defaultValue={sp.type ?? ""}>
-            <option value="">Any type</option>
+            <option value="">{t("Any type")}</option>
             {Object.entries(TYPE_LABEL).map(([k, v]) => (
               <option key={k} value={k}>
-                {v}
+                {t(v)}
               </option>
             ))}
           </Select>
@@ -137,11 +140,11 @@ export default async function WorkOrdersPage({ searchParams }: { searchParams: P
             {(profile.role === "tech" || profile.role === "manager") && (
               <label className="flex items-center gap-1.5 whitespace-nowrap text-xs text-slate-600">
                 <input type="checkbox" name="mine" value="1" defaultChecked={sp.mine === "1"} className="rounded border-slate-300" />
-                {profile.role === "manager" ? "Mine" : "Assigned to me"}
+                {profile.role === "manager" ? t("Mine") : t("Assigned to me")}
               </label>
             )}
             <Button variant="secondary" type="submit" className="flex-1">
-              Filter
+              {t("Filter")}
             </Button>
           </div>
         </form>
@@ -150,19 +153,19 @@ export default async function WorkOrdersPage({ searchParams }: { searchParams: P
       <Card>
         {error && <p className="p-4 text-sm text-red-700">{error.message}</p>}
         {rows.length === 0 ? (
-          <EmptyState title="No work orders match these filters." />
+          <EmptyState title={t("No work orders match these filters.")} />
         ) : (
           <Table>
             <thead className="bg-slate-50">
               <tr>
                 <Th>#</Th>
-                <Th>Work order</Th>
-                <Th>Site</Th>
-                <Th>Priority</Th>
-                <Th>Status</Th>
-                <Th>Assigned</Th>
-                <Th>Due</Th>
-                {profile.role !== "manager" && <Th className="text-right">Cost</Th>}
+                <Th>{t("Work order")}</Th>
+                <Th>{t("Site")}</Th>
+                <Th>{t("Priority")}</Th>
+                <Th>{t("Status")}</Th>
+                <Th>{t("Assigned")}</Th>
+                <Th>{t("Due")}</Th>
+                {profile.role !== "manager" && <Th className="text-right">{t("Cost")}</Th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -177,7 +180,7 @@ export default async function WorkOrdersPage({ searchParams }: { searchParams: P
                     </Link>
                     <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
                       {r.type !== "reactive" && <TypeBadge type={r.type} />}
-                      <span>{r.category}</span>
+                      <span>{t(r.category)}</span>
                       {r.asset && <span>· {r.asset.name}</span>}
                     </div>
                   </Td>
@@ -194,9 +197,9 @@ export default async function WorkOrdersPage({ searchParams }: { searchParams: P
                   <Td className="text-xs">
                     {r.tech && <div>{personName(r.tech)}</div>}
                     {r.vendor && <div className="text-slate-500">{r.vendor.name}</div>}
-                    {!r.tech && !r.vendor && <span className="text-slate-400">Unassigned</span>}
+                    {!r.tech && !r.vendor && <span className="text-slate-400">{t("Unassigned")}</span>}
                   </Td>
-                  <Td className="whitespace-nowrap text-xs">{fmtDateTime(r.due_at)}</Td>
+                  <Td className="whitespace-nowrap text-xs">{fmtDateTime(r.due_at, t.locale)}</Td>
                   {profile.role !== "manager" && (
                     <Td className="whitespace-nowrap text-right tabular-nums">{r.total_cost ? fmtMoney(r.total_cost) : "—"}</Td>
                   )}

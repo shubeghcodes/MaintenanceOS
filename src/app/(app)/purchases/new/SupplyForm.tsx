@@ -5,9 +5,10 @@ import { Field, Input, Select } from "@/components/ui";
 import { SubmitButton } from "@/components/SubmitButton";
 import { PhotoInput } from "@/components/PhotoInput";
 import { addSupplyPurchase } from "../actions";
+import { getT } from "@/lib/i18n/server";
 
 /** The "Log a purchase" form for store supplies. */
-export function SupplyForm({
+export async function SupplyForm({
   sites,
   shopCompanies,
   vendors,
@@ -22,31 +23,32 @@ export function SupplyForm({
   back: string;
   clientKey: string;
 }) {
+  const t = await getT();
   const canShop = shopCompanies.length > 0;
   const self = back;
   return (
     <form action={addSupplyPurchase} className="grid gap-4 p-5 sm:grid-cols-2">
       <input type="hidden" name="client_key" value={key} />
       <input type="hidden" name="back" value={self} />
-      <Field label="Receipt photo" className="sm:col-span-2">
+      <Field label={t("Receipt photo")} className="sm:col-span-2">
         <PhotoInput name="receipt" multiple={false} capture="environment" accept="image/*,application/pdf" />
       </Field>
-      <Field label="Location" className={canShop && shopCompanies.length > 1 ? "" : "sm:col-span-2"}>
+      <Field label={t("Location")} className={canShop && shopCompanies.length > 1 ? "" : "sm:col-span-2"}>
         <Select name="site_id" required defaultValue={preset}>
           <option value="" disabled>
-            Pick a location…
+            {t("Pick a location…")}
           </option>
           {sites.map((s) => (
             <option key={s.id} value={s.id}>
               {s.code ? `${s.code} · ${s.name}` : s.name}
             </option>
           ))}
-          {canShop && <option value="shop">{SHOP_LABEL}</option>}
+          {canShop && <option value="shop">{t(SHOP_LABEL)}</option>}
         </Select>
       </Field>
       {canShop &&
         (shopCompanies.length > 1 ? (
-          <Field label="Company (shop / warehouse only)">
+          <Field label={t("Company (shop / warehouse only)")}>
             <Select name="company_id" defaultValue="">
               <option value="">—</option>
               {shopCompanies.map((c) => (
@@ -59,7 +61,7 @@ export function SupplyForm({
         ) : (
           <input type="hidden" name="company_id" value={shopCompanies[0].id} />
         ))}
-      <Field label="Vendor / store">
+      <Field label={t("Vendor / store")}>
         <Input name="store" required list="supply-vendors" placeholder="Restaurant Depot" />
         <datalist id="supply-vendors">
           {vendors.map((s) => (
@@ -67,54 +69,56 @@ export function SupplyForm({
           ))}
         </datalist>
       </Field>
-      <Field label="Total paid ($)">
+      <Field label={t("Total paid ($)")}>
         <Input name="total" required inputMode="decimal" placeholder="0.00" />
       </Field>
-      <Field label="Category">
+      <Field label={t("Category")}>
         <Select name="category" defaultValue="Smallwares">
           {SUPPLY_CATEGORIES.map((c) => (
-            <option key={c}>{c}</option>
-          ))}
-        </Select>
-      </Field>
-      <Field label="Date">
-        <Input type="date" name="purchase_date" defaultValue={todayISO()} max={todayISO()} />
-      </Field>
-      <Field label="What was bought" className="sm:col-span-2">
-        <Input name="description" placeholder="e.g. sheet pans, sanitizer buckets, to-go cups" />
-      </Field>
-      <Field label="Paid with">
-        <Select name="payment_method" defaultValue="company_card">
-          {Object.entries(PAYMENT_LABEL).map(([k, v]) => (
-            <option key={k} value={k}>
-              {v}
+            <option key={c} value={c}>
+              {t(c)}
             </option>
           ))}
         </Select>
       </Field>
-      <Field label="Card last 4 (company card)">
+      <Field label={t("Date")}>
+        <Input type="date" name="purchase_date" defaultValue={todayISO()} max={todayISO()} />
+      </Field>
+      <Field label={t("What was bought")} className="sm:col-span-2">
+        <Input name="description" placeholder={t("e.g. sheet pans, sanitizer buckets, to-go cups")} />
+      </Field>
+      <Field label={t("Paid with")}>
+        <Select name="payment_method" defaultValue="company_card">
+          {Object.entries(PAYMENT_LABEL).map(([k, v]) => (
+            <option key={k} value={k}>
+              {t(v)}
+            </option>
+          ))}
+        </Select>
+      </Field>
+      <Field label={t("Card last 4 (company card)")}>
         <Input name="card_last4" inputMode="numeric" maxLength={4} placeholder="1234" />
       </Field>
       <details className="sm:col-span-2">
-        <summary className="cursor-pointer text-xs text-slate-500">Add subtotal &amp; tax (optional)</summary>
+        <summary className="cursor-pointer text-xs text-slate-500">{t("Add subtotal & tax (optional)")}</summary>
         <div className="mt-2 grid grid-cols-2 gap-3">
-          <Field label="Subtotal ($)">
+          <Field label={t("Subtotal ($)")}>
             <Input name="subtotal" inputMode="decimal" />
           </Field>
-          <Field label="Tax ($)">
+          <Field label={t("Tax ($)")}>
             <Input name="tax" inputMode="decimal" />
           </Field>
         </div>
       </details>
       <label className="flex items-center gap-2 text-xs text-slate-600 sm:col-span-2">
-        <input type="checkbox" name="no_receipt" className="rounded border-slate-300" /> No receipt available (explain in “What was bought”)
+        <input type="checkbox" name="no_receipt" className="rounded border-slate-300" /> {t("No receipt available (explain in “What was bought”)")}
       </label>
       <div className="flex items-center gap-3 sm:col-span-2">
-        <SubmitButton pendingText="Saving…">Save purchase</SubmitButton>
+        <SubmitButton pendingText={t("Saving…")}>{t("Save purchase")}</SubmitButton>
         <Link href="/purchases" className="text-sm text-slate-500 hover:text-slate-700">
-          Cancel
+          {t("Cancel")}
         </Link>
       </div>
-      <p className="text-xs text-slate-500 sm:col-span-2">Parts for a repair? Add the receipt on the work order instead, so it counts toward that job.</p>
+      <p className="text-xs text-slate-500 sm:col-span-2">{t("Parts for a repair? Add the receipt on the work order instead, so it counts toward that job.")}</p>
     </form>  );
 }

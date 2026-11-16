@@ -2,13 +2,14 @@
 
 import { useFormStatus } from "react-dom";
 import { btnClass } from "./ui";
+import { useT } from "@/lib/i18n/client";
 import type { ReactNode } from "react";
 
 export function SubmitButton({
   children,
   variant = "primary",
   size = "md",
-  pendingText = "Saving…",
+  pendingText,
   name,
   value,
   confirm,
@@ -26,7 +27,9 @@ export function SubmitButton({
   formAction?: (fd: FormData) => void | Promise<void>;
   disabled?: boolean;
 }) {
+  const t = useT();
   const { pending, data, action } = useFormStatus();
+  pendingText ??= t("Saving…");
   // In forms with several submit buttons, only the one that was clicked shows the pending label.
   const isMine = pending && (formAction ? action === formAction : !name || data?.get(name) === value);
   return (

@@ -5,11 +5,14 @@ import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Camera, Check, ChevronDown, Loader2, Wrench, X } from "lucide-react";
 import { setChecklistResult, uploadChecklistPhoto } from "../checklist-actions";
+import { useT } from "@/lib/i18n/client";
 
 export type ChecklistItem = {
   id: string;
   activity: string;
   description: string | null;
+  activity_es?: string | null;
+  description_es?: string | null;
   photo_rule: "before_after" | "single" | "none";
   result: "ok" | "needs_repair" | "na" | null;
   note: string | null;
@@ -43,6 +46,7 @@ async function shrink(f: File): Promise<File> {
 export function ChecklistCard({ items, editable }: { items: ChecklistItem[]; editable: boolean }) {
   const done = items.filter((i) => i.done).length;
   const firstOpen = items.find((i) => !i.done)?.id ?? null;
+  const t = useT();
   const [openId, setOpenId] = useState<string | null>(editable ? firstOpen : null);
   const pct = items.length ? Math.round((done / items.length) * 100) : 0;
 
@@ -50,9 +54,9 @@ export function ChecklistCard({ items, editable }: { items: ChecklistItem[]; edi
     <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
       <div className="border-b border-slate-100 px-5 py-3.5">
         <div className="flex items-center justify-between gap-3">
-          <h2 className="text-sm font-semibold text-slate-900">PM checklist</h2>
+          <h2 className="text-sm font-semibold text-slate-900">{t("PM checklist")}</h2>
           <span className={`text-xs font-medium ${done === items.length ? "text-emerald-700" : "text-slate-600"}`}>
-            {done} of {items.length} done
+            {t("{done} of {total} done", { done, total: items.length })}
           </span>
         </div>
         <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100">
@@ -60,7 +64,7 @@ export function ChecklistCard({ items, editable }: { items: ChecklistItem[]; edi
         </div>
         {editable && done < items.length && (
           <p className="mt-2 text-xs text-slate-500">
-            Each activity needs its photos and a result before this PM can be completed. Mark N/A (with a reason) if it doesn&apos;t apply.
+            {t("Each activity needs its photos and a result before this PM can be completed. Mark N/A (with a reason) if it doesn't apply.")}
           </p>
         )}
       </div>
@@ -100,6 +104,10 @@ function Row({
   onDone: () => void;
 }) {
   const router = useRouter();
+  const t = useT();
+  const es = t.locale === "es";
+  const activity = (es && item.activity_es) || item.activity;
+  const description = (es && item.description_es) || item.description;
   const [pending, start] = useTransition();
   const [busy, setBusy] = useState<"before" | "after" | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -109,11 +117,11 @@ function Row({
   const photos: { slot: "before" | "after"; label: string; url: string | null }[] =
     item.photo_rule === "before_after"
       ? [
-          { slot: "before", label: "Before", url: item.before_url },
-          { slot: "after", label: "After", url: item.after_url },
+          { slot: "before", label: t("Before"), url: item.before_url },
+          { slot: "after", label: t("After"), url: item.after_url },
         ]
       : item.photo_rule === "single"
-        ? [{ slot: "after", label: "Photo", url: item.after_url ?? item.before_url }]
+        ? [{ slot: "after", label: t("Photo"), url: item.after_url ?? item.before_url }]
         : [];
   const photosMissing = photos.some((p) => !p.url);
 
@@ -169,12 +177,12 @@ function Row({
           {item.done ? item.result === "needs_repair" ? <Wrench className="h-3.5 w-3.5" /> : item.result === "na" ? "–" : <Check className="h-3.5 w-3.5" /> : n}
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block text-sm font-medium text-slate-900">{item.activity}</span>
+          <span className="block text-sm font-medium text-slate-900">{activity}</span>
           <span className="mt-0.5 flex flex-wrap gap-x-2 text-xs text-slate-500">
-            {item.result ? <span>{RESULT_LABEL[item.result]}</span> : <span>Not started</span>}
+            {item.result ? <span>{t(RESULT_LABEL[item.result])}</span> : <span>{t("Not started")}</span>}
             {photos.length > 0 && item.result !== "na" && (
               <span>
-                · {photos.filter((p) => p.url).length}/{photos.length} photo{photos.length > 1 ? "s" : ""}
+                · {photos.filter((p) => p.url).length}/{photos.length} {photos.length > 1 ? t("photos") : t("photo")}
               </span>
             )}
             {item.followup && <span>· repair #{item.followup.number}</span>}
@@ -193,7 +201,7 @@ function Row({
 
       {open && (
         <div className="space-y-3 bg-slate-50/60 px-5 pb-4 pt-1">
-          {item.description && <p className="text-sm text-slate-600">{item.description}</p>}
+          {description && <p className="text-sm text-slate-600">{description}</p>}
 
           {photos.length > 0 && (
             <div className="grid grid-cols-2 gap-3">
@@ -222,7 +230,7 @@ function Row({
                         : "bg-white text-slate-700 ring-slate-300 hover:bg-slate-50"
                     }`}
                   >
-                    {RESULT_LABEL[r]}
+                    {t(RESULT_LABEL[r])}
                   </button>
                 ))}
                 {pending && <Loader2 className="h-5 w-5 animate-spin self-center text-slate-400" />}
@@ -236,10 +244,10 @@ function Row({
                     className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
                     placeholder={
                       choice === "needs_repair"
-                        ? "What needs repair? This opens a repair request for admin approval."
+                        ? t("What needs repair? This opens a repair request for admin approval.")
                         : choice === "na"
-                          ? "Why doesn't this apply? (e.g. no make-up air unit at this store)"
-                          : "Note (optional)"
+                          ? t("Why doesn't this apply? (e.g. no make-up air unit at this store)")
+                          : t("Note (optional)")
                     }
                   />
                   {choice && (
@@ -249,37 +257,37 @@ function Row({
                       onClick={() => submit(choice)}
                       className="rounded-lg bg-brand-600 px-3.5 py-2 text-sm font-medium text-white disabled:opacity-50"
                     >
-                      Save {choice === "needs_repair" && !item.followup ? "& open repair request" : "note"}
+                      {choice === "needs_repair" && !item.followup ? t("Save & open repair request") : t("Save note")}
                     </button>
                   )}
                 </div>
               )}
               {choice && choice !== "na" && photosMissing && !error && (
-                <p className="text-xs text-amber-700">Add the {photos.filter((p) => !p.url).map((p) => p.label.toLowerCase()).join(" and ")} photo to finish this item.</p>
+                <p className="text-xs text-amber-700">{t("Add the {which} photo to finish this item.", { which: photos.filter((p) => !p.url).map((p) => p.label.toLowerCase()).join(` ${t("and")} `) })}</p>
               )}
             </>
           ) : (
-            item.note && <p className="text-sm text-slate-700">Note: {item.note}</p>
+            item.note && <p className="text-sm text-slate-700">{t("Note:")} {item.note}</p>
           )}
 
           {item.followup && (
             <p className="text-xs text-slate-600">
-              Repair request{" "}
+              {t("Repair request")}{" "}
               <Link href={`/work-orders/${item.followup.id}`} className="font-medium text-brand-700 hover:underline">
                 #{item.followup.number}
               </Link>{" "}
-              opened from this item.
+              {t("opened from this item.")}
             </p>
           )}
           {item.done && item.completed_by_name && (
             <p className="text-xs text-slate-400">
-              Done by {item.completed_by_name}
-              {item.completed_at ? ` · ${new Date(item.completed_at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}` : ""}
+              {t("Done by {name}", { name: item.completed_by_name })}
+              {item.completed_at ? ` · ${new Date(item.completed_at).toLocaleString(es ? "es-US" : "en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}` : ""}
             </p>
           )}
           {error && (
             <p className="flex items-center gap-1 text-sm text-red-600">
-              <X className="h-4 w-4" /> {error}
+              <X className="h-4 w-4" /> {t(error)}
             </p>
           )}
         </div>
@@ -290,6 +298,7 @@ function Row({
 
 function PhotoSlot({ label, url, busy, disabled, onFile }: { label: string; url: string | null; busy: boolean; disabled: boolean; onFile: (f: File | undefined) => void }) {
   const ref = useRef<HTMLInputElement>(null);
+  const t = useT();
   return (
     <div>
       <div className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-500">{label}</div>
@@ -307,7 +316,7 @@ function PhotoSlot({ label, url, busy, disabled, onFile }: { label: string; url:
         ) : (
           <span className="flex flex-col items-center gap-1 text-sm">
             <Camera className="h-6 w-6" />
-            Take photo
+            {t("Take photo")}
           </span>
         )}
         {busy && (
@@ -315,7 +324,7 @@ function PhotoSlot({ label, url, busy, disabled, onFile }: { label: string; url:
             <Loader2 className="h-6 w-6 animate-spin text-brand-600" />
           </span>
         )}
-        {url && !disabled && <span className="absolute bottom-1 right-1 rounded bg-black/60 px-1.5 py-0.5 text-[11px] text-white">Retake</span>}
+        {url && !disabled && <span className="absolute bottom-1 right-1 rounded bg-black/60 px-1.5 py-0.5 text-[11px] text-white">{t("Retake")}</span>}
       </button>
       <input
         ref={ref}

@@ -142,6 +142,7 @@ export async function updateUser(fd: FormData) {
 
   const vendorId = role === "vendor" ? str(fd, "vendor_id") : null;
   const patch: Record<string, unknown> = { role, vendor_id: vendorId, active, full_name: str(fd, "full_name"), phone: str(fd, "phone") };
+  if (fd.has("language")) patch.language = str(fd, "language") === "es" ? "es" : "en";
   if (superMe) patch.is_super = role === "admin" && makeSuper;
   const { error } = await supabase.from("profiles").update(patch).eq("id", id);
   if (error) redirect(withParam(back, "error", error.message));

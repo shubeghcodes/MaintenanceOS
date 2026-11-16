@@ -29,6 +29,7 @@ import {
 import type { UserRole } from "@/lib/types";
 import { CompanySelect } from "./CompanySelect";
 import { START_TOUR_EVENT } from "./OnboardingTour";
+import { useT } from "@/lib/i18n/client";
 
 const NAV: { href: string; label: string; icon: typeof Wrench; roles: UserRole[]; superOnly?: boolean }[] = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard, roles: ["admin", "manager", "tech"] },
@@ -71,6 +72,7 @@ export function Sidebar({
 }) {
   const pathname = usePathname();
   const router = useRouter();
+  const t = useT();
   const [open, setOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const helpRef = useRef<HTMLDivElement>(null);
@@ -106,14 +108,14 @@ export function Sidebar({
             )}
           >
             <Icon className="h-4 w-4" aria-hidden />
-            {label}
+            {t(label)}
             {href === "/work-orders" && approvalsWaiting > 0 && (
-              <span className="ml-auto rounded-full bg-orange-400 px-1.5 py-0.5 text-[11px] font-semibold text-slate-900" title={role === "manager" ? `${approvalsWaiting} job(s) waiting for your sign-off` : `${approvalsWaiting} work order(s) need approval`}>
+              <span className="ml-auto rounded-full bg-orange-400 px-1.5 py-0.5 text-[11px] font-semibold text-slate-900" title={role === "manager" ? t("{n} job(s) waiting for your sign-off", { n: approvalsWaiting }) : t("{n} work order(s) need approval", { n: approvalsWaiting })}>
                 {approvalsWaiting}
               </span>
             )}
             {href === "/analytics" && receiptsToReview > 0 && (
-              <span className="ml-auto rounded-full bg-amber-400 px-1.5 py-0.5 text-[11px] font-semibold text-slate-900" title={`${receiptsToReview} receipt(s) to review`}>
+              <span className="ml-auto rounded-full bg-amber-400 px-1.5 py-0.5 text-[11px] font-semibold text-slate-900" title={t("{n} receipt(s) to review", { n: receiptsToReview })}>
                 {receiptsToReview}
               </span>
             )}
@@ -140,23 +142,23 @@ export function Sidebar({
           aria-haspopup="menu"
           className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-medium text-slate-300 hover:bg-white/5 hover:text-white"
         >
-          <HelpCircle className="h-4 w-4" aria-hidden /> Help
+          <HelpCircle className="h-4 w-4" aria-hidden /> {t("Help")}
         </button>
         {helpOpen && (
           <div role="menu" className="absolute bottom-full left-0 z-10 mb-1 w-48 rounded-lg bg-white p-1 shadow-lg ring-1 ring-slate-200">
             <button role="menuitem" onClick={takeTour} className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-100">
-              <Compass className="h-4 w-4 text-slate-500" aria-hidden /> Take a tour
+              <Compass className="h-4 w-4 text-slate-500" aria-hidden /> {t("Take a tour")}
             </button>
           </div>
         )}
       </div>
       <Link href="/account" onClick={() => setOpen(false)} className="block rounded-md hover:opacity-80">
         <p className="truncate text-sm font-medium text-white">{name}</p>
-        <p className="text-xs text-slate-400">{roleLabel} · My account</p>
+        <p className="text-xs text-slate-400">{roleLabel} · {t("My account")}</p>
       </Link>
       <form action="/auth/signout" method="post" className="mt-3">
         <button className="flex items-center gap-2 text-xs text-slate-400 hover:text-white">
-          <LogOut className="h-3.5 w-3.5" aria-hidden /> Sign out
+          <LogOut className="h-3.5 w-3.5" aria-hidden /> {t("Sign out")}
         </button>
       </form>
     </div>
@@ -173,7 +175,7 @@ export function Sidebar({
 
   const picker = companyPicker && (
     <div className="px-4 pb-4" data-tour="company">
-      <CompanySelect companies={companyPicker.companies} value={companyPicker.value} canManage={isSuper} variant="dark" label="Company" />
+      <CompanySelect companies={companyPicker.companies} value={companyPicker.value} canManage={isSuper} variant="dark" label={t("Company")} />
     </div>
   );
 
@@ -185,7 +187,7 @@ export function Sidebar({
           <Wrench className="h-4 w-4 text-brand-100" aria-hidden />
           <span className="font-semibold text-white">MaintenanceOS</span>
         </div>
-        <button onClick={() => setOpen(true)} className="text-slate-200" aria-label="Open menu">
+        <button onClick={() => setOpen(true)} className="text-slate-200" aria-label={t("Open menu")}>
           <Menu className="h-5 w-5" />
         </button>
       </div>
@@ -194,7 +196,7 @@ export function Sidebar({
         <div className="fixed inset-0 z-40 lg:hidden">
           <div className="absolute inset-0 bg-slate-900/50" onClick={() => setOpen(false)} />
           <aside className="absolute inset-y-0 left-0 flex w-64 flex-col bg-slate-900">
-            <button onClick={() => setOpen(false)} className="absolute right-3 top-5 text-slate-300" aria-label="Close menu">
+            <button onClick={() => setOpen(false)} className="absolute right-3 top-5 text-slate-300" aria-label={t("Close menu")}>
               <X className="h-5 w-5" />
             </button>
             {brand}

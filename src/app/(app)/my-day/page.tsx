@@ -13,6 +13,8 @@ import { changeTimer, startTimer } from "../work-orders/time-actions";
 import { ClockCard, type ClockJob, type OpenShift } from "./ClockCard";
 import { toDateInput, fmtDate } from "@/lib/format";
 import { redirect } from "next/navigation";
+import { getT } from "@/lib/i18n/server";
+import { plural } from "@/lib/i18n";
 
 export const metadata = { title: "My day" };
 export const dynamic = "force-dynamic";
@@ -42,6 +44,9 @@ export default async function MyDayPage({ searchParams }: { searchParams: Promis
   const { supabase, profile } = await getSession();
   if (profile.role === "vendor") redirect("/work-orders");
   if (profile.role === "manager") redirect("/");
+  const t = await getT();
+  const tr = t;
+  const L = t.locale;
 
   const date = isISODate(sp.date) ? sp.date : todayISO();
   const techId = profile.role === "admin" && sp.tech ? sp.tech : profile.id;
@@ -70,7 +75,7 @@ export default async function MyDayPage({ searchParams }: { searchParams: Promis
   const done = jobs.filter((j) => j.status === "completed" || j.status === "awaiting_signoff").length;
   const nav = (d: string) => `/my-day?date=${d}${!isMe ? `&tech=${techId}` : ""}`;
   const back = nav(date);
-  const techLabel = isMe ? "My day" : `${personName(techs.find((t) => t.id === techId))}’s day`;
+  const techLabel = isMe ? t("My day") : t("{name}’s day", { name: personName(techs.find((x) => x.id === techId)) });
 
   // Clock in / out (technicians only).
   const { data: techRow } = await supabase.from("profiles").select("role").eq("id", techId).maybeSingle();
@@ -133,10 +138,10 @@ export default async function MyDayPage({ searchParams }: { searchParams: Promis
       const startDay = toDateInput(sh.clock_in_at);
       shift = {
         clock_in_at: sh.clock_in_at,
-        clockInTime: `${startDay === today ? "" : `${fmtDate(startDay)} `}${fmtClockTime(sh.clock_in_at)}`,
-        firstLabel: sh.first ? `#${sh.first.number} ${sh.first.title}` : (sh.start_reason ?? "no work order"),
+        clockInTime: `${startDay === today ? "" : `${fmtDate(startDay, L)} `}${fmtClockTime(sh.clock_in_at)}`,
+        firstLabel: sh.first ? `#${sh.first.number} ${sh.first.title}` : t(sh.start_reason ?? "no work order"),
         staleDate: startDay < today ? startDay : null,
-        staleLabel: startDay < today ? fmtDate(startDay) : null,
+        staleLabel: startDay < today ? fmtDate(startDay, L) : null,
         lunch: onLunch ? { since: onLunch.started_at, sinceTime: fmtClockTime(onLunch.started_at) } : null,
         lunchMinutes,
       };
@@ -147,43 +152,43 @@ export default async function MyDayPage({ searchParams }: { searchParams: Promis
     <>
       <PageHeader
         title={techLabel}
-        subtitle={`${dayLabel(date, "long")} · ${jobs.length} job${jobs.length === 1 ? "" : "s"}${hours ? ` · ~${hours}h` : ""}${jobs.length ? ` · ${done} done` : ""}`}
+        subtitle={`${dayLabel(date, "long", L)} · ${plural(t, jobs.length, "{n} job", "{n} jobs")}${hours ? ` · ~${hours}h` : ""}${jobs.length ? ` · ${t("{n} done", { n: done })}` : ""}`}
         actions={
           <div className="flex items-center gap-2">
           <Link
             href="/purchases/new"
             className="inline-flex items-center gap-1.5 rounded-lg bg-white px-3 py-2 text-sm font-medium text-slate-700 ring-1 ring-slate-300 hover:bg-slate-50"
-            title="Restaurant supplies not tied to a job"
+            title={t("Restaurant supplies not tied to a job")}
           >
-            <Receipt className="h-4 w-4" aria-hidden /> Log a purchase
+            <Receipt className="h-4 w-4" aria-hidden /> {t("Log a purchase")}
           </Link>
           <div className="flex items-center rounded-lg bg-white ring-1 ring-slate-300">
-            <Link href={nav(addDaysISO(date, -1))} className="px-2 py-2 text-slate-600 hover:bg-slate-50" aria-label="Previous day">
+            <Link href={nav(addDaysISO(date, -1))} className="px-2 py-2 text-slate-600 hover:bg-slate-50" aria-label={t("Previous day")}>
               <ChevronLeft className="h-4 w-4" />
             </Link>
             <Link href={nav(todayISO())} className="border-x border-slate-300 px-3 py-1.5 text-sm font-medium hover:bg-slate-50">
-              Today
+              {t("Today")}
             </Link>
-            <Link href={nav(addDaysISO(date, 1))} className="px-2 py-2 text-slate-600 hover:bg-slate-50" aria-label="Next day">
+            <Link href={nav(addDaysISO(date, 1))} className="px-2 py-2 text-slate-600 hover:bg-slate-50" aria-label={t("Next day")}>
               <ChevronRight className="h-4 w-4" />
             </Link>
           </div>
           </div>
         }
       />
-      {sp.error && <Alert>{sp.error}</Alert>}
-      {sp.clock === "in" && <Alert tone="good">Clocked in. Your first job&apos;s timer is running.</Alert>}
-      {sp.clock === "out" && <Alert tone="good">Clocked out. Have a good one.</Alert>}
-      {sp.clock === "lunch" && <Alert tone="good">Enjoy your lunch. Your job timer is paused.</Alert>}
-      {sp.clock === "back" && <Alert tone="good">Welcome back.{sp.resumed ? ` Your timer on #${sp.resumed} is running again.` : ""}</Alert>}
-      {sp.clock === "out_done" && <Alert tone="good">Clocked out, and the job was sent to the store&apos;s GM to confirm it&apos;s fixed.</Alert>}
+      {sp.error && <Alert>{t(sp.error)}</Alert>}
+      {sp.clock === "in" && <Alert tone="good">{t("Clocked in. Your first job's timer is running.")}</Alert>}
+      {sp.clock === "out" && <Alert tone="good">{t("Clocked out. Have a good one.")}</Alert>}
+      {sp.clock === "lunch" && <Alert tone="good">{t("Enjoy your lunch. Your job timer is paused.")}</Alert>}
+      {sp.clock === "back" && <Alert tone="good">{t("Welcome back.")}{sp.resumed ? ` ${t("Your timer on #{n} is running again.", { n: sp.resumed })}` : ""}</Alert>}
+      {sp.clock === "out_done" && <Alert tone="good">{t("Clocked out, and the job was sent to the store's GM to confirm it's fixed.")}</Alert>}
       {clocks && isMe && <ClockCard key={shift ? "on" : "off"} shift={shift} jobs={clockJobs} lastJobId={lastJobId} preselectJobId={sp.clockin || null} />}
       {clocks && !isMe && (
         <p className={`mb-4 rounded-lg px-4 py-2.5 text-sm ring-1 ring-inset ${shift ? "bg-emerald-50 text-emerald-900 ring-emerald-200" : "bg-slate-50 text-slate-600 ring-slate-200"}`}>
-          {shift ? `${shift.lunch ? `On lunch since ${shift.lunch.sinceTime} · ` : ""}Clocked in since ${shift.clockInTime} · started on ${shift.firstLabel}` : "Clocked out"}
+          {shift ? `${shift.lunch ? `${t("On lunch since {time}", { time: shift.lunch.sinceTime })} · ` : ""}${t("Clocked in since {time}", { time: shift.clockInTime })} · ${t("started on {job}", { job: shift.firstLabel })}` : t("Clocked out")}
         </p>
       )}
-      {sp.timer?.includes("_paused_") && <Alert tone="good">Timer started. Your other timer (#{sp.timer.split("_paused_")[1]}) was paused, since only one can run at a time.</Alert>}
+      {sp.timer?.includes("_paused_") && <Alert tone="good">{t("Timer started. Your other timer (#{n}) was paused, since only one can run at a time.", { n: sp.timer.split("_paused_")[1] })}</Alert>}
 
       {timers.length > 0 && (
         <div className="mb-4 space-y-2">
@@ -195,7 +200,7 @@ export default async function MyDayPage({ searchParams }: { searchParams: Promis
                   #{t.wo?.number} {t.wo?.title}
                 </Link>
                 <p className="text-xs text-slate-500">
-                  {t.status === "running" ? "Running" : "Paused"} · started {fmtClockTime(t.started_at)} · visit {t.visit}
+                  {t.status === "running" ? tr("Running") : tr("Paused")} · {tr("started {time}", { time: fmtClockTime(t.started_at) })} · {tr("visit {n}", { n: t.visit })}
                 </p>
               </div>
               <TimerClock worked={t.worked_seconds} resumedAt={t.status === "running" ? t.last_resumed_at : null} className="font-mono text-lg font-semibold tabular-nums" />
@@ -205,15 +210,15 @@ export default async function MyDayPage({ searchParams }: { searchParams: Promis
                   <input type="hidden" name="back" value={back} />
                   {t.status === "running" ? (
                     <SubmitButton size="sm" variant="secondary" formAction={changeTimer.bind(null, "pause")} pendingText="…">
-                      <Pause className="h-3.5 w-3.5" aria-hidden /> Pause
+                      <Pause className="h-3.5 w-3.5" aria-hidden /> {tr("Pause")}
                     </SubmitButton>
                   ) : (
                     <SubmitButton size="sm" variant="secondary" formAction={changeTimer.bind(null, "resume")} pendingText="…">
-                      <Play className="h-3.5 w-3.5" aria-hidden /> Resume
+                      <Play className="h-3.5 w-3.5" aria-hidden /> {tr("Resume")}
                     </SubmitButton>
                   )}
-                  <SubmitButton size="sm" formAction={changeTimer.bind(null, "stop")} pendingText="…" confirm="Stop this timer?">
-                    <Square className="h-3.5 w-3.5" aria-hidden /> Stop
+                  <SubmitButton size="sm" formAction={changeTimer.bind(null, "stop")} pendingText="…" confirm={tr("Stop this timer?")}>
+                    <Square className="h-3.5 w-3.5" aria-hidden /> {tr("Stop")}
                   </SubmitButton>
                 </form>
               )}
@@ -233,20 +238,20 @@ export default async function MyDayPage({ searchParams }: { searchParams: Promis
             ))}
           </Select>
           <Button size="sm" variant="secondary" type="submit">
-            View
+            {t("View")}
           </Button>
         </form>
       )}
 
       {jobs.length === 0 ? (
         <Card>
-          <EmptyState title="Nothing scheduled for this day.">
+          <EmptyState title={t("Nothing scheduled for this day.")}>
             {profile.role === "admin" ? (
               <Link href={`/schedule?view=day&date=${date}`} className="text-brand-700">
-                Open the schedule
+                {t("Open the schedule")}
               </Link>
             ) : (
-              "Check open jobs below, or ask dispatch."
+              t("Check open jobs below, or ask dispatch.")
             )}
           </EmptyState>
         </Card>
@@ -261,7 +266,7 @@ export default async function MyDayPage({ searchParams }: { searchParams: Promis
                   <div className="flex gap-4 p-4">
                     <div className="flex w-16 flex-none flex-col items-center">
                       <span className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white">{i + 1}</span>
-                      <span className="mt-1 text-center text-xs font-medium text-slate-700">{fmtTime(j.scheduled_start) || "Anytime"}</span>
+                      <span className="mt-1 text-center text-xs font-medium text-slate-700">{fmtTime(j.scheduled_start) || t("Anytime")}</span>
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
@@ -298,20 +303,20 @@ export default async function MyDayPage({ searchParams }: { searchParams: Promis
                             rel="noreferrer"
                             className="inline-flex items-center gap-1.5 rounded-lg bg-white px-3 py-1.5 text-xs font-medium text-slate-700 ring-1 ring-slate-300 hover:bg-slate-50"
                           >
-                            <Navigation className="h-3.5 w-3.5" aria-hidden /> Directions
+                            <Navigation className="h-3.5 w-3.5" aria-hidden /> {t("Directions")}
                           </a>
                         )}
                         {j.site?.phone && (
                           <a href={`tel:${j.site.phone}`} className="inline-flex items-center gap-1.5 rounded-lg bg-white px-3 py-1.5 text-xs font-medium text-slate-700 ring-1 ring-slate-300 hover:bg-slate-50">
-                            <Phone className="h-3.5 w-3.5" aria-hidden /> Call site
+                            <Phone className="h-3.5 w-3.5" aria-hidden /> {t("Call site")}
                           </a>
                         )}
                         {isMe && !closed && j.status !== "cancelled" && !timerFor(j.id) && (
                           <form action={startTimer}>
                             <input type="hidden" name="work_order_id" value={j.id} />
                             <input type="hidden" name="back" value={back} />
-                            <SubmitButton size="sm" variant="secondary" pendingText="Starting…">
-                              <Play className="h-3.5 w-3.5" aria-hidden /> {j.status === "in_progress" ? "Start timer" : "Start work"}
+                            <SubmitButton size="sm" variant="secondary" pendingText={t("Starting…")}>
+                              <Play className="h-3.5 w-3.5" aria-hidden /> {j.status === "in_progress" ? t("Start timer") : t("Start work")}
                             </SubmitButton>
                           </form>
                         )}
@@ -323,11 +328,11 @@ export default async function MyDayPage({ searchParams }: { searchParams: Promis
                         )}
                         {!closed && (
                           <Link href={`/work-orders/${j.id}?add_receipt=1#receipts`} className="inline-flex items-center gap-1.5 rounded-lg bg-white px-3 py-1.5 text-xs font-medium text-slate-700 ring-1 ring-slate-300 hover:bg-slate-50">
-                            <Receipt className="h-3.5 w-3.5" aria-hidden /> Add receipt
+                            <Receipt className="h-3.5 w-3.5" aria-hidden /> {t("Add receipt")}
                           </Link>
                         )}
                         <Link href={`/work-orders/${j.id}`} className="inline-flex items-center rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-700">
-                          {closed ? "View" : "Open job"}
+                          {closed ? t("View") : t("Open job")}
                         </Link>
                       </div>
                     </div>
@@ -341,7 +346,7 @@ export default async function MyDayPage({ searchParams }: { searchParams: Promis
 
       {unscheduled.length > 0 && (
         <Card className="mt-6">
-          <CardHeader title={isMe ? "Also assigned to you (not scheduled)" : "Also assigned (not scheduled)"} />
+          <CardHeader title={isMe ? t("Also assigned to you (not scheduled)") : t("Also assigned (not scheduled)")} />
           <ul className="divide-y divide-slate-100">
             {unscheduled.map((j) => (
               <li key={j.id}>
@@ -350,7 +355,7 @@ export default async function MyDayPage({ searchParams }: { searchParams: Promis
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">{j.title}</p>
                     <p className="text-xs text-slate-500">
-                      {j.site?.code ?? j.site?.name} · due {dueWhen(j.due_at)}
+                      {j.site?.code ?? j.site?.name} · {t("due {when}", { when: dueWhen(j.due_at, L) })}
                     </p>
                   </div>
                   <PriorityBadge priority={j.priority} />

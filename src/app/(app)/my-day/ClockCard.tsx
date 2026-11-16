@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { Coffee, LogIn, LogOut, MapPin, Play } from "lucide-react";
 import { TimerClock } from "@/components/TimerClock";
 import { clockIn, clockOut, lunchEnd, lunchStart } from "./clock-actions";
+import { useT } from "@/lib/i18n/client";
 
 export type ClockJob = { id: string; number: number; title: string; site: string | null; open: boolean; today?: boolean };
 /** staleDate: the YYYY-MM-DD the shift started on, when that was before today (forgot to clock out). */
@@ -37,6 +38,7 @@ export function ClockCard({
   lastJobId: string | null;
   preselectJobId: string | null;
 }) {
+  const t = useT();
   const [open, setOpen] = useState(!!preselectJobId || !!shift?.staleDate);
   const [pick, setPick] = useState<string>(shift ? (lastJobId ?? jobs[0]?.id ?? "none") : (preselectJobId ?? jobs.find((j) => j.open)?.id ?? "none"));
   const [finished, setFinished] = useState<"yes" | "no">("no");
@@ -79,20 +81,22 @@ export function ClockCard({
         <option key={j.id} value={j.id}>
           #{j.number} {j.title}
           {j.site ? ` · ${j.site}` : ""}
-          {j.today ? " (today)" : ""}
+          {j.today ? ` (${t("today")})` : ""}
         </option>
       ))}
-      <option value="none">No work order (shop, parts run, training…)</option>
+      <option value="none">{t("No work order (shop, parts run, training…)")}</option>
     </select>
   );
 
   const reasonSelect = pick === "none" && (
     <select name="reason" defaultValue="" required className="mt-2 block w-full rounded-lg border-0 bg-white px-3 py-2.5 text-sm ring-1 ring-inset ring-slate-300">
       <option value="" disabled>
-        Why no work order?
+        {t("Why no work order?")}
       </option>
       {NO_JOB_REASONS.map((r) => (
-        <option key={r}>{r}</option>
+        <option key={r} value={r}>
+          {t(r)}
+        </option>
       ))}
     </select>
   );
@@ -111,29 +115,29 @@ export function ClockCard({
         {!open ? (
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="text-sm font-semibold text-slate-900">You&apos;re clocked out</p>
-              <p className="text-xs text-slate-500">Clock in on your first job to start your day.</p>
+              <p className="text-sm font-semibold text-slate-900">{t("You're clocked out")}</p>
+              <p className="text-xs text-slate-500">{t("Clock in on your first job to start your day.")}</p>
             </div>
             <button onClick={() => setOpen(true)} className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700">
-              <LogIn className="h-4 w-4" aria-hidden /> Clock in
+              <LogIn className="h-4 w-4" aria-hidden /> {t("Clock in")}
             </button>
           </div>
         ) : (
           <form ref={formRef} action={clockIn} onSubmit={onSubmit} className="space-y-3">
-            <p className="text-sm font-semibold text-slate-900">Clock in: what&apos;s your first job?</p>
+            <p className="text-sm font-semibold text-slate-900">{t("Clock in: what's your first job?")}</p>
             {select}
             {reasonSelect}
             {hidden}
             <p className="flex items-center gap-1 text-xs text-slate-500">
-              <MapPin className="h-3.5 w-3.5" aria-hidden /> Your location is saved with this punch only.
-              {pick !== "none" && " The job's timer starts now."}
+              <MapPin className="h-3.5 w-3.5" aria-hidden /> {t("Your location is saved with this punch only.")}
+              {pick !== "none" && ` ${t("The job's timer starts now.")}`}
             </p>
             <div className="flex gap-2">
               <button disabled={busy} className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-60">
-                <LogIn className="h-4 w-4" aria-hidden /> {busy ? "Clocking in…" : "Clock in"}
+                <LogIn className="h-4 w-4" aria-hidden /> {busy ? t("Clocking in…") : t("Clock in")}
               </button>
               <button type="button" onClick={() => setOpen(false)} className="rounded-lg px-3 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-100">
-                Cancel
+                {t("Cancel")}
               </button>
             </div>
           </form>
@@ -147,14 +151,14 @@ export function ClockCard({
       <div id="clock" className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-amber-50 p-4 ring-1 ring-amber-200">
         <div>
           <p className="flex items-center gap-1.5 text-sm font-semibold text-amber-950">
-            <Coffee className="h-4 w-4" aria-hidden /> On lunch since {shift.lunch.sinceTime}
+            <Coffee className="h-4 w-4" aria-hidden /> {t("On lunch since {time}", { time: shift.lunch.sinceTime })}
           </p>
-          <p className="text-xs text-amber-900">Your job timer is paused. It picks up again when you end lunch.</p>
+          <p className="text-xs text-amber-900">{t("Your job timer is paused. It picks up again when you end lunch.")}</p>
         </div>
         <TimerClock worked={0} resumedAt={shift.lunch.since} className="font-mono text-xl font-semibold tabular-nums text-amber-950" />
         <form action={lunchEnd}>
           <button className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700">
-            <Play className="h-4 w-4" aria-hidden /> End lunch
+            <Play className="h-4 w-4" aria-hidden /> {t("End lunch")}
           </button>
         </form>
       </div>
@@ -166,21 +170,21 @@ export function ClockCard({
       {!open ? (
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="text-sm font-semibold text-slate-900">Clocked in since {shift.clockInTime}</p>
+            <p className="text-sm font-semibold text-slate-900">{t("Clocked in since {time}", { time: shift.clockInTime })}</p>
             <p className="text-xs text-slate-600">
-              Started on {shift.firstLabel}
-              {shift.lunchMinutes > 0 && ` · lunch ${shift.lunchMinutes} min`}
+              {t("Started on {job}", { job: shift.firstLabel })}
+              {shift.lunchMinutes > 0 && ` · ${t("lunch {n} min", { n: shift.lunchMinutes })}`}
             </p>
           </div>
           <TimerClock worked={0} resumedAt={shift.clock_in_at} className="font-mono text-xl font-semibold tabular-nums text-emerald-900" />
           <div className="flex flex-wrap gap-2">
             <form action={lunchStart}>
               <button className="inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2.5 text-sm font-semibold text-amber-900 shadow-sm ring-1 ring-inset ring-amber-300 hover:bg-amber-50">
-                <Coffee className="h-4 w-4" aria-hidden /> Start lunch
+                <Coffee className="h-4 w-4" aria-hidden /> {t("Start lunch")}
               </button>
             </form>
             <button onClick={() => setOpen(true)} className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-slate-800">
-              <LogOut className="h-4 w-4" aria-hidden /> Clock out
+              <LogOut className="h-4 w-4" aria-hidden /> {t("Clock out")}
             </button>
           </div>
         </div>
@@ -188,34 +192,34 @@ export function ClockCard({
         <form ref={formRef} action={clockOut} onSubmit={onSubmit} className="space-y-3">
           {shift.staleDate ? (
             <div>
-              <p className="text-sm font-semibold text-red-900">You didn&apos;t clock out on {shift.staleLabel}.</p>
-              <p className="text-xs text-red-800">Enter the time you actually finished that day.</p>
+              <p className="text-sm font-semibold text-red-900">{t("You didn't clock out on {date}.", { date: shift.staleLabel })}</p>
+              <p className="text-xs text-red-800">{t("Enter the time you actually finished that day.")}</p>
               <div className="mt-2 grid grid-cols-2 gap-2">
                 <input type="date" name="out_date" required defaultValue={shift.staleDate} className="rounded-lg border-0 px-3 py-2 text-sm ring-1 ring-inset ring-slate-300" />
                 <input type="time" name="out_time" required className="rounded-lg border-0 px-3 py-2 text-sm ring-1 ring-inset ring-slate-300" />
               </div>
             </div>
           ) : (
-            <p className="text-sm font-semibold text-slate-900">Clock out: what was your last job?</p>
+            <p className="text-sm font-semibold text-slate-900">{t("Clock out: what was your last job?")}</p>
           )}
           {select}
           {reasonSelect}
           {job?.open && (
             <fieldset className="rounded-lg bg-white p-3 ring-1 ring-slate-200">
-              <legend className="px-1 text-sm font-medium text-slate-800">Is this job finished?</legend>
+              <legend className="px-1 text-sm font-medium text-slate-800">{t("Is this job finished?")}</legend>
               <div className="flex flex-wrap gap-4 text-sm">
                 <label className="flex items-center gap-2">
-                  <input type="radio" name="finished" value="yes" checked={finished === "yes"} onChange={() => setFinished("yes")} /> Yes, it&apos;s done
+                  <input type="radio" name="finished" value="yes" checked={finished === "yes"} onChange={() => setFinished("yes")} /> {t("Yes, it's done")}
                 </label>
                 <label className="flex items-center gap-2">
-                  <input type="radio" name="finished" value="no" checked={finished === "no"} onChange={() => setFinished("no")} /> Not yet, coming back
+                  <input type="radio" name="finished" value="no" checked={finished === "no"} onChange={() => setFinished("no")} /> {t("Not yet, coming back")}
                 </label>
               </div>
               {finished === "yes" && (
                 <textarea
                   name="resolution_notes"
                   rows={2}
-                  placeholder="What did you do? (sent to the store's GM to confirm)"
+                  placeholder={t("What did you do? (sent to the store's GM to confirm)")}
                   className="mt-2 block w-full rounded-lg border-0 px-3 py-2 text-sm ring-1 ring-inset ring-slate-300"
                 />
               )}
@@ -223,14 +227,14 @@ export function ClockCard({
           )}
           {hidden}
           <p className="flex items-center gap-1 text-xs text-slate-500">
-            <MapPin className="h-3.5 w-3.5" aria-hidden /> Any running job timer stops when you clock out.
+            <MapPin className="h-3.5 w-3.5" aria-hidden /> {t("Any running job timer stops when you clock out.")}
           </p>
           <div className="flex gap-2">
             <button disabled={busy} className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-slate-800 disabled:opacity-60">
-              <LogOut className="h-4 w-4" aria-hidden /> {busy ? "Clocking out…" : "Clock out"}
+              <LogOut className="h-4 w-4" aria-hidden /> {busy ? t("Clocking out…") : t("Clock out")}
             </button>
             <button type="button" onClick={() => setOpen(false)} className="rounded-lg px-3 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-100">
-              Cancel
+              {t("Cancel")}
             </button>
           </div>
         </form>

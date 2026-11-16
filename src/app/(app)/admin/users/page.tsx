@@ -196,6 +196,11 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
                         <td className="px-3 py-3">
                           <div className="flex flex-wrap items-center gap-1">
                             <RoleBadge u={u} />
+                            {u.language === "es" && (
+                              <Badge tone="neutral" dot={false}>
+                                ES
+                              </Badge>
+                            )}
                             {!u.active && <Badge tone="muted">Inactive</Badge>}
                           </div>
                         </td>

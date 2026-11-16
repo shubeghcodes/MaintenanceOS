@@ -1,4 +1,7 @@
+"use client";
+
 import { FileText, Paperclip } from "lucide-react";
+import { useT } from "@/lib/i18n/client";
 import { Card, CardHeader } from "./ui";
 import { SubmitButton } from "./SubmitButton";
 import { PhotoInput } from "./PhotoInput";
@@ -9,7 +12,7 @@ export function Attachments({
   items,
   action,
   hidden,
-  title = "Photos & files",
+  title,
   allowInternal = false,
   categories = false,
 }: {
@@ -20,9 +23,10 @@ export function Attachments({
   allowInternal?: boolean;
   categories?: boolean;
 }) {
+  const t = useT();
   return (
     <Card>
-      <CardHeader title={title} subtitle={`${items.length} file${items.length === 1 ? "" : "s"}`} />
+      <CardHeader title={title ?? t("Photos & files")} subtitle={t(items.length === 1 ? "{n} file" : "{n} files", { n: items.length })} />
       <div className="p-5">
         {items.length > 0 ? (
           <ul className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -39,17 +43,17 @@ export function Attachments({
                   )}
                   <p className="mt-1 truncate text-xs text-slate-700">{a.file_name}</p>
                   <p className="truncate text-[11px] text-slate-400">
-                    {a.category && a.category !== "photo" && <span className="mr-1 font-medium capitalize text-slate-600">{a.category}</span>}
-                    {a.visibility === "internal" && <span className="mr-1 font-medium text-amber-700">Internal</span>}
+                    {a.category && a.category !== "photo" && <span className="mr-1 font-medium capitalize text-slate-600">{t(a.category)}</span>}
+                    {a.visibility === "internal" && <span className="mr-1 font-medium text-amber-700">{t("Internal")}</span>}
                     {a.uploaded_by_label ? `${a.uploaded_by_label} · ` : ""}
-                    {fmtDate(a.created_at)}
+                    {fmtDate(a.created_at, t.locale)}
                   </p>
                 </a>
               </li>
             ))}
           </ul>
         ) : (
-          <p className="text-sm text-slate-500">No files yet.</p>
+          <p className="text-sm text-slate-500">{t("No files yet.")}</p>
         )}
         {action && (
           <form action={action} className="mt-4 flex flex-wrap items-center gap-3 border-t border-slate-100 pt-4">
@@ -59,19 +63,19 @@ export function Attachments({
               <PhotoInput name="files" />
             </label>
             {categories && (
-              <select name="category" defaultValue="photo" className="rounded-md border-0 py-1 pl-2 pr-7 text-xs ring-1 ring-slate-300" aria-label="File type">
-                <option value="photo">Photo</option>
-                <option value="certificate">Certificate</option>
-                <option value="document">Document</option>
-                <option value="invoice">Invoice</option>
+              <select name="category" defaultValue="photo" className="rounded-md border-0 py-1 pl-2 pr-7 text-xs ring-1 ring-slate-300" aria-label={t("File type")}>
+                <option value="photo">{t("Photo")}</option>
+                <option value="certificate">{t("Certificate")}</option>
+                <option value="document">{t("Document")}</option>
+                <option value="invoice">{t("Invoice")}</option>
               </select>
             )}
             {allowInternal && (
-              <label className="flex items-center gap-1.5 text-xs text-slate-600" title="Hidden from outside vendors">
-                <input type="checkbox" name="internal" className="rounded border-slate-300" /> Internal only
+              <label className="flex items-center gap-1.5 text-xs text-slate-600" title={t("Hidden from outside vendors")}>
+                <input type="checkbox" name="internal" className="rounded border-slate-300" /> {t("Internal only")}
               </label>
             )}
-            <SubmitButton size="sm" variant="secondary" pendingText="Uploading…">Upload</SubmitButton>
+            <SubmitButton size="sm" variant="secondary" pendingText={t("Uploading…")}>{t("Upload")}</SubmitButton>
           </form>
         )}
       </div>

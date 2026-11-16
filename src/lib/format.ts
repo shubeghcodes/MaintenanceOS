@@ -2,16 +2,20 @@ import type { FreqUnit } from "./types";
 
 const TZ = process.env.NEXT_PUBLIC_TIMEZONE || "America/Los_Angeles";
 
-export function fmtDate(value: string | null | undefined) {
+/** Language for dates: "es" gives Spanish month and day names. */
+type Lang = "en" | "es" | undefined;
+const loc = (lang: Lang) => (lang === "es" ? "es-US" : "en-US");
+
+export function fmtDate(value: string | null | undefined, lang?: Lang) {
   if (!value) return "—";
   // Plain dates (YYYY-MM-DD) are calendar dates — don't shift them by timezone.
   const d = /^\d{4}-\d{2}-\d{2}$/.test(value) ? new Date(value + "T12:00:00") : new Date(value);
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: TZ });
+  return d.toLocaleDateString(loc(lang), { month: "short", day: "numeric", year: "numeric", timeZone: TZ });
 }
 
-export function fmtDateTime(value: string | null | undefined) {
+export function fmtDateTime(value: string | null | undefined, lang?: Lang) {
   if (!value) return "—";
-  return new Date(value).toLocaleString("en-US", {
+  return new Date(value).toLocaleString(loc(lang), {
     month: "short",
     day: "numeric",
     hour: "numeric",
@@ -57,17 +61,19 @@ export function daysUntil(iso: string | null | undefined) {
 }
 
 /** Lowercase phrase that reads after "due"/"next": "today", "in 3d", "5d overdue". */
-export function dueWhen(iso: string | null | undefined) {
+export function dueWhen(iso: string | null | undefined, lang?: Lang) {
   const d = daysUntil(iso);
   if (d == null) return "—";
+  if (lang === "es") return d === 0 ? "hoy" : d < 0 ? `${-d} d de atraso` : `en ${d} d`;
   if (d === 0) return "today";
   if (d < 0) return `${-d}d overdue`;
   return `in ${d}d`;
 }
 
-export function relativeDue(iso: string | null | undefined) {
+export function relativeDue(iso: string | null | undefined, lang?: Lang) {
   const d = daysUntil(iso);
   if (d == null) return "—";
+  if (lang === "es") return d === 0 ? "Vence hoy" : d < 0 ? `${-d} d de atraso` : `En ${d} d`;
   if (d === 0) return "Due today";
   if (d < 0) return `${-d}d overdue`;
   return `In ${d}d`;
@@ -131,11 +137,13 @@ export function weekStartISO(iso: string, startDay = 1) {
 }
 
 /** "Mon 11/16" style labels for calendar headers. */
-export function dayLabel(iso: string, style: "short" | "long" = "short") {
+export function dayLabel(iso: string, style: "short" | "long" = "short", lang?: Lang) {
   const d = new Date(iso + "T12:00:00Z");
-  return style === "short"
-    ? d.toLocaleDateString("en-US", { weekday: "short", month: "numeric", day: "numeric", timeZone: "UTC" })
-    : d.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", timeZone: "UTC" });
+  const s =
+    style === "short"
+      ? d.toLocaleDateString(loc(lang), { weekday: "short", month: "numeric", day: "numeric", timeZone: "UTC" })
+      : d.toLocaleDateString(loc(lang), { weekday: "long", month: "long", day: "numeric", timeZone: "UTC" });
+  return lang === "es" ? s.charAt(0).toUpperCase() + s.slice(1) : s;
 }
 
 export function isISODate(v: string | null | undefined): v is string {

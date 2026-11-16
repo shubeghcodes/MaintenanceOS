@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { X } from "lucide-react";
 import type { UserRole } from "@/lib/types";
 import { saveTourState } from "@/app/(app)/tour-actions";
+import { useT } from "@/lib/i18n/client";
 
 /** Fire this (e.g. from the Help menu) to start the tour on the current page. */
 export const START_TOUR_EVENT = "mos:start-tour";
@@ -21,7 +22,7 @@ type Step = {
 
 /** The steps for each role. Text is written for what that person can actually do. */
 function stepsFor(role: UserRole, firstName: string | null): Step[] {
-  const hi = firstName ? `Welcome to MaintenanceOS, ${firstName}` : "Welcome to MaintenanceOS";
+  const hi = firstName ? `Welcome to MaintenanceOS, ${firstName}` : "Welcome to MaintenanceOS"; // translated by pattern
   const welcome: Step = {
     id: "welcome",
     title: hi,
@@ -157,6 +158,7 @@ export function OnboardingTour({ role, firstName, autoStart }: { role: UserRole;
   const [index, setIndex] = useState(0);
   const [box, setBox] = useState<Box | null>(null);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const tr = useT();
   const popRef = useRef<HTMLDivElement>(null);
   const primaryRef = useRef<HTMLButtonElement>(null);
 
@@ -277,20 +279,20 @@ export function OnboardingTour({ role, firstName, autoStart }: { role: UserRole;
       >
         <div className="flex items-start justify-between gap-3">
           <p className="text-xs font-medium text-brand-700">
-            Step {index + 1} of {steps.length}
+            {tr("Step {n} of {total}", { n: index + 1, total: steps.length })}
           </p>
-          <button onClick={() => end("skipped")} className="-m-1 rounded p-1 text-slate-400 hover:text-slate-700" aria-label="Close tour">
+          <button onClick={() => end("skipped")} className="-m-1 rounded p-1 text-slate-400 hover:text-slate-700" aria-label={tr("Close tour")}>
             <X className="h-4 w-4" aria-hidden />
           </button>
         </div>
         <h2 id="tour-title" className="mt-1 text-base font-semibold text-slate-900">
-          {step.title}
+          {tr(step.title)}
         </h2>
         <p id="tour-body" className="mt-1.5 text-sm leading-6 text-slate-600">
-          {step.body}
+          {tr(step.body)}
         </p>
         {!box && step.targets?.some((t) => t.startsWith("nav-") || t === "help" || t === "company") && (
-          <p className="mt-2 text-xs text-slate-500">On a phone, find it in the menu (☰) at the top of the screen.</p>
+          <p className="mt-2 text-xs text-slate-500">{tr("On a phone, find it in the menu (☰) at the top of the screen.")}</p>
         )}
         <div className="mt-3 flex gap-1" aria-hidden>
           {steps.map((s, i) => (
@@ -302,7 +304,7 @@ export function OnboardingTour({ role, firstName, autoStart }: { role: UserRole;
             <span />
           ) : (
             <button onClick={() => end("skipped")} className="text-sm font-medium text-slate-500 hover:text-slate-800">
-              Skip tour
+              {tr("Skip tour")}
             </button>
           )}
           <div className="flex gap-2">
@@ -311,7 +313,7 @@ export function OnboardingTour({ role, firstName, autoStart }: { role: UserRole;
                 onClick={() => setIndex(index - 1)}
                 className="rounded-lg px-3 py-1.5 text-sm font-medium text-slate-700 ring-1 ring-inset ring-slate-300 hover:bg-slate-50"
               >
-                Back
+                {tr("Back")}
               </button>
             )}
             <button
@@ -319,7 +321,7 @@ export function OnboardingTour({ role, firstName, autoStart }: { role: UserRole;
               onClick={() => (last ? end("completed") : setIndex(index + 1))}
               className="rounded-lg bg-brand-600 px-3.5 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-brand-700"
             >
-              {last ? "Finish" : "Next"}
+              {last ? tr("Finish") : tr("Next")}
             </button>
           </div>
         </div>
