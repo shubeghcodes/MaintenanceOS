@@ -255,7 +255,7 @@ export default async function Dashboard() {
               ? `Incl. ${fmtMoney(laborMtd)} internal labor`
               : avgHours == null
                 ? "Parts and vendor costs this month"
-                : `Avg reactive close: ${avgHours < 48 ? `${avgHours.toFixed(1)} h` : `${(avgHours / 24).toFixed(1)} d`}`
+                : `Avg repair close time: ${avgHours < 48 ? `${avgHours.toFixed(1)} h` : `${(avgHours / 24).toFixed(1)} d`}`
           }
         />
       </div>

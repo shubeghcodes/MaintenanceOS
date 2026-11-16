@@ -59,7 +59,7 @@ export const PRIORITY_SLA: Record<WoPriority, string> = {
 };
 
 export const TYPE_LABEL: Record<WoType, string> = {
-  reactive: "Reactive",
+  reactive: "Repair",
   preventive: "Preventive",
   compliance: "Compliance",
   project: "Project",
