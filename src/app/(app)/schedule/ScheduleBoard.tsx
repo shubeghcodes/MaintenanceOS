@@ -70,6 +70,7 @@ export function ScheduleBoard({
   sent,
   backUrl,
   sites,
+  hideNoTech,
 }: {
   days: string[];
   dayLabels: Record<string, string>;
@@ -85,6 +86,8 @@ export function ScheduleBoard({
   sent: Record<string, string>; // `${techId}|${date}` → "6:02 AM"
   backUrl: string;
   sites: { id: string; code: string }[];
+  /** Techs see only their own row (no "No tech" row). */
+  hideNoTech?: boolean;
 }) {
   const router = useRouter();
   const [jobs, setJobs] = useState(initialJobs);
@@ -130,7 +133,7 @@ export function ScheduleBoard({
     return m;
   }, [forecast, days]);
 
-  const rows: BoardTech[] = [...techs, { id: NO_TECH, name: "No tech (vendor / unassigned)" }];
+  const rows: BoardTech[] = hideNoTech ? techs : [...techs, { id: NO_TECH, name: "No tech (vendor / unassigned)" }];
   const techName = (id: string | null) => techs.find((t) => t.id === id)?.name;
 
   function drop(target: { techId: string | null; date: string | null }) {
