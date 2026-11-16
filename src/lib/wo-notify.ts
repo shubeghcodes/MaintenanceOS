@@ -409,7 +409,7 @@ export async function emailPartUpdate(partId: string, actorId: string) {
 /**
  * Someone posted a note on a work order (in the app or by replying to an email). Who hears about it:
  * - a GM writes → the assigned tech (or, with no tech yet, the admins who cover the company)
- * - a tech writes → the store's GMs (unless staff-only), plus the admins when the job is waiting on them
+ * - a tech writes → the store's GMs (unless staff-only) and the admins
  * - an admin writes → the store's GMs (unless staff-only) and the assigned tech
  * Never the person who wrote it. Each email can be answered by replying, which adds to the conversation.
  */
@@ -426,8 +426,8 @@ export async function notifyNote(woId: string, note: { body: string; authorId: s
   const quote = `<div style="margin-top:10px;padding:12px;background:#f8fafc;border-radius:8px;color:#0f172a">${esc(text).replace(/\n/g, "<br>")}</div>`;
   const ref = { id: woId, number: wo.number };
 
-  const { data: row } = await db.from("work_orders").select("site_id,status").eq("id", woId).single();
-  const { site_id, status } = row as { site_id: string; status: string };
+  const { data: row } = await db.from("work_orders").select("site_id").eq("id", woId).single();
+  const { site_id } = row as { site_id: string };
 
   // GMs (English).
   if (author.role !== "manager" && !note.staffOnly) {
@@ -462,8 +462,8 @@ export async function notifyNote(woId: string, note: { body: string; authorId: s
     );
   }
 
-  // Admins: when a GM writes and no tech is on it yet, or a tech writes while the job waits on the office.
-  const adminsGet = (author.role === "manager" && !reachable(wo.tech, author.id)) || (author.role === "tech" && ["requested", "on_hold", "new"].includes(status));
+  // Admins: every tech note, and a GM's note when no tech is on the job yet.
+  const adminsGet = (author.role === "manager" && !reachable(wo.tech, author.id)) || author.role === "tech";
   if (adminsGet) {
     const covers = await adminCoverage(db, wo.company_id);
     const { data } = await db.from("profiles").select("id,email").eq("role", "admin").eq("active", true);

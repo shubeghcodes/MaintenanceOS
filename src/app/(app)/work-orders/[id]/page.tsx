@@ -216,9 +216,7 @@ export default async function WorkOrderPage({
         ? t("The assigned tech is notified.")
         : t("The admins are notified (no tech assigned yet).")
       : role === "tech"
-        ? ["requested", "on_hold", "new"].includes(wo.status)
-          ? t("The store's GM and the admins are notified.")
-          : t("The store's GM is notified.")
+        ? t("The store's GM and the admins are notified.")
         : hasTech
           ? t("The store's GM and the assigned tech are notified.")
           : t("The store's GM is notified.");
