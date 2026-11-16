@@ -43,6 +43,8 @@ type DoneWo = {
 export default async function Dashboard() {
   const { supabase, profile } = await getSession();
   if (profile.role === "vendor") redirect("/work-orders");
+  // Techs start their day on My day (their jobs, clock and timer); the dashboard is for admins and GMs.
+  if (profile.role === "tech") redirect("/my-day");
 
   const today = todayISO();
   const since90 = new Date(Date.now() - 90 * 86_400_000).toISOString();
