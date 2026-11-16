@@ -8,6 +8,8 @@ import type { WoPriority, WoStatus, WoType } from "@/lib/types";
 import { Alert, Button, PageHeader, Select, btnClass } from "@/components/ui";
 import { ScheduleBoard, type BoardJob, type BoardForecast } from "./ScheduleBoard";
 import { upcomingDueDates } from "@/lib/pm-forecast";
+import { addDays, loadTimeOff, offReason, pmScheduleDate } from "@/lib/time-off";
+import { CalendarOff } from "lucide-react";
 import type { FreqUnit } from "@/lib/types";
 
 export const metadata = { title: "Schedule" };
@@ -60,7 +62,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
         .select("id,title,next_due_on,lead_days,frequency_interval,frequency_unit,assigned_tech_id,estimated_hours,start_time,site:sites(code,name)")
         .eq("active", true)
         .eq("auto_schedule", true)
-        .lte("next_due_on", end),
+        .lte("next_due_on", addDays(end, 61)),
       cid,
     ),
     inCompany(supabase.from("work_orders").select("pm_schedule_id").not("pm_schedule_id", "is", null).not("status", "in", "(completed,cancelled)"), cid),
@@ -78,10 +80,17 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
     start_time: string | null;
     site: { code: string | null; name: string } | null;
   };
+  // Days off: a little beyond the visible days, since a PM due just outside can move in (or out).
+  const offInfo = await loadTimeOff(supabase, addDays(start, -31), addDays(end, 61));
   const openPm = new Set(((openPmData ?? []) as { pm_schedule_id: string }[]).map((r) => r.pm_schedule_id));
   let forecast: BoardForecast[] = ((pmData ?? []) as unknown as PmRow[]).flatMap((p) =>
-    upcomingDueDates(p, start, end, today, openPm.has(p.id)).map((date) => ({
+    upcomingDueDates(p, addDays(start, -61), addDays(end, 31), today, openPm.has(p.id))
+      // Same rule as the scheduler: land on the tech's nearest working day.
+      .map((due) => ({ due, date: pmScheduleDate(offInfo, p.assigned_tech_id, due, today) }))
+      .filter(({ date }) => date >= start && date <= end)
+      .map(({ due, date }) => ({
       pm_id: p.id,
+      due,
       date,
       title: p.title,
       tech_id: p.assigned_tech_id,
@@ -118,6 +127,12 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
   });
   let jobs = [...scheduled, ...((backlogData ?? []) as unknown as Row[])].map(toJob);
   if (sp.tech) jobs = jobs.filter((j) => j.assigned_tech_id === sp.tech || !j.scheduled_date);
+
+  const off: Record<string, string> = {};
+  for (const t of techs) for (const d of days) {
+    const why = offReason(offInfo, t.id, d);
+    if (why) off[`${t.id}|${d}`] = why;
+  }
 
   const sent: Record<string, string> = {};
   for (const s of (sentData ?? []) as { tech_id: string; schedule_date: string; sent_at: string }[]) {
@@ -181,6 +196,11 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
             Show
           </Button>
         </form>
+        {profile.role === "admin" && (
+          <Link href="/schedule/time-off" className={btnClass("secondary", "sm")}>
+            <CalendarOff className="h-4 w-4" aria-hidden /> Days off
+          </Link>
+        )}
         {view === "day" && (
           <Link href={`/my-day?date=${anchor}${sp.tech ? `&tech=${sp.tech}` : ""}`} className={btnClass("ghost", "sm")}>
             Route view →
@@ -194,6 +214,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
         techs={techs}
         jobs={jobs}
         forecast={forecast}
+        off={off}
         canEdit
         isAdmin={profile.role === "admin"}
         view={view}

@@ -8,6 +8,8 @@ import { LocationPicker } from "@/components/LocationPicker";
 import { setLaborRate, updateUser } from "../actions";
 import { loadUsersData, RoleBadge, roleOptions, ROLE_SHORT, roleKey, Section } from "../shared";
 import { RoleFields } from "../RoleFields";
+import { TIME_OFF_LABEL, WEEKDAYS, type TimeOffEntry } from "@/lib/time-off";
+import { todayISO } from "@/lib/format";
 
 export const metadata = { title: "Edit person" };
 
@@ -34,6 +36,15 @@ export default async function UserPage({
   const rates = d.ratesOf(id);
   const current = d.currentRate(id);
   const showRate = superMe && (u.role === "tech" || u.role === "admin");
+  const [{ data: wd }, { data: offData }] =
+    u.role === "tech"
+      ? await Promise.all([
+          supabase.from("tech_work_days").select("days_off").eq("user_id", id).maybeSingle(),
+          supabase.from("tech_time_off").select("id,user_id,start_date,end_date,kind,note").eq("user_id", id).gte("end_date", todayISO()).order("start_date").limit(5),
+        ])
+      : [{ data: null }, { data: null }];
+  const regularOff = ((wd as { days_off: number[] } | null)?.days_off ?? []).map((i) => WEEKDAYS[i]);
+  const upcomingOff = (offData ?? []) as TimeOffEntry[];
 
   return (
     <>
@@ -154,6 +165,35 @@ export default async function UserPage({
             />
           </Card>
 
+          {u.role === "tech" && (
+            <Card>
+              <CardHeader
+                title="Days off"
+                action={
+                  <Link href={`/schedule/time-off?tech=${id}`} className="text-xs font-medium text-brand-700">
+                    Manage
+                  </Link>
+                }
+              />
+              <div className="space-y-2 px-5 py-4 text-sm">
+                <p className="text-slate-700">
+                  <span className="text-slate-500">Regular: </span>
+                  {regularOff.length ? regularOff.join(", ") : "Works every day"}
+                </p>
+                {upcomingOff.length === 0 ? (
+                  <p className="text-xs text-slate-500">No time off coming up.</p>
+                ) : (
+                  <ul className="space-y-1 text-xs text-slate-600">
+                    {upcomingOff.map((e) => (
+                      <li key={e.id}>
+                        {TIME_OFF_LABEL[e.kind]} · {e.start_date === e.end_date ? fmtDate(e.start_date) : `${fmtDate(e.start_date)} – ${fmtDate(e.end_date)}`}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </Card>
+          )}
           {showRate && (
             <Card>
               <CardHeader title="Labor rate" subtitle="Costs their timed work. Each visit uses the rate in effect that day. Only super admins see rates." />
