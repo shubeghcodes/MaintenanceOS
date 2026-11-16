@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Coffee, LogIn, LogOut, MapPin, Play } from "lucide-react";
 import { TimerClock } from "@/components/TimerClock";
 import { clockIn, clockOut, lunchEnd, lunchStart } from "./clock-actions";
@@ -15,7 +15,7 @@ export type OpenShift = {
   staleLabel: string | null;
   clockInTime: string;
   /** Set while on lunch. */
-  lunch: { since: string; sinceTime: string } | null;
+  lunch: { since: string; sinceTime: string; backAt: string; backAtTime: string } | null;
   /** Lunch already taken this shift, in minutes. */
   lunchMinutes: number;
 };
@@ -32,13 +32,24 @@ export function ClockCard({
   jobs,
   lastJobId,
   preselectJobId,
+  breakUntil,
 }: {
   shift: OpenShift | null;
   jobs: ClockJob[];
   lastJobId: string | null;
   preselectJobId: string | null;
+  /** Clocked out less than 30 minutes ago: when they can clock back in. */
+  breakUntil?: { at: string; time: string } | null;
 }) {
   const t = useT();
+  // Breaks are at least 30 minutes: keep the button locked until then (the database enforces it too).
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 15_000);
+    return () => clearInterval(id);
+  }, []);
+  const lunchLocked = !!shift?.lunch && now < new Date(shift.lunch.backAt).getTime();
+  const clockInLocked = !shift && !!breakUntil && now < new Date(breakUntil.at).getTime();
   const [open, setOpen] = useState(!!preselectJobId || !!shift?.staleDate);
   const [pick, setPick] = useState<string>(shift ? (lastJobId ?? jobs[0]?.id ?? "none") : (preselectJobId ?? jobs.find((j) => j.open)?.id ?? "none"));
   const [finished, setFinished] = useState<"yes" | "no">("no");
@@ -116,9 +127,15 @@ export function ClockCard({
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="text-sm font-semibold text-slate-900">{t("You're clocked out")}</p>
-              <p className="text-xs text-slate-500">{t("Clock in on your first job to start your day.")}</p>
+              <p className="text-xs text-slate-500">
+                {clockInLocked ? t("Breaks are at least 30 minutes. You can clock back in at {time}.", { time: breakUntil!.time }) : t("Clock in on your first job to start your day.")}
+              </p>
             </div>
-            <button onClick={() => setOpen(true)} className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700">
+            <button
+              onClick={() => setOpen(true)}
+              disabled={clockInLocked}
+              className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
               <LogIn className="h-4 w-4" aria-hidden /> {t("Clock in")}
             </button>
           </div>
@@ -153,12 +170,19 @@ export function ClockCard({
           <p className="flex items-center gap-1.5 text-sm font-semibold text-amber-950">
             <Coffee className="h-4 w-4" aria-hidden /> {t("On lunch since {time}", { time: shift.lunch.sinceTime })}
           </p>
-          <p className="text-xs text-amber-900">{t("Your job timer is paused. It picks up again when you end lunch.")}</p>
+          <p className="text-xs text-amber-900">
+            {lunchLocked
+              ? t("Lunch is at least 30 minutes. You can clock back in at {time}.", { time: shift.lunch.backAtTime })
+              : t("Your job timer is paused. It picks up again when you end lunch.")}
+          </p>
         </div>
         <TimerClock worked={0} resumedAt={shift.lunch.since} className="font-mono text-xl font-semibold tabular-nums text-amber-950" />
         <form action={lunchEnd}>
-          <button className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700">
-            <Play className="h-4 w-4" aria-hidden /> {t("End lunch")}
+          <button
+            disabled={lunchLocked}
+            className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Play className="h-4 w-4" aria-hidden /> {lunchLocked ? t("Back at {time}", { time: shift.lunch.backAtTime }) : t("End lunch")}
           </button>
         </form>
       </div>
