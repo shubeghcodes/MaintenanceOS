@@ -1,5 +1,5 @@
 import { getSession } from "@/lib/auth";
-import { TechOptions } from "@/components/TechOptions";
+import { AssigneePicker } from "@/components/AssigneePicker";
 import { getLookups } from "@/lib/data";
 import { CATEGORIES, PRIORITY_LABEL, PRIORITY_SLA, TYPE_LABEL } from "@/lib/constants";
 import { personName } from "@/lib/format";
@@ -101,22 +101,7 @@ export default async function NewWorkOrderPage({
                   ))}
                 </Select>
               </Field>
-              <Field label="Assign technician">
-                <Select name="assigned_tech_id" defaultValue="">
-                  <option value="">— Unassigned —</option>
-                  <TechOptions techs={techs} />
-                </Select>
-              </Field>
-              <Field label="Dispatch vendor">
-                <Select name="vendor_id" defaultValue="">
-                  <option value="">— None —</option>
-                  {vendors.map((v) => (
-                    <option key={v.id} value={v.id}>
-                      {v.name}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
+              <AssigneePicker techs={techs} vendors={vendors} />
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Schedule for">
                   <Input type="date" name="scheduled_date" />

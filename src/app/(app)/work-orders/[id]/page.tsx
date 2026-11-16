@@ -22,6 +22,7 @@ import { PartsCard } from "./PartsCard";
 import { TimeCard } from "./TimeCard";
 import { ChecklistCard, type ChecklistItem } from "./ChecklistCard";
 import { TechOptions } from "@/components/TechOptions";
+import { AssigneePicker } from "@/components/AssigneePicker";
 import { fmtHours } from "@/lib/labor";
 import { getT } from "@/lib/i18n/server";
 import type { T } from "@/lib/i18n";
@@ -616,22 +617,15 @@ export default async function WorkOrderPage({
               <CardHeader title={t("Assignment & schedule")} action={<Link href={`/schedule?date=${wo.scheduled_date ?? ""}`} className="text-xs font-medium text-brand-700">{t("Calendar")}</Link>} />
               <form action={updateAssignment} className="space-y-3 p-5">
                 <input type="hidden" name="id" value={id} />
-                <Field label={t("Technician")} hint={role === "admin" ? undefined : t("Only admins assign technicians and vendors")}>
-                  <Select name="assigned_tech_id" defaultValue={wo.assigned_tech_id ?? ""} disabled={role !== "admin"}>
-                    <option value="">— {t("Unassigned")} —</option>
-                    <TechOptions techs={lookups.techs} staff={lookups.staff} current={wo.assigned_tech_id} />
-                  </Select>
-                </Field>
-                <Field label={t("Vendor")}>
-                  <Select name="vendor_id" defaultValue={wo.vendor_id ?? ""} disabled={role !== "admin"}>
-                    <option value="">— {t("None")} —</option>
-                    {lookups.vendors.map((v) => (
-                      <option key={v.id} value={v.id}>
-                        {v.name}
-                      </option>
-                    ))}
-                  </Select>
-                </Field>
+                <AssigneePicker
+                  techs={lookups.techs}
+                  staff={lookups.staff}
+                  vendors={lookups.vendors}
+                  defaultTechId={wo.assigned_tech_id}
+                  defaultVendorId={wo.vendor_id}
+                  disabled={role !== "admin"}
+                  hint={role === "admin" ? undefined : t("Only admins assign technicians and vendors")}
+                />
                 <div className="grid grid-cols-3 gap-3 rounded-lg bg-slate-50 p-3">
                   <Field label={t("Schedule date")}>
                     <Input type="date" name="scheduled_date" defaultValue={wo.scheduled_date ?? ""} />
