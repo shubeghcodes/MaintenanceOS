@@ -65,9 +65,10 @@ No app code will ever read or write memory, and memory tables never link to app 
 |---|---|---|---|
 | **A. Inside the live app's project** ⚠️ | A separate drawer in the **live production database** — today the only project that exists | Nothing new to set up or pay for | ⚠️ **This is the live database with real data.** Breaks our own rule "never write to production". Memory would sit one mistake away from real customer data, and every memory read or write would be a chat working inside production. **Ruled out.** |
 | **B. Inside the sandbox project** | A separate drawer in the test database. **No sandbox exists yet**, so this is not available today; it would have to be created first | No extra project beyond the sandbox; no risk to live data | The sandbox gets wiped and rebuilt for testing — memory could be wiped with it. Test logins could sit next to memory. |
-| **C. A separate small project** *(recommended)* | Its own database, used for nothing else | Cleanest wall: app users have no way in at all. Cannot be damaged by app work or sandbox resets. Easy to delete if we change our minds | One more project to keep an eye on. May cost money depending on the Supabase plan (free plans have a small project limit and pause unused projects) — **M-Brain to confirm the current cost before the owner decides.** |
+| **C. A separate small project** *(recommended)* | Its own database, used for nothing else | Cleanest wall: app users have no way in at all. Cannot be damaged by app work or sandbox resets. Easy to delete if we change our minds | One more project to keep an eye on. May cost money — see the note on cost below. |
 | **D. A Supabase "branch"** ⚠️ | A temporary copy of a project, made for testing a change. Today it could only be a branch **of the live project** | Quick to create | ⚠️ Created from, and attached to, the live production project. Branches are made to be thrown away, are billed while they run, and start as a copy of the app's tables. Wrong tool for long-term memory. **Not recommended.** |
 | **E. No database: files in the repo** | Notes kept as files under `team/memory/` on a branch | Zero database risk, free, works today | Chats on different branches don't see each other's notes until merged; easy to clash; not searchable. Fine as a stop-gap, weak long-term. |
+| *Note on cost* | The owner's Supabase organization is on the **free plan**, which has a small limit on the number of projects. A sandbox project (needed by `CLAUDE.md` rule 3) will use one of those slots, so a separate memory project should **not** be assumed to be free. The owner decides where memory lives. | | |
 
 **Recommendation:** C — it is the only database option that keeps team memory fully away from live app data. If the owner wants no new project or cost right now, use E (files in the repo) as a stop-gap. B only becomes possible once a sandbox project exists, and then only if the sandbox reset procedure leaves `team_memory` alone. A and D touch the live project and are ruled out.
 
@@ -75,7 +76,7 @@ No app code will ever read or write memory, and memory tables never link to app 
 
 ## Build steps once approved (for reference — not started)
 1. M-Brain names the project; M-Architect sends a short build plan and waits for go-ahead.
-2. The table script is kept in `team/memory/` (not in `supabase/migrations/`, so it can never be run against the app by mistake). *Open point: rule "only M-Database writes SQL" — M-Brain to say whether M-Database writes or reviews this script.*
+2. The table script is kept in `team/memory/` (not in `supabase/migrations/`, so it can never be run against the app by mistake). M-Architect writes it and M-Brain verifies it (decided by M-Brain, 17 Nov 2026). It is not written until the owner has chosen where memory lives.
 3. Apply to the named project only. Run the proof tests above. Report to M-Brain.
 4. Add the "Memory" section to each rule book. M-Brain verifies; M-Review re-checks.
 
