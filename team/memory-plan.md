@@ -2,6 +2,11 @@
 
 **Status:** plan only. No SQL has been run and nothing has been created in Supabase. Building starts only after the owner approves and M-Brain names the exact project.
 
+## Important fact (confirmed by the owner, 17 Nov 2026)
+There is **only one** Supabase project today, named "MaintainanceOS", and it is the **live production database with real data**. There is **no sandbox project yet**. So:
+- Anything "inside the existing project" means inside the live database. This plan does **not** propose that (option A below is listed only so the owner can see why it is ruled out).
+- **The option that keeps team memory fully away from live app data is C: a separate project used for nothing else.** (Option E, files in the repo, also stays fully away, because it uses no database at all.)
+
 ## Why
 Each chat forgets everything when it ends. Team memory is a shared notebook so a new or restarted chat can see what was decided, what is in progress and what was already done, instead of asking the owner again.
 
@@ -58,13 +63,15 @@ No app code will ever read or write memory, and memory tables never link to app 
 ## Where it lives — the options
 | Option | What it means | Good | Bad |
 |---|---|---|---|
-| **A. Inside the live app's project** | A separate drawer in the production database | Nothing new to set up or pay for | Breaks our own rule "never write to production". One mistake away from real customer data. **Not recommended.** |
-| **B. Inside the sandbox project** | A separate drawer in the test database | No new project; no risk to live data | The sandbox gets wiped and rebuilt for testing — memory could be wiped with it. Test logins could sit next to memory. |
+| **A. Inside the live app's project** ⚠️ | A separate drawer in the **live production database** — today the only project that exists | Nothing new to set up or pay for | ⚠️ **This is the live database with real data.** Breaks our own rule "never write to production". Memory would sit one mistake away from real customer data, and every memory read or write would be a chat working inside production. **Ruled out.** |
+| **B. Inside the sandbox project** | A separate drawer in the test database. **No sandbox exists yet**, so this is not available today; it would have to be created first | No extra project beyond the sandbox; no risk to live data | The sandbox gets wiped and rebuilt for testing — memory could be wiped with it. Test logins could sit next to memory. |
 | **C. A separate small project** *(recommended)* | Its own database, used for nothing else | Cleanest wall: app users have no way in at all. Cannot be damaged by app work or sandbox resets. Easy to delete if we change our minds | One more project to keep an eye on. May cost money depending on the Supabase plan (free plans have a small project limit and pause unused projects) — **M-Brain to confirm the current cost before the owner decides.** |
-| **D. A Supabase "branch"** | A temporary copy of a project, made for testing a change | Quick to create | Branches are made to be thrown away, are billed while they run, and start as a copy of the app's tables. Wrong tool for long-term memory. **Not recommended.** |
+| **D. A Supabase "branch"** ⚠️ | A temporary copy of a project, made for testing a change. Today it could only be a branch **of the live project** | Quick to create | ⚠️ Created from, and attached to, the live production project. Branches are made to be thrown away, are billed while they run, and start as a copy of the app's tables. Wrong tool for long-term memory. **Not recommended.** |
 | **E. No database: files in the repo** | Notes kept as files under `team/memory/` on a branch | Zero database risk, free, works today | Chats on different branches don't see each other's notes until merged; easy to clash; not searchable. Fine as a stop-gap, weak long-term. |
 
-**Recommendation:** C. If the owner prefers no extra project or cost, B is acceptable provided the sandbox reset procedure is changed to leave `team_memory` alone.
+**Recommendation:** C — it is the only database option that keeps team memory fully away from live app data. If the owner wants no new project or cost right now, use E (files in the repo) as a stop-gap. B only becomes possible once a sandbox project exists, and then only if the sandbox reset procedure leaves `team_memory` alone. A and D touch the live project and are ruled out.
+
+**Related gap, for M-Brain:** `CLAUDE.md` rule 3 and every rule book require testing on a sandbox project, which does not exist yet. Until it does, no chat can finish the required path for a change that needs a database test.
 
 ## Build steps once approved (for reference — not started)
 1. M-Brain names the project; M-Architect sends a short build plan and waits for go-ahead.
