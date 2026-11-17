@@ -1,6 +1,12 @@
 # Team memory — plan (nothing built yet)
 
-**Status:** plan only. No SQL has been run and nothing has been created in Supabase. Building starts only after the owner approves and M-Brain names the exact project.
+**Status:** the owner has decided (17 Nov 2026) — see "Owner decision" below. The table script is written in `team/memory/` but **not applied**. It is applied only when M-Brain says so.
+
+## Owner decision (17 Nov 2026)
+- A practice (sandbox) Supabase project will be created: `MaintenanceOS-Practice`, same region as live, $0 only.
+- **Team memory lives in that practice project, in its own `team_memory` schema** (option B below).
+- **Rule: a sandbox reset must never touch `team_memory`.** Anyone resetting or reloading the practice project rebuilds only the app's schemas (`public`, `storage` contents, auth test users) and leaves `team_memory` alone. Before any reset, export `team_memory` first.
+- The live project `pkjjmhnbrzsshyfyuxiq` is never touched.
 
 ## Important fact (confirmed by the owner, 17 Nov 2026)
 There is **only one** Supabase project today, named "MaintainanceOS", and it is the **live production database with real data**. There is **no sandbox project yet**. So:
@@ -70,17 +76,17 @@ No app code will ever read or write memory, and memory tables never link to app 
 | **E. No database: files in the repo** | Notes kept as files under `team/memory/` on a branch | Zero database risk, free, works today | Chats on different branches don't see each other's notes until merged; easy to clash; not searchable. Fine as a stop-gap, weak long-term. |
 | *Note on cost* | The owner's Supabase organization is on the **free plan**, which has a small limit on the number of projects. A sandbox project (needed by `CLAUDE.md` rule 3) will use one of those slots, so a separate memory project should **not** be assumed to be free. The owner decides where memory lives. | | |
 
-**Recommendation:** C — it is the only database option that keeps team memory fully away from live app data. If the owner wants no new project or cost right now, use E (files in the repo) as a stop-gap. B only becomes possible once a sandbox project exists, and then only if the sandbox reset procedure leaves `team_memory` alone. A and D touch the live project and are ruled out.
+**Recommendation (before the owner decided):** C — it is the only database option that keeps team memory fully away from live app data. If the owner wants no new project or cost right now, use E (files in the repo) as a stop-gap. B only becomes possible once a sandbox project exists, and then only if the sandbox reset procedure leaves `team_memory` alone. A and D touch the live project and are ruled out.
 
 **Related gap, for M-Brain:** `CLAUDE.md` rule 3 and every rule book require testing on a sandbox project, which does not exist yet. Until it does, no chat can finish the required path for a change that needs a database test.
 
-## Build steps once approved (for reference — not started)
+## Build steps (owner approved option B)
 1. M-Brain names the project; M-Architect sends a short build plan and waits for go-ahead.
-2. The table script is kept in `team/memory/` (not in `supabase/migrations/`, so it can never be run against the app by mistake). M-Architect writes it and M-Brain verifies it (decided by M-Brain, 17 Nov 2026). It is not written until the owner has chosen where memory lives.
+2. The table script is kept in `team/memory/001_team_memory.sql`, with read-only checks in `team/memory/002_verify_team_memory.sql` (not in `supabase/migrations/`, so it can never be run against the app by mistake). M-Architect writes it and M-Brain verifies it (decided by M-Brain, 17 Nov 2026). Written 17 Nov 2026; **not applied**. It also locks out `service_role` (the app's server key), not only `anon` and `authenticated`, so nothing in the app can reach memory.
 3. Apply to the named project only. Run the proof tests above. Report to M-Brain.
 4. Add the "Memory" section to each rule book. M-Brain verifies; M-Review re-checks.
 
-## Decisions needed from the owner
-1. Where memory lives (A–E above; C recommended).
-2. If C: OK to create one new Supabase project, and any cost that comes with it.
+## Decisions (answered by the owner, 17 Nov 2026, except 3)
+1. Where memory lives → **B: the practice project, own `team_memory` schema.**
+2. New project → **yes, a practice project, only if it costs $0.**
 3. How long to keep old entries (suggestion: keep everything for now; it is small).
