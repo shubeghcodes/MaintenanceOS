@@ -21,7 +21,7 @@ Internal CMMS for QSR, dine-in and commercial real estate sites: work orders, pr
 ## Non-negotiable rules
 1. **Security lives in the database.** Roles are enforced by RLS policies and SQL functions, not just the UI. Any change that touches who can read or write data needs an RLS review and a test as each role (super admin, admin, manager, tech, vendor).
 2. **Never apply a migration to production directly.** Add a new numbered file in `supabase/migrations/` (next free number after `0038`). Test it on a dev project or branch first. Do not edit an existing migration that may already have run.
-3. **Never push to `main` without a preview deploy.** Work on a branch; Vercel builds previews. Pushing `main` deploys production.
+3. **Every change goes through the sandbox before it goes live.** No exceptions, however small. The path is: feature branch → `npm run typecheck`, `node scripts/i18n-check.mjs` and `npm run build` pass → tested against the sandbox Supabase project (never production) → Vercel preview deploy checked → reviewed → the owner approves → merge to `main`. Pushing `main` deploys production, so never push or merge to `main` directly, and never point a test at the production database.
 4. **Secrets stay out of code, commits, logs and prompts.** No Supabase service-role key, Resend key, `LINK_SIGNING_SECRET`, or `CRON_SECRET` in the repo.
 5. **Vendor links are a security boundary.** Vendors see only their own job. Do not expose internal comments, labor or parts costs, other vendors' activity, invoices, or other sites on `app/v/[token]`.
 6. **Labor dollars are admin-only.** Hourly rates are super-admin only. Techs and managers see hours, never labor dollars; managers never see vendor quotes or invoices.
