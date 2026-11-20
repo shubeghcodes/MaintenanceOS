@@ -22,6 +22,14 @@ begin
   end if;
 end $$;
 
+-- ---------- 0. let the practice super admin sign in ----------
+-- That login was created unconfirmed. Mark its email confirmed; nothing else in auth changes
+-- (no passwords, no other users, no settings). Does nothing once it is confirmed.
+update auth.users
+   set email_confirmed_at = now()
+ where id = 'ad1af769-bbe9-4d8c-83bf-8a1a2a56bb5b' and email = 'superadmin@practice.test'
+   and email_confirmed_at is null;
+
 -- ---------- 1. people ----------
 -- Profile rows normally come from the signup trigger; make any that are missing.
 insert into public.profiles (id, email)
