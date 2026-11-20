@@ -44,7 +44,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
             </div>
           </form>
         </Card>
-        <p className="mt-4 text-center text-xs text-slate-500">Access is by invitation. Contact your admin.</p>
+        <p className="mt-4 text-center text-xs text-slate-500">Access is by invitation only. Ask your admin for an invite.</p>
       </div>
     </div>
   );
