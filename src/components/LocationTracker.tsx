@@ -87,7 +87,7 @@ export function LocationTracker({ clockedIn, consented }: { clockedIn: boolean; 
         <MapPin className="h-4 w-4" aria-hidden /> {t("Let the app note when you reach a store?")}
       </p>
       <p className="mt-1 text-xs text-slate-600">
-        {t("While you're clocked in and the app is open, MaintenanceOS checks whether you're at one of your stores and records when you arrive and leave. Your exact location is not saved. Admins and your store's GM can see your store visits.")}
+        {t("While you're clocked in and the app is open, MaintenanceOS checks whether you're at one of your stores and records when you arrive and leave. Your exact location is not saved. Admins and your store's GM can see your store visits. You can turn this off any time in My account.")}
       </p>
       <div className="mt-3 flex gap-2">
         <button onClick={agree} disabled={busy} className="rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-60">

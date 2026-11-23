@@ -763,7 +763,7 @@ export const ES: Record<string, string> = {
   "Withdraw my agreement": "Retirar mi autorización",
   "Agree to location checks": "Autorizar la verificación de ubicación",
   "Let the app note when you reach a store?": "¿Permitir que la app registre cuando llegues a una sucursal?",
-  "While you're clocked in and the app is open, MaintenanceOS checks whether you're at one of your stores and records when you arrive and leave. Your exact location is not saved. Admins and your store's GM can see your store visits.": "Mientras estás registrado y la app está abierta, MaintenanceOS verifica si estás en una de tus sucursales y anota cuándo llegas y cuándo sales. Tu ubicación exacta no se guarda. Los administradores y el gerente de tu sucursal pueden ver tus visitas.",
+  "While you're clocked in and the app is open, MaintenanceOS checks whether you're at one of your stores and records when you arrive and leave. Your exact location is not saved. Admins and your store's GM can see your store visits. You can turn this off any time in My account.": "Mientras estás registrado y la app está abierta, MaintenanceOS verifica si estás en una de tus sucursales y anota cuándo llegas y cuándo sales. Tu ubicación exacta no se guarda. Los administradores y el gerente de tu sucursal pueden ver tus visitas. Puedes desactivarlo cuando quieras en Mi cuenta.",
   "Agree": "Acepto",
   "Not now": "Ahora no",
   "Store visits": "Visitas a sucursales",
