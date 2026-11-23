@@ -33,7 +33,7 @@ export async function notifyPresence(events: PingEvent[], techName: string, tech
   try {
     const db = createAdminClient();
     const [{ data: admins }, { data: limits }, { data: sites }] = await Promise.all([
-      db.from("profiles").select("id").eq("role", "admin").eq("active", true),
+      db.from("profiles").select("id,is_super").eq("role", "admin").eq("active", true),
       db.from("admin_companies").select("user_id,company_id"),
       db.from("sites").select("id,company_id").in("id", [...new Set(events.map((e) => e.site_id))]),
     ]);
@@ -42,9 +42,10 @@ export async function notifyPresence(events: PingEvent[], techName: string, tech
     for (const l of limits ?? []) limited.set(l.user_id, (limited.get(l.user_id) ?? new Set()).add(l.company_id));
     for (const e of events) {
       const co = companyOf.get(e.site_id);
+      // Super admins always get it; other admins only if they have no company limits or manage this store's company.
       const ids = (admins ?? [])
-        .map((a) => a.id as string)
-        .filter((id) => !limited.has(id) || (!!co && limited.get(id)!.has(co)));
+        .filter((a) => a.is_super || !limited.has(a.id as string) || (!!co && limited.get(a.id as string)!.has(co)))
+        .map((a) => a.id as string);
       await pushToUsers(ids, {
         title: `${techName} ${e.kind === "enter" ? "arrived at" : "left"} ${e.site_name}`,
         url: `/admin/users/${techId}`,

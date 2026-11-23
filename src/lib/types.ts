@@ -55,7 +55,7 @@ export interface PresenceEvent {
   site_id: string;
   kind: "enter" | "exit";
   at: string;
-  source: "ping" | "clock_in" | "clock_out";
+  source: "ping" | "clock_in" | "clock_out" | "consent_withdrawn";
 }
 
 /** What record_location_ping() returns for each new arrive/leave. */
