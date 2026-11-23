@@ -770,5 +770,6 @@ export const ES: Record<string, string> = {
   "Last 30 days, newest first.": "Últimos 30 días, las más recientes primero.",
   "No store visits logged yet.": "Aún no hay visitas registradas.",
   "Arrived": "Llegó",
-  "Left": "Salió"
+  "Left": "Salió",
+  "Recent tech visits": "Visitas recientes de técnicos"
 };

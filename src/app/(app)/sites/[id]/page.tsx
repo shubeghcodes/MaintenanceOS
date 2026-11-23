@@ -10,6 +10,7 @@ import { OPEN_STATUSES, ROLE_LABEL, SITE_TYPE_LABEL } from "@/lib/constants";
 import { fmtDate, fmtMoney, personName, relativeDue, todayISO } from "@/lib/format";
 import type { AssetStatus, Site, UserRole, WoPriority, WoStatus } from "@/lib/types";
 import { Alert, Badge, ButtonLink, Card, CardHeader, DefList, EmptyState, PageHeader, Stat } from "@/components/ui";
+import { StoreVisits } from "@/components/StoreVisits";
 import { AssetStatusBadge, DueBadge, OverdueBadge, PriorityBadge, StatusBadge } from "@/components/badges";
 
 export default async function SitePage({
@@ -262,6 +263,7 @@ export default async function SitePage({
               </ul>
             )}
           </Card>
+          {(profile.role === "admin" || profile.role === "manager") && <StoreVisits supabase={supabase} siteId={id} lang={profile.language} />}
         </div>
       </div>
 
