@@ -7,6 +7,8 @@ import { getSession } from "@/lib/auth";
 import { str } from "@/lib/format";
 import { zonedDateTimeISO } from "@/lib/labor";
 import { afterWorkDone } from "@/lib/signoff";
+import { personName } from "@/lib/format";
+import { notifyPresence, recordPing } from "@/lib/presence";
 
 const friendly = (msg: string) => msg.replace(/^.*?ERROR:\s*/i, "").replace(/\s*\(SQLSTATE.*$/, "");
 const coord = (fd: FormData, k: string) => {
@@ -37,6 +39,9 @@ export async function clockIn(fd: FormData) {
     p_accuracy: coord(fd, "accuracy"),
   });
   if (error) go(`error=${encodeURIComponent(friendly(error.message))}`);
+  // Store check at the punch (does nothing without consent or a reading).
+  const events = await recordPing(supabase, coord(fd, "lat"), coord(fd, "lng"), coord(fd, "accuracy"), "clock_in");
+  if (events.length) after(() => notifyPresence(events, personName(profile), profile.id));
   refresh();
   if (woId) revalidatePath(`/work-orders/${woId}`);
   go("clock=in");
@@ -65,6 +70,9 @@ export async function clockOut(fd: FormData) {
     p_accuracy: coord(fd, "accuracy"),
   });
   if (error) go(`error=${encodeURIComponent(friendly(error.message))}`);
+  // Leaving whatever store they were at.
+  const events = await recordPing(supabase, coord(fd, "lat"), coord(fd, "lng"), coord(fd, "accuracy"), "clock_out");
+  if (events.length) after(() => notifyPresence(events, personName(profile), profile.id));
 
   if (finished) {
     const patch: Record<string, unknown> = { status: "completed" };

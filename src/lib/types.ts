@@ -24,6 +24,8 @@ export interface Profile {
   active: boolean;
   is_super?: boolean;
   language?: "en" | "es";
+  /** When they agreed to location checks while clocked in (null = not agreed). */
+  location_consent_at?: string | null;
 }
 
 export interface Site {
@@ -40,6 +42,28 @@ export interface Site {
   sq_ft: number | null;
   notes: string | null;
   active: boolean;
+  latitude?: number | null;
+  longitude?: number | null;
+  /** How close counts as "at the store" (50–2000 m). */
+  geofence_radius_m?: number;
+}
+
+/** One arrive/leave row from site_presence_events (read-only for the app). */
+export interface PresenceEvent {
+  id: string;
+  user_id: string;
+  site_id: string;
+  kind: "enter" | "exit";
+  at: string;
+  source: "ping" | "clock_in" | "clock_out";
+}
+
+/** What record_location_ping() returns for each new arrive/leave. */
+export interface PingEvent {
+  kind: "enter" | "exit";
+  site_id: string;
+  site_name: string;
+  at: string;
 }
 
 export interface Vendor {

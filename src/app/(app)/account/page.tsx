@@ -6,13 +6,15 @@ import { Alert, Card, CardHeader, Field, Input, PageHeader, Select } from "@/com
 import { SubmitButton } from "@/components/SubmitButton";
 import { updateAccount } from "./actions";
 import { getVapidPublicKey } from "@/lib/push";
+import { LocationConsentToggle } from "@/components/LocationConsentToggle";
+import { StoreVisits } from "@/components/StoreVisits";
 import { PushToggle } from "@/components/pwa/PushToggle";
 
 export const metadata = { title: "My account" };
 
 export default async function AccountPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const sp = await searchParams;
-  const { profile } = await getSession();
+  const { supabase, profile } = await getSession();
   const t = await getT();
   const vapidKey = await getVapidPublicKey();
   return (
@@ -50,6 +52,19 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
             <PushToggle vapidKey={vapidKey} />
           </div>
         </Card>
+      )}
+    {profile.role === "tech" && (
+        <>
+          <Card className="mt-6 max-w-lg">
+            <CardHeader title={t("Location checks")} subtitle={t("Only while you are clocked in and the app is open.")} />
+            <div className="p-5">
+              <LocationConsentToggle consented={!!profile.location_consent_at} />
+            </div>
+          </Card>
+          <div className="mt-6 max-w-lg">
+            <StoreVisits supabase={supabase} userId={profile.id} lang={profile.language} />
+          </div>
+        </>
       )}
     </>
   );

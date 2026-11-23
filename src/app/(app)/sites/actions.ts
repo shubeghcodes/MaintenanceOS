@@ -25,6 +25,13 @@ export async function saveSite(fd: FormData) {
     ...(str(fd, "company_id") ? { company_id: str(fd, "company_id") } : {}),
   };
   if (!row.name) redirect(`${back}?error=Name+is+required`);
+  const lat = num(fd, "latitude");
+  const lng = num(fd, "longitude");
+  const radius = num(fd, "geofence_radius_m") ?? 150;
+  if ((lat == null) !== (lng == null)) redirect(`${back}?error=Enter+both+latitude+and+longitude,+or+leave+both+blank`);
+  if ((lat != null && (lat < -90 || lat > 90)) || (lng != null && (lng < -180 || lng > 180))) redirect(`${back}?error=Latitude+or+longitude+is+out+of+range`);
+  if (!Number.isInteger(radius) || radius < 50 || radius > 2000) redirect(`${back}?error=Geofence+radius+must+be+a+whole+number+from+50+to+2000+metres`);
+  Object.assign(row, { latitude: lat, longitude: lng, geofence_radius_m: radius });
   const res = id
     ? await supabase.from("sites").update(row).eq("id", id).select("id").single()
     : await supabase.from("sites").insert(row).select("id").single();

@@ -4,6 +4,7 @@ import type { Site } from "@/lib/types";
 import { Card, Field, Input, Select, Textarea } from "@/components/ui";
 import { SubmitButton } from "@/components/SubmitButton";
 import { FormFooter, FormSection } from "@/components/FormSection";
+import { SiteGeofenceFields } from "@/components/SiteGeofenceFields";
 import { saveSite } from "./actions";
 
 export function SiteForm({
@@ -81,6 +82,10 @@ export function SiteForm({
               <Input name="sq_ft" inputMode="numeric" defaultValue={site?.sq_ft ?? ""} />
             </Field>
           </div>
+        </FormSection>
+
+        <FormSection title="Store location" help="Used to log when a clocked-in tech arrives at or leaves this store. Leave blank to skip this store.">
+          <SiteGeofenceFields lat={site?.latitude ?? null} lng={site?.longitude ?? null} radius={site?.geofence_radius_m ?? 150} />
         </FormSection>
 
         <FormSection title="Notes" help="Access codes, landlord contacts, shut-off locations. Everyone at this location can see them.">

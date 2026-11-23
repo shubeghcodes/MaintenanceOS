@@ -755,5 +755,20 @@ export const ES: Record<string, string> = {
   "{n} to review": "{n} por revisar",
   "{n} waiting": "{n} en espera",
   "{n} work order(s) need approval": "{n} orden(es) necesitan aprobación",
-  "— None / not sure —": "— Ninguno / no estoy seguro —"
+  "— None / not sure —": "— Ninguno / no estoy seguro —",
+  "Location checks": "Verificación de ubicación",
+  "Only while you are clocked in and the app is open.": "Solo mientras estás registrado y la app está abierta.",
+  "Location checks are on while you are clocked in.": "La verificación de ubicación está activa mientras estás registrado.",
+  "Location checks are off.": "La verificación de ubicación está desactivada.",
+  "Withdraw my agreement": "Retirar mi autorización",
+  "Agree to location checks": "Autorizar la verificación de ubicación",
+  "Let the app note when you reach a store?": "¿Permitir que la app registre cuando llegues a una sucursal?",
+  "While you are clocked in and the app is open, your phone's location is checked about once a minute to log when you arrive at or leave your stores. Nothing is checked when you are clocked out or the app is closed. Your admins see these visits, the store's GM sees visits to their store, and you see your own. You can turn this off any time on My account.": "Mientras estás registrado y la app está abierta, se revisa la ubicación de tu teléfono más o menos una vez por minuto para anotar cuándo llegas a tus sucursales o sales de ellas. No se revisa nada cuando no estás registrado o la app está cerrada. Tus administradores ven estas visitas, el gerente de cada sucursal ve las visitas a la suya y tú ves las tuyas. Puedes desactivarlo cuando quieras en Mi cuenta.",
+  "Agree": "Acepto",
+  "Not now": "Ahora no",
+  "Store visits": "Visitas a sucursales",
+  "Last 30 days, newest first.": "Últimos 30 días, las más recientes primero.",
+  "No store visits logged yet.": "Aún no hay visitas registradas.",
+  "Arrived": "Llegó",
+  "Left": "Salió"
 };

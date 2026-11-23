@@ -5,16 +5,21 @@ import { getApprovalsWaiting, getCompanyScope, getReceiptsToReview } from "@/lib
 import { ROLE_LABEL } from "@/lib/constants";
 import { personName } from "@/lib/format";
 import { getVapidPublicKey } from "@/lib/push";
+import { LocationTracker } from "@/components/LocationTracker";
 import { InstallBanner } from "@/components/pwa/InstallBanner";
 import { I18nProvider } from "@/lib/i18n/client";
 import { asLocale, translate } from "@/lib/i18n";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const { profile } = await getSession();
+  const { supabase, profile } = await getSession();
   const scope = await getCompanyScope();
   const [receiptsToReview, approvalsWaiting, vapidKey] = await Promise.all([getReceiptsToReview(), getApprovalsWaiting(), getVapidPublicKey()]);
   // Admins always get the switcher (to add companies); others only when they span more than one company.
   const showPicker = scope.enabled && profile.role !== "vendor" && (profile.role === "admin" || scope.companies.length > 1);
+  // Techs: is a shift open? (the location tracker only runs then)
+  const clockedIn =
+    profile.role === "tech" &&
+    !!(await supabase.from("tech_shifts").select("id").eq("user_id", profile.id).is("clock_out_at", null).limit(1).maybeSingle()).data;
   const locale = asLocale(profile.language);
   return (
     <I18nProvider locale={locale}>
@@ -28,6 +33,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       {profile.role !== "vendor" && (
         <OnboardingTour role={profile.role} firstName={(profile.full_name ?? "").split(" ")[0] || null} autoStart={!profile.tour_completed_at} />
       )}
+      {profile.role === "tech" && <LocationTracker clockedIn={clockedIn} consented={!!profile.location_consent_at} />}
       {profile.role !== "vendor" && <InstallBanner vapidKey={vapidKey} />}
       <main className="lg:pl-60 print:!pl-0">
         <div className="mx-auto max-w-screen-2xl px-4 py-6 sm:px-6 lg:px-8 lg:py-8 print:max-w-none print:p-0">{children}</div>

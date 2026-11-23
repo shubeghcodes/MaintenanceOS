@@ -7,6 +7,7 @@ import { SubmitButton } from "@/components/SubmitButton";
 import { LocationPicker } from "@/components/LocationPicker";
 import { setLaborRate, updateUser } from "../actions";
 import { loadUsersData, RoleBadge, roleOptions, ROLE_SHORT, roleKey, Section } from "../shared";
+import { StoreVisits } from "@/components/StoreVisits";
 import { RoleFields } from "../RoleFields";
 import { TIME_OFF_LABEL, WEEKDAYS, type TimeOffEntry } from "@/lib/time-off";
 import { todayISO } from "@/lib/format";
@@ -200,6 +201,7 @@ export default async function UserPage({
               </div>
             </Card>
           )}
+          {u.role === "tech" && <StoreVisits supabase={supabase} userId={id} lang={me.language} />}
           {showRate && (
             <Card>
               <CardHeader title="Labor rate" subtitle="Costs their timed work. Each visit uses the rate in effect that day. Only super admins see rates." />
