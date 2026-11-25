@@ -19,7 +19,7 @@ export async function sendLoginLink(email: string): Promise<LoginLinkResult> {
   });
   const { error } = await client.auth.signInWithOtp({
     email,
-    options: { shouldCreateUser: false, emailRedirectTo: `${origin}/auth/confirm?next=/account` },
+    options: { shouldCreateUser: false, emailRedirectTo: `${origin}/auth/confirm` },
   });
   if (!error) return { ok: true };
   const msg = error.message || "Couldn’t send the email";

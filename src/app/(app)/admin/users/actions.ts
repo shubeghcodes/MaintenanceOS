@@ -56,7 +56,7 @@ export async function inviteUser(fd: FormData) {
   const admin = createAdminClient();
 
   // Already has an account? Just give them the selected sites instead of failing the invite.
-  const { data: existing } = await admin.from("profiles").select("id,role").ilike("email", email).maybeSingle();
+  const { data: existing } = await admin.from("profiles").select("id,role,active").ilike("email", email).maybeSingle();
   if (existing) {
     if (existing.role === "admin" && !isSuper(me)) redirect(withParam(back, "error", `${email} is an admin; only a super admin can change admins`));
     if (existing.role === "vendor" && siteIds.length) {
@@ -72,7 +72,7 @@ export async function inviteUser(fd: FormData) {
     revalidatePath("/sites", "layout");
     // Never signed in yet? Send them a login link too, instead of silently doing nothing.
     let url = withParam(back, "added", email);
-    if (await hasNeverSignedIn(existing.id)) {
+    if (existing.active && (await hasNeverSignedIn(existing.id))) {
       const r = await sendLoginLink(email);
       url = r.ok ? withParam(url, "linksent", email) : withParam(url, "linkerror", `${email}: ${r.error}`);
     }
@@ -108,6 +108,14 @@ export async function sendLoginLinkToUser(fd: FormData) {
   if (!u || !u.email) redirect(withParam(back, "error", "User not found"));
   if (u.role === "admin" && !isSuper(me)) redirect(withParam(back, "error", "Only a super admin can send a login link to an admin"));
   if (!u.active) redirect(withParam(back, "error", `${u.email} is inactive, so they can’t sign in`));
+  // A company-limited admin may only reach people at stores in their own companies (checked with their own access).
+  if (!isSuper(me)) {
+    const { data: limits } = await supabase.from("admin_companies").select("company_id").eq("user_id", me.id).limit(1);
+    if (limits?.length) {
+      const { data: shared } = await supabase.from("site_members").select("site_id").eq("user_id", u.id).limit(1);
+      if (!shared?.length) redirect(withParam(back, "error", `${u.email} isn’t at any of your companies’ locations, so you can’t send them a login link`));
+    }
+  }
   const never = await hasNeverSignedIn(u.id);
   if (never === null) redirect(withParam(back, "error", "Couldn’t check whether they have signed in. Try again."));
   if (never === false) redirect(withParam(back, "error", `${u.email} has already signed in. They can use “Email me a link” on the sign-in page.`));
