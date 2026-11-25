@@ -7,7 +7,8 @@ import { ROLE_LABEL } from "@/lib/constants";
 import type { Profile } from "@/lib/types";
 import { Alert, Badge, ButtonLink, Card, CardHeader, EmptyState, Field, Input, PageHeader, Select } from "@/components/ui";
 import { SubmitButton } from "@/components/SubmitButton";
-import { addSiteMember, inviteUser, removeSiteMember } from "./actions";
+import { neverSignedInIds } from "@/lib/login-link";
+import { addSiteMember, inviteUser, removeSiteMember, sendLoginLinkToUser } from "./actions";
 import { loadUsersData, RoleBadge, roleKey } from "./shared";
 
 export const metadata = { title: "Users" };
@@ -26,7 +27,7 @@ const ROLE_ORDER = { super_admin: 0, admin: 1, tech: 2, manager: 3, vendor: 4 } 
 export default async function UsersPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const sp = await searchParams;
   const { supabase, profile: me } = await requireRole("admin");
-  const d = await loadUsersData(supabase);
+  const [d, neverIn] = await Promise.all([loadUsersData(supabase), neverSignedInIds()]);
   const superMe = isSuper(me);
   const view = sp.view === "sites" || sp.site ? "sites" : "users";
   const siteById = new Map(d.locations.map((l) => [l.id, l]));
@@ -99,6 +100,8 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
       />
       {sp.error && <Alert>{sp.error}</Alert>}
       {sp.invited && <Alert tone="good">Invite sent to {sp.invited}.</Alert>}
+      {sp.linksent && <Alert tone="good">Login link sent to {sp.linksent}.</Alert>}
+      {sp.linkerror && <Alert>The login link wasn’t sent. {sp.linkerror}</Alert>}
       {sp.added && <Alert tone="good">{sp.added} now has access.</Alert>}
       {sp.removed && <Alert tone="good">Removed from the location.</Alert>}
       {sp.saved && <Alert tone="good">User updated.</Alert>}
@@ -202,6 +205,7 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
                               </Badge>
                             )}
                             {!u.active && <Badge tone="muted">Inactive</Badge>}
+                            {u.active && neverIn.has(u.id) && <Badge tone="warning" dot={false}>Not signed in yet</Badge>}
                           </div>
                         </td>
                         <td className="hidden px-3 py-3 text-slate-700 md:table-cell">{locationsLabel(u)}</td>
@@ -220,6 +224,15 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
                           </td>
                         )}
                         <td className="px-5 py-3 text-right">
+                          {u.active && neverIn.has(u.id) && u.email && (superMe || u.role !== "admin") && (
+                            <form action={sendLoginLinkToUser} className="mb-1 block sm:mb-0 sm:mr-3 sm:inline-block">
+                              <input type="hidden" name="user_id" value={u.id} />
+                              <input type="hidden" name="back" value={qs({})} />
+                              <SubmitButton size="sm" variant="secondary" pendingText="Sending…">
+                                Send login link
+                              </SubmitButton>
+                            </form>
+                          )}
                           <Link href={href} className="inline-flex items-center gap-0.5 text-sm font-medium text-brand-700 group-hover:underline">
                             {superMe || u.role !== "admin" ? "Edit" : "View"} <ChevronRight className="h-4 w-4" aria-hidden />
                           </Link>

@@ -175,10 +175,21 @@ export function UserImportClient() {
               .
             </p>
             {state.invited.length > 0 && <p className="text-emerald-800">Invite emails sent to: {state.invited.join(", ")}</p>}
-            {state.createdNoEmail.length > 0 && (
+            {state.loginLinked.length > 0 && <p className="text-emerald-800">Login links sent to: {state.loginLinked.join(", ")}</p>}
+            {state.createdNoEmail.length > state.loginLinked.length && (
               <Alert tone="warning">
-                Logins created and locations set, but the invite email couldn’t be sent (usually the email sending limit) for: {state.createdNoEmail.join(", ")}. Resend
-                their invites later from Users → By location → Invite (same email), or they can use “Email me a link” on the sign-in page.
+                <p>
+                  Logins created and locations set, but no email could be sent (usually the email sending limit) to:{" "}
+                  {state.createdNoEmail.filter((e) => !state.loginLinked.includes(e)).join(", ")}. Use “Send login link” next to their name on Users later, or they can use “Email
+                  me a link” on the sign-in page.
+                </p>
+                {state.linkProblems.length > 0 && (
+                  <ul className="mt-1 list-disc pl-5">
+                    {state.linkProblems.map((p) => (
+                      <li key={p}>{p}</li>
+                    ))}
+                  </ul>
+                )}
               </Alert>
             )}
             {state.problems.length > 0 && (

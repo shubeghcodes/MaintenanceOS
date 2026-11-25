@@ -6,6 +6,7 @@ import { headers } from "next/headers";
 import { isSuper, requireRole, requireSuper } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { str } from "@/lib/format";
+import { hasNeverSignedIn, sendLoginLink } from "@/lib/login-link";
 import type { UserRole } from "@/lib/types";
 
 const ROLES: UserRole[] = ["admin", "manager", "tech", "vendor"];
@@ -69,7 +70,13 @@ export async function inviteUser(fd: FormData) {
     }
     revalidatePath("/admin/users");
     revalidatePath("/sites", "layout");
-    redirect(withParam(back, "added", email));
+    // Never signed in yet? Send them a login link too, instead of silently doing nothing.
+    let url = withParam(back, "added", email);
+    if (await hasNeverSignedIn(existing.id)) {
+      const r = await sendLoginLink(email);
+      url = r.ok ? withParam(url, "linksent", email) : withParam(url, "linkerror", `${email}: ${r.error}`);
+    }
+    redirect(url);
   }
 
   const origin = process.env.NEXT_PUBLIC_SITE_URL || (await headers()).get("origin") || "";
@@ -88,6 +95,25 @@ export async function inviteUser(fd: FormData) {
   revalidatePath("/admin/users");
   revalidatePath("/sites", "layout");
   redirect(withParam(back, "invited", email));
+}
+
+/** Email a one-tap login link to someone who has never signed in. Admins only; only super admins act on admin accounts. */
+export async function sendLoginLinkToUser(fd: FormData) {
+  const { supabase, profile: me } = await requireRole("admin");
+  const back = backTo(fd);
+  const id = str(fd, "user_id");
+  if (!id) redirect(withParam(back, "error", "Pick a person"));
+  // Read through the admin's own access so a company-limited admin can only reach people they can see.
+  const { data: u } = await supabase.from("profiles").select("id,email,role,active").eq("id", id).maybeSingle();
+  if (!u || !u.email) redirect(withParam(back, "error", "User not found"));
+  if (u.role === "admin" && !isSuper(me)) redirect(withParam(back, "error", "Only a super admin can send a login link to an admin"));
+  if (!u.active) redirect(withParam(back, "error", `${u.email} is inactive, so they can’t sign in`));
+  const never = await hasNeverSignedIn(u.id);
+  if (never === null) redirect(withParam(back, "error", "Couldn’t check whether they have signed in. Try again."));
+  if (never === false) redirect(withParam(back, "error", `${u.email} has already signed in. They can use “Email me a link” on the sign-in page.`));
+  const r = await sendLoginLink(u.email);
+  if (!r.ok) redirect(withParam(back, "error", `${u.email}: ${r.error}`));
+  redirect(withParam(back, "linksent", u.email));
 }
 
 /** Add an existing user to one location. */

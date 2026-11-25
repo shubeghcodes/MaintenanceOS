@@ -6,6 +6,7 @@ import { isSuper, requireRole } from "@/lib/auth";
 import { getCompanyScope } from "@/lib/company";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { todayISO } from "@/lib/format";
+import { sendLoginLink } from "@/lib/login-link";
 import { parseUserFile, type UserImportRow } from "@/lib/user-import";
 import type { UserRole } from "@/lib/types";
 
@@ -26,7 +27,7 @@ export type UserImportState =
       unknownHeaders: string[];
       counts: { invite: number; update: number; skip: number; assignments: number };
     }
-  | { stage: "done"; invited: string[]; createdNoEmail: string[]; updated: number; assigned: number; rates: number; problems: string[] };
+  | { stage: "done"; invited: string[]; createdNoEmail: string[]; loginLinked: string[]; linkProblems: string[]; updated: number; assigned: number; rates: number; problems: string[] };
 
 type Site = { id: string; code: string | null; name: string; company_id: string | null; active: boolean };
 type Person = { id: string; email: string | null; full_name: string | null; phone: string | null; role: UserRole; active: boolean };
@@ -168,6 +169,9 @@ export async function importUsers(_prev: UserImportState, fd: FormData): Promise
   const problems: string[] = [];
   const invited: string[] = [];
   const createdNoEmail: string[] = [];
+  const loginLinked: string[] = [];
+  const linkProblems: string[] = [];
+  let linkBlocked = false; // stop trying once the email limit is hit
   let updated = 0;
   let assigned = 0;
   let rates = 0;
@@ -194,6 +198,17 @@ export async function importUsers(_prev: UserImportState, fd: FormData): Promise
         }
         userId = cr.data.user.id;
         createdNoEmail.push(r.email!);
+        // Try a login link instead (works with "Email me a link" email; skip the rest once rate limited).
+        if (linkBlocked) {
+          linkProblems.push(`${r.email}: not tried (email limit reached earlier)`);
+        } else {
+          const link = await sendLoginLink(r.email!);
+          if (link.ok) loginLinked.push(r.email!);
+          else {
+            linkProblems.push(`${r.email}: ${link.error}`);
+            if (link.rateLimited) linkBlocked = true;
+          }
+        }
       }
       const { error } = await admin
         .from("profiles")
@@ -232,5 +247,5 @@ export async function importUsers(_prev: UserImportState, fd: FormData): Promise
 
   revalidatePath("/admin/users");
   revalidatePath("/sites", "layout");
-  return { stage: "done", invited, createdNoEmail, updated, assigned, rates, problems };
+  return { stage: "done", invited, createdNoEmail, loginLinked, linkProblems, updated, assigned, rates, problems };
 }
